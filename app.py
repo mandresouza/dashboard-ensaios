@@ -15,15 +15,15 @@ import traceback
 # --- FUNÇÕES DE AUTENTICAÇÃO (AGORA DENTRO DO APP.PY) ---
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
-def create_flow( ):
+def create_flow():
     """Cria o objeto de fluxo de autenticação a partir dos segredos."""
     client_config = st.secrets["gcreds_oauth"].to_dict()
     
     # FORÇA BRUTA: COLOQUE A URL DO SEU APP DIRETAMENTE AQUI
-    # SUBSTITUA A LINHA ABAIXO PELA URL REAL DO SEU DASHBOARD
-    redirect_uri = "https://accounts.google.com/signin/oauth/error?authError=Cg9pbnZhbGlkX3JlcXVlc3QSKE1pc3NpbmcgcmVxdWlyZWQgcGFyYW1ldGVyOiByZWRpcmVjdF91cmkaN2h0dHBzOi8vZGV2ZWxvcGVycy5nb29nbGUuY29tL2lkZW50aXR5L3Byb3RvY29scy9vYXV0aDIgkAM%3D&client_id=547588952377-7e1hg5bg5ssu19t4dn7l0sagvgkati9g.apps.googleusercontent.com&flowName=GeneralOAuthFlow" 
-    
-    flow = Flow.from_client_config(
+    # Esta é a correção final para o erro 'invalid_redirect_uri'.
+    # SUBSTITUA A LINHA ABAIXO PELA URL REAL E COMPLETA DO SEU DASHBOARD
+    redirect_uri = "https://accounts.google.com/signin/oauth/error?authError=Cg9pbnZhbGlkX3JlcXVlc3QSP0ludmFsaWQgcmVkaXJlY3RfdXJpIGNvbnRhaW5zIHJlc2VydmVkIHJlc3BvbnNlIHBhcmFtIGNsaWVudF9pZBo3aHR0cHM6Ly9kZXZlbG9wZXJzLmdvb2dsZS5jb20vaWRlbnRpdHkvcHJvdG9jb2xzL29hdXRoMiCQAw%3D%3D&client_id=547588952377-7e1hg5bg5ssu19t4dn7l0sagvgkati9g.apps.googleusercontent.com&flowName=GeneralOAuthFlow" 
+        flow = Flow.from_client_config(
         client_config=client_config,
         scopes=SCOPES,
         redirect_uri=redirect_uri
