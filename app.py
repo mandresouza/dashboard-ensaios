@@ -1,17 +1,46 @@
 # =======================================================================
-# ARQUIVO app.py (VERSÃO FINAL E ABSOLUTA - st-gspread-connection)
+# ARQUIVO app.py (VERSÃO FINAL E VITORIOSA - Inspirada por você)
 # =======================================================================
 import streamlit as st
-from st_gspread_connections import GSheetsConnection
+import gspread
 import pandas as pd
 from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
 import traceback
+from google.oauth2.service_account import Credentials
 
 # --- CONFIGURAÇÕES GLOBAIS ---
 st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="wide")
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+
+# --- FUNÇÃO DE CARREGAMENTO ROBUSTA ---
+@st.cache_data(ttl=600 )
+def carregar_dados():
+    try:
+        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=SCOPES)
+        client = gspread.authorize(creds)
+        spreadsheet = client.open("BANCO_DADOS_GERAL.xlsx")
+        
+        worksheet10 = spreadsheet.worksheet("BANC_10_POS")
+        df_banc10 = pd.DataFrame(worksheet10.get_all_records())
+        df_banc10['Bancada'] = 'BANC_10_POS'
+        
+        worksheet20 = spreadsheet.worksheet("BANC_20_POS")
+        df_banc20 = pd.DataFrame(worksheet20.get_all_records())
+        df_banc20['Bancada'] = 'BANC_20_POS'
+
+        df_completo = pd.concat([df_banc10, df_banc20], ignore_index=True)
+        df_completo['Data_dt'] = pd.to_datetime(df_completo['Data'], errors='coerce', dayfirst=True)
+        df_completo = df_completo.dropna(subset=['Data_dt'])
+        df_completo['Data'] = df_completo['Data_dt'].dt.strftime('%d/%m/%y')
+        return df_completo
+    except Exception as e:
+        st.error("ERRO CRÍTICO AO CARREGAR DADOS:")
+        st.error(f"Detalhes: {e}")
+        st.code(traceback.format_exc())
+        return pd.DataFrame()
 
 # --- FUNÇÕES DE PROCESSAMENTO E RENDERIZAÇÃO ---
 def valor_num(v):
@@ -23,25 +52,6 @@ def valor_num(v):
 def texto(v):
     if pd.isna(v) or v is None: return "-"
     return str(v)
-
-@st.cache_data(ttl=600)
-def carregar_dados(_conn):
-    try:
-        df_banc10 = _conn.read(worksheet="BANC_10_POS", usecols=list(range(50)), ttl="10m")
-        df_banc10['Bancada'] = 'BANC_10_POS'
-        
-        df_banc20 = _conn.read(worksheet="BANC_20_POS", usecols=list(range(100)), ttl="10m")
-        df_banc20['Bancada'] = 'BANC_20_POS'
-
-        df_completo = pd.concat([df_banc10, df_banc20], ignore_index=True)
-        df_completo['Data_dt'] = pd.to_datetime(df_completo['Data'], errors='coerce', dayfirst=True)
-        df_completo = df_completo.dropna(subset=['Data_dt'])
-        df_completo['Data'] = df_completo['Data_dt'].dt.strftime('%d/%m/%y')
-        return df_completo
-    except Exception as e:
-        st.error(f"Erro ao carregar dados do Google Sheets: {e}")
-        st.code(traceback.format_exc())
-        return pd.DataFrame()
 
 def processar_ensaio(row, classe_banc20=None):
     medidores = []
@@ -63,7 +73,7 @@ def processar_ensaio(row, classe_banc20=None):
             if pontos_contra >= 2: status, detalhe = "CONTRA O CONSUMIDOR", "<b>⚠️ Medição a mais</b>"
             else:
                 aprovado = all(valor_num(v) is None or abs(valor_num(v)) <= limite for v in [cn, cp, ci]) and reg_ok and not mv_reprovado
-                if aprovado: status, detalhe = "APROVado", ""
+                if aprovado: status, detalhe = "APROVADO", ""
                 else:
                     status = "REPROVADO"
                     normais = sum(1 for v in [cn, cp, ci] if valor_num(v) is not None and abs(valor_num(v)) <= limite)
@@ -77,7 +87,7 @@ def get_stats_por_dia(df_mes):
     for data, group in df_mes.groupby('Data_dt'):
         medidores = [];
         for _, row in group.iterrows(): medidores.extend(processar_ensaio(row, 'B'))
-        aprovados = sum(1 for m in medidores if m['status'] == 'APROVado')
+        aprovados = sum(1 for m in medidores if m['status'] == 'APROVADO')
         reprovados = sum(1 for m in medidores if m['status'] == 'REPROVADO')
         daily_stats.append({'Data': data, 'Aprovados': aprovados, 'Reprovados': reprovados})
     return pd.DataFrame(daily_stats)
@@ -188,21 +198,19 @@ def pagina_visao_mensal(df_completo):
 def main():
     st.title("📊 Dashboard de Ensaios")
     try:
-        conn = st.connection("gsheets", type=GSheetsConnection)
-        df_completo = carregar_dados(conn)
-        
-        if df_completo.empty:
-            st.warning("Aguardando dados... Se esta mensagem persistir, verifique as permissões da sua conta Google no Streamlit.")
-            st.info("Se você ainda não conectou sua conta, procure por um botão 'Connect to Google Sheets' no canto superior direito e siga os passos.")
-        else:
+        df_completo = carregar_dados()
+        if not df_completo.empty:
+            st.success("Dados carregados com sucesso!")
             st.sidebar.title("Menu de Navegação")
             tipo_visao = st.sidebar.radio("Escolha o tipo de análise:", ('Visão Diária', 'Visão Mensal'))
             if tipo_visao == 'Visão Diária':
                 pagina_visao_diaria(df_completo)
             else:
                 pagina_visao_mensal(df_completo)
+        else:
+            st.error("Não foi possível carregar os dados. Verifique a mensagem de erro acima.")
     except Exception as e:
-        st.error("Ocorreu um erro crítico ao executar a aplicação.")
+        st.error("Um erro inesperado ocorreu na aplicação principal.")
         st.code(traceback.format_exc())
 
 if __name__ == "__main__":
