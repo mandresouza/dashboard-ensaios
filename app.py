@@ -1,5 +1,5 @@
 # ===============================================================
-# ARQUIVO app.py (VERSÃO FINAL DE REPARO)
+# ARQUIVO app.py (VERSÃO FINAL - CÓDIGO OFICIAL)
 # ===============================================================
 import streamlit as st
 import pandas as pd
@@ -9,45 +9,40 @@ import plotly.graph_objects as go
 import gspread
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
-from google.auth.transport.requests import Request
 import traceback
+import webbrowser
 
-# --- FUNÇÕES DE AUTENTICAÇÃO (AGORA DENTRO DO APP.PY) ---
+# --- CONFIGURAÇÕES GLOBAIS ---
+st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="wide")
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
+
+# --- FUNÇÕES DE AUTENTICAÇÃO (NOVA LÓGICA ROBUSTA ) ---
+def get_creds():
+    """Retorna as credenciais do estado da sessão, se existirem."""
+    if 'creds' in st.session_state:
+        return Credentials.from_authorized_user_info(st.session_state['creds'])
+    return None
+
+def set_creds(creds_info):
+    """Salva as credenciais no estado da sessão."""
+    st.session_state['creds'] = creds_info
 
 def create_flow():
-    """Cria o objeto de fluxo de autenticação a partir dos segredos."""
+    """Cria o fluxo de autenticação."""
     client_config = st.secrets["gcreds_oauth"].to_dict()
+    # A URL de redirecionamento é a URL base do próprio app Streamlit
+    # Esta é a forma mais robusta de obter a URL correta em produção.
+    redirect_uri = st.get_option("server.baseUrlPath").strip('/')
     
-    redirect_uri = "https://accounts.google.com/signin/oauth/error?authError=Cg9pbnZhbGlkX3JlcXVlc3QSP0ludmFsaWQgcmVkaXJlY3RfdXJpIGNvbnRhaW5zIHJlc2VydmVkIHJlc3BvbnNlIHBhcmFtIGNsaWVudF9pZBo3aHR0cHM6Ly9kZXZlbG9wZXJzLmdvb2dsZS5jb20vaWRlbnRpdHkvcHJvdG9jb2xzL29hdXRoMiCQAw%3D%3D&client_id=547588952377-7e1hg5bg5ssu19t4dn7l0sagvgkati9g.apps.googleusercontent.com&flowName=GeneralOAuthFlow" 
-    
-    flow = Flow.from_client_config(      # <--- ALINHAMENTO CORRIGIDO
+    flow = Flow.from_client_config(
         client_config=client_config,
         scopes=SCOPES,
-        redirect_uri=redirect_uri
+        redirect_uri=f"https://{redirect_uri}"
      )
     return flow
 
-def get_auth_url():
-    """Gera a URL de autorização para o usuário clicar."""
-    flow = create_flow()
-    authorization_url, state = flow.authorization_url(
-        access_type='offline',
-        include_granted_scopes='true',
-        prompt='consent'
-    )
-    st.session_state['oauth_state'] = state
-    return authorization_url
-
-def get_credentials(code: str):
-    """Obtém as credenciais a partir do código de autorização retornado pelo Google."""
-    flow = create_flow()
-    flow.fetch_token(code=code)
-    return flow.credentials
-
-# --- FUNÇÕES DE PROCESSAMENTO DE DADOS (AGORA DENTRO DO APP.PY) ---
-LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
-
+# --- FUNÇÕES DE PROCESSAMENTO E RENDERIZAÇÃO (SEM ALTERAÇÕES) ---
 def valor_num(v):
     try:
         if pd.isna(v): return None
@@ -59,9 +54,11 @@ def texto(v):
     return str(v)
 
 @st.cache_data(ttl=600)
-def carregar_dados(_client):
+def carregar_dados(_creds_dict):
     try:
-        spreadsheet = _client.open(st.secrets["sheet_name"])
+        creds = Credentials.from_authorized_user_info(_creds_dict)
+        client = gspread.authorize(creds)
+        spreadsheet = client.open(st.secrets["sheet_name"])
         worksheet10 = spreadsheet.worksheet("BANC_10_POS")
         df_banc10 = pd.DataFrame(worksheet10.get_all_records())
         df_banc10['Bancada'] = 'BANC_10_POS'
@@ -116,7 +113,6 @@ def get_stats_por_dia(df_mes):
         daily_stats.append({'Data': data, 'Aprovados': aprovados, 'Reprovados': reprovados})
     return pd.DataFrame(daily_stats)
 
-# --- Funções de renderização (sem alterações) ---
 def renderizar_card(medidor):
     status_cor = {"APROVADO": "#dcfce7", "REPROVADO": "#fee2e2", "CONTRA O CONSUMIDOR": "#ede9fe", "NÃO ENTROU": "#e5e7eb"}
     cor = status_cor.get(medidor['status'], "#f3f4f6")
@@ -219,41 +215,60 @@ def pagina_visao_mensal(df_completo):
         with col1: st.plotly_chart(fig_pie, use_container_width=True)
         with col2: st.plotly_chart(fig_line, use_container_width=True)
 
-# --- LÓGICA PRINCIPAL (FINAL) ---
-st.title("📊 Dashboard de Ensaios")
+# --- LÓGICA PRINCIPAL DE EXECUÇÃO ---
+def main():
+    st.title("📊 Dashboard de Ensaios")
 
-if 'credentials' not in st.session_state:
-    st.session_state.credentials = None
+    creds = get_creds()
+    
+    # Se o Google redirecionou de volta com um código, processa-o
+    query_params = st.query_params
+    if not creds and "code" in query_params:
+        try:
+            with st.spinner("Autenticando com o Google..."):
+                flow = create_flow()
+                flow.fetch_token(code=query_params['code'])
+                creds_info = {
+                    'token': flow.credentials.token,
+                    'refresh_token': flow.credentials.refresh_token,
+                    'token_uri': flow.credentials.token_uri,
+                    'client_id': flow.credentials.client_id,
+                    'client_secret': flow.credentials.client_secret,
+                    'scopes': flow.credentials.scopes
+                }
+                set_creds(creds_info)
+                st.rerun() # Re-executa para carregar o app principal
+        except Exception as e:
+            st.error("Ocorreu um erro ao tentar obter as credenciais.")
+            st.code(traceback.format_exc())
+            return
 
-if st.session_state.credentials:
+    # Se ainda não estiver autenticado, mostra o botão de login
+    if not creds:
+        st.warning("Para acessar os dados, você precisa autorizar a aplicação a ler suas planilhas do Google.")
+        flow = create_flow()
+        auth_url, _ = flow.authorization_url(prompt='consent')
+        st.link_button("Fazer Login com o Google e Autorizar", auth_url, use_container_width=True)
+        return
+
+    # Se estiver autenticado, carrega e mostra o dashboard
     try:
-        client = gspread.authorize(st.session_state.credentials)
-        df_completo = carregar_dados(client)
+        df_completo = carregar_dados(st.session_state['creds'])
         if df_completo.empty:
             st.warning("Carregando ou aguardando dados... Se esta mensagem persistir, verifique as permissões e os nomes das abas na sua planilha.")
         else:
             st.sidebar.title("Menu de Navegação")
             tipo_visao = st.sidebar.radio("Escolha o tipo de análise:", ('Visão Diária', 'Visão Mensal'))
-            if tipo_visao == 'Visão Diária': pagina_visao_diaria(df_completo)
-            else: pagina_visao_mensal(df_completo)
+            if tipo_visao == 'Visão Diária':
+                pagina_visao_diaria(df_completo)
+            else:
+                pagina_visao_mensal(df_completo)
     except Exception as e:
         st.error("Ocorreu um erro ao carregar os dados após a autenticação.")
         st.code(traceback.format_exc())
-        st.session_state.credentials = None
-        if st.button("Tentar autenticar novamente"): st.rerun()
-else:
-    query_params = st.query_params
-    if "code" in query_params:
-        try:
-            with st.spinner("Autenticando com o Google..."):
-                creds = get_credentials(query_params.get("code"))
-                st.session_state.credentials = creds
-                st.rerun()
-        except Exception as e:
-            st.error("Ocorreu um erro ao tentar obter as credenciais.")
-            st.code(traceback.format_exc())
-    else:
-        st.warning("Para acessar os dados, você precisa autorizar a aplicação a ler suas planilhas do Google.")
-        auth_url = get_auth_url()
-        st.link_button("Fazer Login com o Google e Autorizar", auth_url, use_container_width=True)
+        if st.button("Limpar credenciais e tentar novamente"):
+            del st.session_state['creds']
+            st.rerun()
 
+if __name__ == "__main__":
+    main()
