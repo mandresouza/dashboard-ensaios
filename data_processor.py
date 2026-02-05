@@ -1,10 +1,12 @@
 # ===============================================================
-# ARQUIVO data_processor.py (VERSÃO FINAL E À PROVA DE FALHAS)
+# ARQUIVO data_processor.py (VERSÃO PLANO C)
 # ===============================================================
 import pandas as pd
 import streamlit as st
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
 import json
 
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
@@ -19,55 +21,76 @@ def texto(v):
     if pd.isna(v) or v is None: return "-"
     return str(v)
 
-@st.cache_data(ttl=600)
-def carregar_dados():
-    try:
-        creds_dict = st.secrets["gcp_service_account"]
-        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope )
-        client = gspread.authorize(creds)
-
-        spreadsheet = client.open(st.secrets["sheet_name"])
+def authenticate():
+    SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    
+    if "gcreds_token" in st.secrets:
+        creds_dict = st.secrets["gcreds_token"].to_dict( )
+        creds = Credentials.from_authorized_user_info(creds_dict, SCOPES)
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        return gspread.authorize(creds)
+    else:
+        flow = InstalledAppFlow.from_client_secrets_info(st.secrets["gcreds_oauth"].to_dict(), SCOPES)
+        auth_url, _ = flow.authorization_url(prompt='consent')
         
-        # Bloco de verificação de abas
-        try:
-            worksheet10 = spreadsheet.worksheet("BANC_10_POS")
-        except gspread.exceptions.WorksheetNotFound:
-            st.error("ERRO CRÍTICO: A aba 'BANC_10_POS' não foi encontrada na sua planilha. Verifique o nome exato.")
-            return pd.DataFrame()
+        st.warning("⚠️ Ação necessária: Autorize o acesso ao Google Drive")
+        st.write("Por favor, acesse o link abaixo para autorizar a aplicação:")
+        st.code(auth_url)
+        
+        auth_code = st.text_input("Cole o código de autorização que você recebeu aqui:")
+        
+        if st.button("Autorizar Aplicação"):
+            if not auth_code:
+                st.error("O código de autorização não pode estar vazio.")
+                st.stop()
+            
+            try:
+                with st.spinner("Verificando código e gerando token de acesso..."):
+                    flow.fetch_token(code=auth_code)
+                    creds = flow.credentials
+                    creds_dict_to_save = {
+                        'token': creds.token,
+                        'refresh_token': creds.refresh_token,
+                        'token_uri': creds.token_uri,
+                        'client_id': creds.client_id,
+                        'client_secret': creds.client_secret,
+                        'scopes': creds.scopes
+                    }
+                    st.success("Autorização bem-sucedida! O token foi gerado.")
+                    st.info("Copie o texto abaixo e cole nos segredos do seu app no Streamlit como uma nova seção [gcreds_token].")
+                    st.code(json.dumps(creds_dict_to_save, indent=2))
+                    st.warning("Depois de salvar o segredo, você precisará reiniciar ('Reboot') a aplicação.")
+                    st.stop()
+            except Exception as e:
+                st.error(f"Ocorreu um erro ao buscar o token: {e}")
+                st.stop()
+        
+        st.stop()
 
-        try:
-            worksheet20 = spreadsheet.worksheet("BANC_20_POS")
-        except gspread.exceptions.WorksheetNotFound:
-            st.error("ERRO CRÍTICO: A aba 'BANC_20_POS' não foi encontrada na sua planilha. Verifique o nome exato.")
-            return pd.DataFrame()
-
+@st.cache_data(ttl=600)
+def carregar_dados(_client):
+    try:
+        spreadsheet = _client.open(st.secrets["sheet_name"])
+        
+        worksheet10 = spreadsheet.worksheet("BANC_10_POS")
         df_banc10 = pd.DataFrame(worksheet10.get_all_records())
         df_banc10['Bancada'] = 'BANC_10_POS'
 
+        worksheet20 = spreadsheet.worksheet("BANC_20_POS")
         df_banc20 = pd.DataFrame(worksheet20.get_all_records())
         df_banc20['Bancada'] = 'BANC_20_POS'
         
         df_completo = pd.concat([df_banc10, df_banc20], ignore_index=True)
         
-        if 'Data' not in df_completo.columns:
-            st.error("ERRO CRÍTICO: A coluna 'Data' não foi encontrada na sua planilha. Verifique os cabeçalhos.")
-            return pd.DataFrame()
-
         df_completo['Data_dt'] = pd.to_datetime(df_completo['Data'], errors='coerce', dayfirst=True)
         df_completo = df_completo.dropna(subset=['Data_dt'])
         df_completo['Data'] = df_completo['Data_dt'].dt.strftime('%d/%m/%y')
         return df_completo
-        
-    except gspread.exceptions.SpreadsheetNotFound:
-        st.error("ERRO CRÍTICO: Planilha não encontrada.")
-        st.error(f"Verifique se o nome '{st.secrets['sheet_name']}' está correto e se o e-mail '{creds.service_account_email}' tem permissão de 'Leitor'.")
-        return pd.DataFrame()
     except Exception as e:
-        st.error(f"Ocorreu um erro inesperado ao carregar os dados: {e}")
+        st.error(f"Erro ao carregar dados do Google Sheets: {e}")
         return pd.DataFrame()
 
-# O resto do arquivo (processar_ensaio, get_stats_por_dia) continua igual
 def processar_ensaio(row, classe_banc20=None):
     medidores = []
     bancada = row.get('Bancada'); tamanho_bancada = 20 if bancada == 'BANC_20_POS' else 10
