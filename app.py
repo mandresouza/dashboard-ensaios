@@ -1,16 +1,124 @@
 # ===============================================================
-# ARQUIVO app.py (VERSÃO PLANO C)
+# ARQUIVO app.py (VERSÃO FINAL DE REPARO)
 # ===============================================================
 import streamlit as st
 import pandas as pd
 from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
-from data_processor import authenticate, carregar_dados, processar_ensaio, texto, get_stats_por_dia
+import gspread
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import Flow
+from google.auth.transport.requests import Request
 import traceback
 
-st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="wide")
+# --- FUNÇÕES DE AUTENTICAÇÃO (AGORA DENTRO DO APP.PY) ---
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
+def create_flow( ):
+    """Cria o objeto de fluxo de autenticação a partir dos segredos."""
+    client_config = st.secrets["gcreds_oauth"].to_dict()
+    
+    # FORÇA BRUTA: COLOQUE A URL DO SEU APP DIRETAMENTE AQUI
+    # SUBSTITUA A LINHA ABAIXO PELA URL REAL DO SEU DASHBOARD
+    redirect_uri = "https://SUA-URL-COMPLETA-AQUI.streamlit.app/" 
+    
+    flow = Flow.from_client_config(
+        client_config=client_config,
+        scopes=SCOPES,
+        redirect_uri=redirect_uri
+     )
+    return flow
+
+def get_auth_url():
+    """Gera a URL de autorização para o usuário clicar."""
+    flow = create_flow()
+    authorization_url, state = flow.authorization_url(
+        access_type='offline',
+        include_granted_scopes='true',
+        prompt='consent'
+    )
+    st.session_state['oauth_state'] = state
+    return authorization_url
+
+def get_credentials(code: str):
+    """Obtém as credenciais a partir do código de autorização retornado pelo Google."""
+    flow = create_flow()
+    flow.fetch_token(code=code)
+    return flow.credentials
+
+# --- FUNÇÕES DE PROCESSAMENTO DE DADOS (AGORA DENTRO DO APP.PY) ---
+LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
+
+def valor_num(v):
+    try:
+        if pd.isna(v): return None
+        return float(str(v).replace("%", "").replace(",", "."))
+    except (ValueError, TypeError): return None
+
+def texto(v):
+    if pd.isna(v) or v is None: return "-"
+    return str(v)
+
+@st.cache_data(ttl=600)
+def carregar_dados(_client):
+    try:
+        spreadsheet = _client.open(st.secrets["sheet_name"])
+        worksheet10 = spreadsheet.worksheet("BANC_10_POS")
+        df_banc10 = pd.DataFrame(worksheet10.get_all_records())
+        df_banc10['Bancada'] = 'BANC_10_POS'
+        worksheet20 = spreadsheet.worksheet("BANC_20_POS")
+        df_banc20 = pd.DataFrame(worksheet20.get_all_records())
+        df_banc20['Bancada'] = 'BANC_20_POS'
+        df_completo = pd.concat([df_banc10, df_banc20], ignore_index=True)
+        df_completo['Data_dt'] = pd.to_datetime(df_completo['Data'], errors='coerce', dayfirst=True)
+        df_completo = df_completo.dropna(subset=['Data_dt'])
+        df_completo['Data'] = df_completo['Data_dt'].dt.strftime('%d/%m/%y')
+        return df_completo
+    except Exception as e:
+        st.error(f"Erro ao carregar dados do Google Sheets: {e}")
+        return pd.DataFrame()
+
+def processar_ensaio(row, classe_banc20=None):
+    medidores = []
+    bancada = row.get('Bancada'); tamanho_bancada = 20 if bancada == 'BANC_20_POS' else 10
+    classe = str(row.get("Classe", "")).upper()
+    if not classe and bancada == 'BANC_20_POS' and classe_banc20: classe = classe_banc20
+    if not classe: classe = 'B'
+    limite = 4.0 if "ELETROMEC" in classe else LIMITES_CLASSE.get(classe.replace("ELETROMEC", "").strip(), 1.3)
+    for pos in range(1, tamanho_bancada + 1):
+        serie, cn, cp, ci = texto(row.get(f"P{pos}_Série")), row.get(f"P{pos}_CN"), row.get(f"P{pos}_CP"), row.get(f"P{pos}_CI")
+        if pd.isna(cn) and pd.isna(cp) and pd.isna(ci): status, detalhe = "NÃO ENTROU", ""
+        else:
+            cargas_positivas_acima = sum(1 for v in [cn, cp, ci] if valor_num(v) is not None and valor_num(v) > 0 and abs(valor_num(v)) > limite)
+            reg_ini, reg_fim = valor_num(row.get(f"P{pos}_REG_Inicio")), valor_num(row.get(f"P{pos}_REG_Fim"))
+            reg_incremento_maior = (reg_ini is not None and reg_fim is not None and (reg_fim - reg_ini) > 1)
+            reg_ok = (reg_ini is not None and reg_fim is not None and (reg_fim - reg_ini) == 1)
+            mv_reprovado = str(texto(row.get(f"P{pos}_MV"))).upper() in ["REPROVADO", "NOK", "FAIL", "-"]
+            pontos_contra = sum([cargas_positivas_acima >= 1, mv_reprovado, reg_incremento_maior])
+            if pontos_contra >= 2: status, detalhe = "CONTRA O CONSUMIDOR", "<b>⚠️ Medição a mais</b>"
+            else:
+                aprovado = all(valor_num(v) is None or abs(valor_num(v)) <= limite for v in [cn, cp, ci]) and reg_ok and not mv_reprovado
+                if aprovado: status, detalhe = "APROVADO", ""
+                else:
+                    status = "REPROVADO"
+                    normais = sum(1 for v in [cn, cp, ci] if valor_num(v) is not None and abs(valor_num(v)) <= limite)
+                    reprovados = sum(1 for v in [cn, cp, ci] if valor_num(v) is not None and abs(valor_num(v)) > limite)
+                    detalhe = "<b>⚠️ Verifique este medidor</b>" if normais >= 1 and reprovados >= 1 else ""
+        medidores.append({"pos": pos, "serie": serie, "cn": texto(cn), "cp": texto(cp), "ci": texto(ci), "mv": texto(row.get(f"P{pos}_MV")), "reg_ini": texto(row.get(f"P{pos}_REG_Inicio")), "reg_fim": texto(row.get(f"P{pos}_REG_Fim")), "reg_err": texto(row.get(f"P{pos}_REG_Erro")), "status": status, "detalhe": detalhe, "limite": limite})
+    return medidores
+
+def get_stats_por_dia(df_mes):
+    daily_stats = []
+    for data, group in df_mes.groupby('Data_dt'):
+        medidores = [];
+        for _, row in group.iterrows(): medidores.extend(processar_ensaio(row, 'B'))
+        aprovados = sum(1 for m in medidores if m['status'] == 'APROVADO')
+        reprovados = sum(1 for m in medidores if m['status'] == 'REPROVADO')
+        daily_stats.append({'Data': data, 'Aprovados': aprovados, 'Reprovados': reprovados})
+    return pd.DataFrame(daily_stats)
+
+# --- Funções de renderização (sem alterações) ---
 def renderizar_card(medidor):
     status_cor = {"APROVADO": "#dcfce7", "REPROVADO": "#fee2e2", "CONTRA O CONSUMIDOR": "#ede9fe", "NÃO ENTROU": "#e5e7eb"}
     cor = status_cor.get(medidor['status'], "#f3f4f6")
@@ -31,7 +139,6 @@ def pagina_visao_diaria(df_completo):
     if serie_filter:
         st.markdown(f"### Buscando por série: **{serie_filter}**")
         with st.spinner("Buscando em todo o banco de dados..."):
-            medidores_encontrados = []
             for _, ensaio_row in df_completo.iterrows():
                 for i in range(1, 21):
                     serie_col = f'P{i}_Série'
@@ -114,22 +221,41 @@ def pagina_visao_mensal(df_completo):
         with col1: st.plotly_chart(fig_pie, use_container_width=True)
         with col2: st.plotly_chart(fig_line, use_container_width=True)
 
+# --- LÓGICA PRINCIPAL (FINAL) ---
 st.title("📊 Dashboard de Ensaios")
 
-try:
-    client = authenticate()
-    df_completo = carregar_dados(client)
-    
-    if df_completo.empty:
-        st.info("Aguardando autorização ou carregamento de dados...")
+if 'credentials' not in st.session_state:
+    st.session_state.credentials = None
+
+if st.session_state.credentials:
+    try:
+        client = gspread.authorize(st.session_state.credentials)
+        df_completo = carregar_dados(client)
+        if df_completo.empty:
+            st.warning("Carregando ou aguardando dados... Se esta mensagem persistir, verifique as permissões e os nomes das abas na sua planilha.")
+        else:
+            st.sidebar.title("Menu de Navegação")
+            tipo_visao = st.sidebar.radio("Escolha o tipo de análise:", ('Visão Diária', 'Visão Mensal'))
+            if tipo_visao == 'Visão Diária': pagina_visao_diaria(df_completo)
+            else: pagina_visao_mensal(df_completo)
+    except Exception as e:
+        st.error("Ocorreu um erro ao carregar os dados após a autenticação.")
+        st.code(traceback.format_exc())
+        st.session_state.credentials = None
+        if st.button("Tentar autenticar novamente"): st.rerun()
+else:
+    query_params = st.query_params
+    if "code" in query_params:
+        try:
+            with st.spinner("Autenticando com o Google..."):
+                creds = get_credentials(query_params.get("code"))
+                st.session_state.credentials = creds
+                st.rerun()
+        except Exception as e:
+            st.error("Ocorreu um erro ao tentar obter as credenciais.")
+            st.code(traceback.format_exc())
     else:
-        st.sidebar.title("Menu de Navegação")
-        tipo_visao = st.sidebar.radio("Escolha o tipo de análise:", ('Visão Diária', 'Visão Mensal'))
-        if tipo_visao == 'Visão Diária':
-            pagina_visao_diaria(df_completo)
-        elif tipo_visao == 'Visão Mensal':
-            pagina_visao_mensal(df_completo)
-except Exception as e:
-    st.error("Ocorreu um erro crítico ao iniciar a aplicação!")
-    st.error(f"Detalhes do erro: {e}")
-    st.code(traceback.format_exc())
+        st.warning("Para acessar os dados, você precisa autorizar a aplicação a ler suas planilhas do Google.")
+        auth_url = get_auth_url()
+        st.link_button("Fazer Login com o Google e Autorizar", auth_url, use_container_width=True)
+
