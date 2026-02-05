@@ -31,7 +31,7 @@ def authenticate():
             creds.refresh(Request())
         return gspread.authorize(creds)
     else:
-        flow = InstalledAppFlow.from_client_secrets_info(st.secrets["gcreds_oauth"].to_dict(), SCOPES)
+        flow = InstalledAppFlow.from_client_config(st.secrets["gcreds_oauth"].to_dict(), SCOPES)
         auth_url, _ = flow.authorization_url(prompt='consent')
         
         st.warning("⚠️ Ação necessária: Autorize o acesso ao Google Drive")
