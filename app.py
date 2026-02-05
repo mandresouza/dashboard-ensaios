@@ -23,7 +23,7 @@ def create_flow():
     
     # FORÇA BRUTA: A URL do seu app é colocada diretamente aqui.
     # SUBSTITUA PELA SUA URL REAL.
-    redirect_uri = "https://SUA-URL-COMPLETA-AQUI.streamlit.app/"
+    redirect_uri = "https://accounts.google.com/signin/oauth/error?authError=Cg9pbnZhbGlkX3JlcXVlc3QS3gEKWW91IGNhbid0IHNpZ24gaW4gdG8gdGhpcyBhcHAgYmVjYXVzZSBpdCBkb2Vzbid0IGNvbXBseSB3aXRoIEdvb2dsZSdzIE9BdXRoIDIuMCBwb2xpY3kgZm9yIGtlZXBpbmcgYXBwcyBzZWN1cmUuCgpZb3UgY2FuIGxldCB0aGUgYXBwIGRldmVsb3BlciBrbm93IHRoYXQgdGhpcyBhcHAgZG9lc24ndCBjb21wbHkgd2l0aCBvbmUgb3IgbW9yZSBHb29nbGUgdmFsaWRhdGlvbiBydWxlcy4KICAaWWh0dHBzOi8vZGV2ZWxvcGVycy5nb29nbGUuY29tL2lkZW50aXR5L3Byb3RvY29scy9vYXV0aDIvcG9saWNpZXMjc2VjdXJlLXJlc3BvbnNlLWhhbmRsaW5nIJADKhgKDHJlZGlyZWN0X3VyaRIIaHR0cHM6Ly8%3D&client_id=806874912622-o07mio7iejdt8l2hvdofg0i47ndabm6v.apps.googleusercontent.com&flowName=GeneralOAuthFlow"
     
     flow = Flow.from_client_config(
         client_config=client_config,
