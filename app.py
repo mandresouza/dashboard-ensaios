@@ -21,7 +21,7 @@ def create_flow( ):
     
     # FORÇA BRUTA: COLOQUE A URL DO SEU APP DIRETAMENTE AQUI
     # SUBSTITUA A LINHA ABAIXO PELA URL REAL DO SEU DASHBOARD
-    redirect_uri = "https://SUA-URL-COMPLETA-AQUI.streamlit.app/" 
+    redirect_uri = "https://accounts.google.com/signin/oauth/error?authError=Cg9pbnZhbGlkX3JlcXVlc3QSKE1pc3NpbmcgcmVxdWlyZWQgcGFyYW1ldGVyOiByZWRpcmVjdF91cmkaN2h0dHBzOi8vZGV2ZWxvcGVycy5nb29nbGUuY29tL2lkZW50aXR5L3Byb3RvY29scy9vYXV0aDIgkAM%3D&client_id=547588952377-7e1hg5bg5ssu19t4dn7l0sagvgkati9g.apps.googleusercontent.com&flowName=GeneralOAuthFlow" 
     
     flow = Flow.from_client_config(
         client_config=client_config,
