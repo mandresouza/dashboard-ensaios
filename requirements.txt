@@ -1,2 +1,6 @@
 streamlit
-st-gspread-connections
+gspread
+google-auth-oauthlib
+pandas
+openpyxl
+plotly
