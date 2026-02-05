@@ -1,6 +1,2 @@
 streamlit
-pandas
-openpyxl
-plotly
-gspread
-google-auth-oauthlib
+st-gspread-connections
