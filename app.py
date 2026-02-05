@@ -1,17 +1,16 @@
-# =================================================
-# ARQUIVO app.py (VERSÃO DE DIAGNÓSTICO FINAL)
-# =================================================
+# ===============================================================
+# ARQUIVO app.py (VERSÃO PLANO C)
+# ===============================================================
 import streamlit as st
 import pandas as pd
 from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
-from data_processor import carregar_dados, processar_ensaio, texto, get_stats_por_dia
-import traceback # Importamos a biblioteca para rastrear o erro
+from data_processor import authenticate, carregar_dados, processar_ensaio, texto, get_stats_por_dia
+import traceback
 
 st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="wide")
 
-# --- As funções de renderização não mudam ---
 def renderizar_card(medidor):
     status_cor = {"APROVADO": "#dcfce7", "REPROVADO": "#fee2e2", "CONTRA O CONSUMIDOR": "#ede9fe", "NÃO ENTROU": "#e5e7eb"}
     cor = status_cor.get(medidor['status'], "#f3f4f6")
@@ -115,13 +114,14 @@ def pagina_visao_mensal(df_completo):
         with col1: st.plotly_chart(fig_pie, use_container_width=True)
         with col2: st.plotly_chart(fig_line, use_container_width=True)
 
-# --- LÓGICA PRINCIPAL (COM CAPTURA DE ERRO) ---
 st.title("📊 Dashboard de Ensaios")
 
 try:
-    df_completo = carregar_dados()
+    client = authenticate()
+    df_completo = carregar_dados(client)
+    
     if df_completo.empty:
-        st.warning("A função carregar_dados() não retornou dados, mas não gerou um erro. Verifique as mensagens de erro acima.")
+        st.info("Aguardando autorização ou carregamento de dados...")
     else:
         st.sidebar.title("Menu de Navegação")
         tipo_visao = st.sidebar.radio("Escolha o tipo de análise:", ('Visão Diária', 'Visão Mensal'))
@@ -133,4 +133,3 @@ except Exception as e:
     st.error("Ocorreu um erro crítico ao iniciar a aplicação!")
     st.error(f"Detalhes do erro: {e}")
     st.code(traceback.format_exc())
-
