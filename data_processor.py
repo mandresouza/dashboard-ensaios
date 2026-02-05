@@ -1,8 +1,8 @@
 # ===============================================================
-# ARQUIVO data_processor.py (VERSÃO FINAL CORRIGIDA)
+# ARQUIVO data_processor.py (VERSÃO FINAL E À PROVA DE FALHAS)
 # ===============================================================
 import pandas as pd
-import streamlit as st  # <--- A LINHA QUE FALTAVA AGORA ESTÁ AQUI
+import streamlit as st
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import json
@@ -22,35 +22,52 @@ def texto(v):
 @st.cache_data(ttl=600)
 def carregar_dados():
     try:
-        # Usa o segredo diretamente como um dicionário, que é o jeito novo do Streamlit
         creds_dict = st.secrets["gcp_service_account"]
-        
         scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope )
         client = gspread.authorize(creds)
 
-        # Abre a planilha pelo nome (que também está nos segredos)
         spreadsheet = client.open(st.secrets["sheet_name"])
         
-        worksheet10 = spreadsheet.worksheet("BANC_10_POS")
+        # Bloco de verificação de abas
+        try:
+            worksheet10 = spreadsheet.worksheet("BANC_10_POS")
+        except gspread.exceptions.WorksheetNotFound:
+            st.error("ERRO CRÍTICO: A aba 'BANC_10_POS' não foi encontrada na sua planilha. Verifique o nome exato.")
+            return pd.DataFrame()
+
+        try:
+            worksheet20 = spreadsheet.worksheet("BANC_20_POS")
+        except gspread.exceptions.WorksheetNotFound:
+            st.error("ERRO CRÍTICO: A aba 'BANC_20_POS' não foi encontrada na sua planilha. Verifique o nome exato.")
+            return pd.DataFrame()
+
         df_banc10 = pd.DataFrame(worksheet10.get_all_records())
         df_banc10['Bancada'] = 'BANC_10_POS'
 
-        worksheet20 = spreadsheet.worksheet("BANC_20_POS")
         df_banc20 = pd.DataFrame(worksheet20.get_all_records())
         df_banc20['Bancada'] = 'BANC_20_POS'
         
         df_completo = pd.concat([df_banc10, df_banc20], ignore_index=True)
         
+        if 'Data' not in df_completo.columns:
+            st.error("ERRO CRÍTICO: A coluna 'Data' não foi encontrada na sua planilha. Verifique os cabeçalhos.")
+            return pd.DataFrame()
+
         df_completo['Data_dt'] = pd.to_datetime(df_completo['Data'], errors='coerce', dayfirst=True)
         df_completo = df_completo.dropna(subset=['Data_dt'])
         df_completo['Data'] = df_completo['Data_dt'].dt.strftime('%d/%m/%y')
         return df_completo
+        
+    except gspread.exceptions.SpreadsheetNotFound:
+        st.error("ERRO CRÍTICO: Planilha não encontrada.")
+        st.error(f"Verifique se o nome '{st.secrets['sheet_name']}' está correto e se o e-mail '{creds.service_account_email}' tem permissão de 'Leitor'.")
+        return pd.DataFrame()
     except Exception as e:
-        st.error(f"Erro ao carregar dados do Google Sheets: {e}")
-        st.error("Verifique se a chave da conta de serviço está correta nos segredos do Streamlit e se o email da conta de serviço foi compartilhado como 'Leitor' na sua planilha.")
+        st.error(f"Ocorreu um erro inesperado ao carregar os dados: {e}")
         return pd.DataFrame()
 
+# O resto do arquivo (processar_ensaio, get_stats_por_dia) continua igual
 def processar_ensaio(row, classe_banc20=None):
     medidores = []
     bancada = row.get('Bancada'); tamanho_bancada = 20 if bancada == 'BANC_20_POS' else 10
