@@ -48,7 +48,7 @@ def texto(v):
     if pd.isna(v) or v is None: return "-"
     return str(v)
 
-@st.cache_data(ttl=600, _experimental_allow_widgets=True)
+@st.cache_data(ttl=600)
 def carregar_dados(_creds):
     try:
         client = gspread.authorize(_creds)
