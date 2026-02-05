@@ -4,6 +4,7 @@
 import streamlit as st
 from google_auth_oauthlib.flow import Flow
 import traceback
+import webbrowser
 
 st.set_page_config(page_title="Diagnóstico de Autenticação", layout="wide")
 
