@@ -180,7 +180,18 @@ def renderizar_resumo(stats):
 
 def pagina_visao_diaria(df_completo):
     st.sidebar.header("Filtros da Visão Diária")
-    serie_filter = st.sidebar.text_input("Buscar por Número de Série")
+    # Inicializa o estado da sessão se ainda não existir
+    if 'serie_filter_state' not in st.session_state:
+        st.session_state.serie_filter_state = ""
+    
+    # Cria o campo de texto e o vincula ao estado da sessão
+    st.sidebar.text_input(
+        "Buscar por Número de Série",
+        key="serie_filter_state" # Vincula o input a uma chave no estado da sessão
+    )
+
+# A variável que o resto do seu código usará agora vem do estado da sessão
+serie_filter = st.session_state.serie_filter_state
 
     if serie_filter:
         st.markdown(f"### Buscando por série: **{serie_filter}**")
