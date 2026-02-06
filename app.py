@@ -167,16 +167,16 @@ def pagina_visao_diaria(df_completo):
             st.warning("Nenhum medidor encontrado com os filtros de status aplicados.")
         else:
             num_colunas = 5
-            # Agrupa os medidores em "linhas" de 5
             linhas_de_medidores = [medidores_para_exibir[i:i + num_colunas] for i in range(0, len(medidores_para_exibir), num_colunas)]
 
-            # Itera sobre cada linha de medidores
-            for linha in linhas_de_medidores:
+            for linha_de_medidores in linhas_de_medidores:
                 cols = st.columns(num_colunas)
-                for i, medidor in enumerate(linha):
+                for i, medidor in enumerate(linha_de_medidores):
                     with cols[i]:
-                        renderizar_card(medidor)           
-               st.write("")          
+                        renderizar_card(medidor)
+                
+                # Adiciona um espaço vertical após cada linha de cards
+                st.write("")     
                               
 def pagina_visao_mensal(df_completo):
     st.sidebar.header("Filtros da Visão Mensal")
