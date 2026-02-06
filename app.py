@@ -164,8 +164,8 @@ def pagina_visao_diaria(df_completo):
         st.markdown("---")
         st.subheader("Detalhes dos Medidores")
         if not medidores_para_exibir:
-            st.warning("Nenhum medidor encontrado com os filtros de status aplicados.")        
-else:
+            st.warning("Nenhum medidor encontrado com os filtros de status aplicados.")
+        else:
             num_colunas = 5
             # Agrupa os medidores em "linhas" de 5
             linhas_de_medidores = [medidores_para_exibir[i:i + num_colunas] for i in range(0, len(medidores_para_exibir), num_colunas)]
