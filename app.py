@@ -141,12 +141,11 @@ def pagina_visao_diaria(df_completo):
         st.markdown(f"### Relatório do dia: **{data_selecionada_str}**")
         if df_filtrado.empty:
             st.info(f"Nenhum ensaio encontrado para os filtros selecionados.")
-            return
-
+            return            
 with st.spinner("Processando ensaios... Por favor, aguarde."):
     todos_medidores = []
     
-    # Processa os ensaios do DataFrame já filtrado por data e bancada
+    # Processa os ensaios do DataFrame já filtrado
     for _, ensaio_row in df_filtrado.iterrows():
         medidores_processados = processar_ensaio(ensaio_row)
         todos_medidores.extend(medidores_processados)
@@ -178,12 +177,7 @@ if todos_medidores:
     renderizar_resumo(stats)
     st.markdown("---") # Linha divisória
 
-    # 2. Renderiza o Gráfico de Pizza
-    df_para_grafico = pd.DataFrame(todos_medidores)
-    st.plotly_chart(criar_grafico_pizza(df_para_grafico), use_container_width=True)
-    st.markdown("---") # Linha divisória
-
-# 3. Renderiza os Cards Detalhados
+# 2. Renderiza os Cards Detalhados
 st.subheader("Detalhes dos Medidores")
 if not todos_medidores:
     st.info("Nenhum medidor encontrado com os filtros aplicados.")
