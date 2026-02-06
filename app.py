@@ -21,7 +21,7 @@ def carregar_dados():
     try:
         creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=SCOPES)
         client = gspread.authorize(creds)
-        spreadsheet = client.open("BANCO_DADOS_GERAL.xlsx")
+        spreadsheet = client.open("https://docs.google.com/spreadsheets/d/1D_05h5Cp9KOzmXwhz137ygvCfG7H6Czt/edit?gid=1075500096#gid=1075500096")
         
         worksheet10 = spreadsheet.worksheet("BANC_10_POS")
         df_banc10 = pd.DataFrame(worksheet10.get_all_records())
