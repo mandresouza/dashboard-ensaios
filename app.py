@@ -144,45 +144,45 @@ def pagina_visao_diaria(df_completo):
             return            
 with st.spinner("Processando ensaios... Por favor, aguarde."):
     todos_medidores = []
-    # 1. Processa os ensaios do DataFrame já filtrado
-    for _, ensaio_row in df_filtrado.iterrows():
-        medidores_processados = processar_ensaio(ensaio_row)
-        todos_medidores.extend(medidores_processados)
-    # 2. Filtro final por CLASSE (para BANC_20_POS)
-    classe_banc20 = None
-    if bancada_selecionada == 'BANC_20_POS' or bancada_selecionada == 'Todas':
-        if not df_filtrado[df_filtrado['Bancada'] == 'BANC_20_POS'].empty:
-            st.sidebar.markdown("---")
-            st.sidebar.subheader("⚙️ Config. Bancada 20")
-            tipo_medidor = st.sidebar.radio("Tipo de Medidor", ["Eletrônico", "Eletromecânico"])
-            if tipo_medidor == 'Eletromecânico':
-                classe_banc20 = "ELETROMECANICO"
-            else:
-                classe_banc20 = st.sidebar.selectbox("Classe de Exatidão", ['A', 'B', 'C', 'D'], index=1)    
-    if classe_banc20:
-        todos_medidores = [m for m in todos_medidores if m.get('bancada') != 'BANC_20_POS' or m.get('classe_exatidao') == classe_banc20]
-    # 3. Filtro final por STATUS
-    if status_filter:
-        todos_medidores = [m for m in todos_medidores if m['status'] in status_filter]
-# --- Exibição dos Resultados (Fora do Spinner) ---
-# 1. Renderiza o resumo
-if todos_medidores:
-    stats = calcular_estatisticas(todos_medidores)
-    renderizar_resumo(stats)
-    st.markdown("---")
-# 2. Renderiza os Cards Detalhados
-st.subheader("Detalhes dos Medidores")
-if not todos_medidores:
-    st.info("Nenhum medidor encontrado com os filtros aplicados.")
-else:
-    num_colunas = 5
-    linhas_de_medidores = [todos_medidores[i:i + num_colunas] for i in range(0, len(todos_medidores), num_colunas)]
-    for linha in linhas_de_medidores:
-        cols = st.columns(num_colunas)
-        for i, medidor in enumerate(linha):
-            with cols[i]:
-                renderizar_card(medidor)
-        st.write("") # Espaçamento vertical
+        # 1. Processa os ensaios do DataFrame já filtrado
+        for _, ensaio_row in df_filtrado.iterrows():
+            medidores_processados = processar_ensaio(ensaio_row)
+            todos_medidores.extend(medidores_processados)
+        # 2. Filtro final por CLASSE (para BANC_20_POS)
+        classe_banc20 = None
+        if bancada_selecionada == 'BANC_20_POS' or bancada_selecionada == 'Todas':
+            if not df_filtrado[df_filtrado['Bancada'] == 'BANC_20_POS'].empty:
+                st.sidebar.markdown("---")
+                st.sidebar.subheader("⚙️ Config. Bancada 20")
+                tipo_medidor = st.sidebar.radio("Tipo de Medidor", ["Eletrônico", "Eletromecânico"])
+                if tipo_medidor == 'Eletromecânico':
+                    classe_banc20 = "ELETROMECANICO"
+                else:
+                    classe_banc20 = st.sidebar.selectbox("Classe de Exatidão", ['A', 'B', 'C', 'D'], index=1)    
+        if classe_banc20:
+            todos_medidores = [m for m in todos_medidores if m.get('bancada') != 'BANC_20_POS' or m.get('classe_exatidao') == classe_banc20]
+        # 3. Filtro final por STATUS
+        if status_filter:
+            todos_medidores = [m for m in todos_medidores if m['status'] in status_filter]
+    # --- Exibição dos Resultados (Fora do Spinner) ---
+    # 1. Renderiza o resumo
+    if todos_medidores:
+        stats = calcular_estatisticas(todos_medidores)
+        renderizar_resumo(stats)
+        st.markdown("---")
+    # 2. Renderiza os Cards Detalhados
+    st.subheader("Detalhes dos Medidores")
+    if not todos_medidores:
+        st.info("Nenhum medidor encontrado com os filtros aplicados.")
+    else:
+        num_colunas = 5
+        linhas_de_medidores = [todos_medidores[i:i + num_colunas] for i in range(0, len(todos_medidores), num_colunas)]
+        for linha in linhas_de_medidores:
+            cols = st.columns(num_colunas)
+            for i, medidor in enumerate(linha):
+                with cols[i]:
+                    renderizar_card(medidor)
+            st.write("") # Espaçamento vertical
 # 2. Renderiza os Cards Detalhados
 st.subheader("Detalhes dos Medidores")
 if not todos_medidores:
