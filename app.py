@@ -15,20 +15,18 @@ st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
-# --- FUNÇÃO DE CARREGAMENTO ROBUSTA ---
-@st.cache_data(ttl=600 )
+# --- FUNÇÃO DE CARREGAMENTO ROBUSTA (VERSÃO PANDAS) ---
+@st.cache_data(ttl=600)
 def carregar_dados():
     try:
-        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=SCOPES)
-        client = gspread.authorize(creds)
-        spreadsheet = client.open("https://docs.google.com/spreadsheets/d/1D_05h5Cp9KOzmXwhz137ygvCfG7H6Czt/edit?gid=1075500096#gid=1075500096")
+        # Caminho direto para o arquivo, como no Colab
+        caminho_arquivo = "/mount/src/dashboard-ensaios/BANCO_DADOS_GERAL.xlsx"
         
-        worksheet10 = spreadsheet.worksheet("BANC_10_POS")
-        df_banc10 = pd.DataFrame(worksheet10.get_all_records())
+        # Usando o "rolo compressor" (pandas) para ler as abas
+        df_banc10 = pd.read_excel(caminho_arquivo, sheet_name="BANC_10_POS")
         df_banc10['Bancada'] = 'BANC_10_POS'
         
-        worksheet20 = spreadsheet.worksheet("BANC_20_POS")
-        df_banc20 = pd.DataFrame(worksheet20.get_all_records())
+        df_banc20 = pd.read_excel(caminho_arquivo, sheet_name="BANC_20_POS")
         df_banc20['Bancada'] = 'BANC_20_POS'
 
         df_completo = pd.concat([df_banc10, df_banc20], ignore_index=True)
@@ -36,6 +34,11 @@ def carregar_dados():
         df_completo = df_completo.dropna(subset=['Data_dt'])
         df_completo['Data'] = df_completo['Data_dt'].dt.strftime('%d/%m/%y')
         return df_completo
+    except Exception as e:
+        st.error("ERRO CRÍTICO AO CARREGAR DADOS COM PANDAS:")
+        st.error(f"Detalhes: {e}")
+        st.code(traceback.format_exc())
+        return pd.DataFrame()
     except Exception as e:
         st.error("ERRO CRÍTICO AO CARREGAR DADOS:")
         st.error(f"Detalhes: {e}")
