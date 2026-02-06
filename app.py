@@ -175,11 +175,8 @@ def pagina_visao_diaria(df_completo):
                 cols = st.columns(num_colunas)
                 for i, medidor in enumerate(linha):
                     with cols[i]:
-                        renderizar_card(medidor)
-                
-                # ESTA É A LINHA CORRETA E COMPLETA
-                st.markdown("  
-            ", unsafe_allow_html=True)               
+                        renderizar_card(medidor)           
+               st.write("")          
                               
 def pagina_visao_mensal(df_completo):
     st.sidebar.header("Filtros da Visão Mensal")
