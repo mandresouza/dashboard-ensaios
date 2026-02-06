@@ -1,6 +1,8 @@
 # =======================================================================
-# ARQUIVO app.py (VERSÃO CORRIGIDA)
+# ARQUIVO: app.py (VERSÃO ORGANIZADA POR BLOCOS NUMERADOS)
 # =======================================================================
+
+# [BLOCO 01] - IMPORTAÇÕES E CONFIGURAÇÕES INICIAIS
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -8,18 +10,17 @@ import plotly.express as px
 import plotly.graph_objects as go
 import traceback
 
-# --- CONFIGURAÇÕES GLOBAIS ---
 st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="wide")
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
-# --- FUNÇÃO DE CARREGAMENTO ROBUSTA (VERSÃO PANDAS) ---
+# -----------------------------------------------------------------------
+
+# [BLOCO 02] - CARREGAMENTO DE DADOS (BANCO DE DADOS)
 @st.cache_data(ttl=600)
 def carregar_dados():
     try:
-        # Caminho direto para o arquivo
         caminho_arquivo = "/mount/src/dashboard-ensaios/BANCO_DADOS_GERAL.xlsx"
         
-        # Lendo as abas
         df_banc10 = pd.read_excel(caminho_arquivo, sheet_name="BANC_10_POS")
         df_banc10['Bancada'] = 'BANC_10_POS'
         
@@ -32,12 +33,12 @@ def carregar_dados():
         df_completo['Data'] = df_completo['Data_dt'].dt.strftime('%d/%m/%y')
         return df_completo
     except Exception as e:
-        st.error("ERRO CRÍTICO AO CARREGAR DADOS COM PANDAS:")
-        st.error(f"Detalhes: {e}")
-        st.code(traceback.format_exc())
+        st.error(f"ERRO NO BLOCO 02 (CARREGAMENTO): {e}")
         return pd.DataFrame()
 
-# --- FUNÇÕES DE PROCESSAMENTO E RENDERIZAÇÃO ---
+# -----------------------------------------------------------------------
+
+# [BLOCO 03] - FUNÇÕES AUXILIARES (CONVERSÃO E ESTATÍSTICAS)
 def valor_num(v):
     try:
         if pd.isna(v): return None
@@ -53,13 +54,11 @@ def calcular_estatisticas(todos_medidores):
     aprovados = sum(1 for m in todos_medidores if m['status'] == 'APROVADO')
     reprovados = sum(1 for m in todos_medidores if m['status'] == 'REPROVADO')
     consumidor = sum(1 for m in todos_medidores if m['status'] == 'CONTRA O CONSUMIDOR')
-    return {
-        "total": total,
-        "aprovados": aprovados,
-        "reprovados": reprovados,
-        "consumidor": consumidor
-    }
+    return {"total": total, "aprovados": aprovados, "reprovados": reprovados, "consumidor": consumidor}
 
+# -----------------------------------------------------------------------
+
+# [BLOCO 04] - PROCESSAMENTO TÉCNICO DOS ENSAIOS (LÓGICA DE APROVAÇÃO)
 def processar_ensaio(row, classe_banc20=None):
     medidores = []
     bancada = row.get('Bancada')
@@ -75,9 +74,7 @@ def processar_ensaio(row, classe_banc20=None):
     
     for pos in range(1, tamanho_bancada + 1):
         serie = texto(row.get(f"P{pos}_Série"))
-        cn = row.get(f"P{pos}_CN")
-        cp = row.get(f"P{pos}_CP")
-        ci = row.get(f"P{pos}_CI")
+        cn, cp, ci = row.get(f"P{pos}_CN"), row.get(f"P{pos}_CP"), row.get(f"P{pos}_CI")
         
         if pd.isna(cn) and pd.isna(cp) and pd.isna(ci): 
             status, detalhe = "NÃO ENTROU", ""
@@ -103,34 +100,16 @@ def processar_ensaio(row, classe_banc20=None):
                     detalhe = "<b>⚠️ Verifique este medidor</b>" if normais >= 1 and reprovados >= 1 else ""
                     
         medidores.append({
-            "pos": pos, 
-            "serie": serie, 
-            "cn": texto(cn), 
-            "cp": texto(cp), 
-            "ci": texto(ci), 
-            "mv": texto(row.get(f"P{pos}_MV")), 
-            "reg_ini": texto(row.get(f"P{pos}_REG_Inicio")), 
-            "reg_fim": texto(row.get(f"P{pos}_REG_Fim")), 
-            "reg_err": texto(row.get(f"P{pos}_REG_Erro")), 
-            "status": status, 
-            "detalhe": detalhe, 
-            "limite": limite,
-            "bancada": bancada,
-            "classe_exatidao": classe
+            "pos": pos, "serie": serie, "cn": texto(cn), "cp": texto(cp), "ci": texto(ci), 
+            "mv": texto(row.get(f"P{pos}_MV")), "reg_ini": texto(row.get(f"P{pos}_REG_Inicio")), 
+            "reg_fim": texto(row.get(f"P{pos}_REG_Fim")), "reg_err": texto(row.get(f"P{pos}_REG_Erro")), 
+            "status": status, "detalhe": detalhe, "limite": limite, "bancada": bancada, "classe_exatidao": classe
         })
     return medidores
 
-def get_stats_por_dia(df_mes):
-    daily_stats = []
-    for data, group in df_mes.groupby('Data_dt'):
-        medidores = []
-        for _, row in group.iterrows(): 
-            medidores.extend(processar_ensaio(row, 'B'))
-        aprovados = sum(1 for m in medidores if m['status'] == 'APROVADO')
-        reprovados = sum(1 for m in medidores if m['status'] == 'REPROVADO')
-        daily_stats.append({'Data': data, 'Aprovados': aprovados, 'Reprovados': reprovados})
-    return pd.DataFrame(daily_stats)
+# -----------------------------------------------------------------------
 
+# [BLOCO 05] - COMPONENTES VISUAIS (CARDS E RESUMO)
 def renderizar_card(medidor):
     status_cor = {"APROVADO": "#dcfce7", "REPROVADO": "#fee2e2", "CONTRA O CONSUMIDOR": "#ede9fe", "NÃO ENTROU": "#e5e7eb"}
     cor = status_cor.get(medidor['status'], "#f3f4f6")
@@ -142,17 +121,14 @@ def renderizar_card(medidor):
                 <div style="background: rgba(0,0,0,0.05); padding: 10px; border-radius: 8px; margin-bottom:12px;">
                     <b style="display: block; margin-bottom: 8px;">Exatidão (±{medidor['limite']}%)</b>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px;">
-                        <span><b>CN:</b> {medidor['cn']}%</span>
-                        <span><b>CP:</b> {medidor['cp']}%</span>
-                        <span><b>CI:</b> {medidor['ci']}%</span>
-                        <span><b>MV:</b> {medidor['mv']}</span>
+                        <span><b>CN:</b> {medidor['cn']}%</span><span><b>CP:</b> {medidor['cp']}%</span>
+                        <span><b>CI:</b> {medidor['ci']}%</span><span><b>MV:</b> {medidor['mv']}</span>
                     </div>
                 </div>
                 <div style="background: rgba(0,0,0,0.05); padding: 10px; border-radius: 8px;">
                     <b style="display: block; margin-bottom: 8px;">Registrador</b>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px;">
-                        <span><b>Início:</b> {medidor['reg_ini']}</span>
-                        <span><b>Fim:</b> {medidor['reg_fim']}</span>
+                        <span><b>Início:</b> {medidor['reg_ini']}</span><span><b>Fim:</b> {medidor['reg_fim']}</span>
                         <span style="grid-column: span 2;"><b>Erro:</b> {medidor['reg_err']}</span>
                     </div>
                 </div>
@@ -165,33 +141,19 @@ def renderizar_card(medidor):
     """, unsafe_allow_html=True)
 
 def renderizar_resumo(stats):
-    st.markdown("""
-        <style>
-        .metric-card{background-color:#FFFFFF;padding:20px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.05);text-align:center;}
-        .metric-value{font-size:32px;font-weight:700;}
-        .metric-label{font-size:16px;color:#64748b;}
-        </style>
-    """, unsafe_allow_html=True)
+    st.markdown("""<style>.metric-card{background-color:#FFFFFF;padding:20px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.05);text-align:center;}.metric-value{font-size:32px;font-weight:700;}.metric-label{font-size:16px;color:#64748b;}</style>""", unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns(4)
     with col1: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#1e293b;">{stats["total"]}</div><div class="metric-label">Total Ensaiados</div></div>', unsafe_allow_html=True)
     with col2: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#16a34a;">{stats["aprovados"]}</div><div class="metric-label">Aprovados</div></div>', unsafe_allow_html=True)
     with col3: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#dc2626;">{stats["reprovados"]}</div><div class="metric-label">Reprovados</div></div>', unsafe_allow_html=True)
     with col4: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#7c3aed;">{stats["consumidor"]}</div><div class="metric-label">Contra Consumidor</div></div>', unsafe_allow_html=True)
 
+# -----------------------------------------------------------------------
+
+# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (FILTROS E PROCESSAMENTO)
 def pagina_visao_diaria(df_completo):
     st.sidebar.header("Filtros da Visão Diária")
-    # Inicializa o estado da sessão se ainda não existir
-    if 'serie_filter_state' not in st.session_state:
-        st.session_state.serie_filter_state = ""
-    
-    # Cria o campo de texto e o vincula ao estado da sessão
-    st.sidebar.text_input(
-        "Buscar por Número de Série",
-        key="serie_filter_state" # Vincula o input a uma chave no estado da sessão
-    )
-
-# A variável que o resto do seu código usará agora vem do estado da sessão
-serie_filter = st.session_state.serie_filter_state
+    serie_filter = st.sidebar.text_input("Buscar por Número de Série")
 
     if serie_filter:
         st.markdown(f"### Buscando por série: **{serie_filter}**")
@@ -210,68 +172,70 @@ serie_filter = st.session_state.serie_filter_state
                                     encontrado = True
                                     break
                 if encontrado: break
-            if not encontrado:
-                st.warning("Nenhum medidor encontrado com este número de série em todo o banco de dados.")
+            if not encontrado: st.warning("Nenhum medidor encontrado.")
     else:
+        # Configuração de Filtros Laterais
         data_selecionada_dt = st.sidebar.date_input("Selecione a Data", value=datetime.today(), format="DD/MM/YYYY")
         data_selecionada_str = data_selecionada_dt.strftime('%d/%m/%y')
         bancadas_disponiveis = df_completo['Bancada'].unique().tolist()
         bancada_selecionada = st.sidebar.selectbox("Selecione a Bancada", options=['Todas'] + bancadas_disponiveis)
-        st.sidebar.markdown("---")
-        status_filter = st.sidebar.multiselect("Filtrar por Status", options=["APROVADO", "REPROVADO", "CONTRA O CONSUMIDOR"], placeholder="Selecione um ou mais status")
+        status_filter = st.sidebar.multiselect("Filtrar por Status", options=["APROVADO", "REPROVADO", "CONTRA O CONSUMIDOR"])
         
+        # Filtragem do DataFrame
         df_filtrado = df_completo[df_completo['Data'] == data_selecionada_str].copy()
-        if bancada_selecionada != 'Todas': 
-            df_filtrado = df_filtrado[df_filtrado['Bancada'] == bancada_selecionada]
+        if bancada_selecionada != 'Todas': df_filtrado = df_filtrado[df_filtrado['Bancada'] == bancada_selecionada]
         
         st.markdown(f"### Relatório do dia: **{data_selecionada_str}**")
         if df_filtrado.empty:
             st.info(f"Nenhum ensaio encontrado para os filtros selecionados.")
             return
 
-        with st.spinner("Processando ensaios... Por favor, aguarde."):
+        with st.spinner("Processando ensaios..."):
             todos_medidores = []
-            
-            # 1. Processa os ensaios do DataFrame já filtrado
             for _, ensaio_row in df_filtrado.iterrows():
-                medidores_processados = processar_ensaio(ensaio_row)
-                todos_medidores.extend(medidores_processados)
+                todos_medidores.extend(processar_ensaio(ensaio_row))
 
-            # 2. Filtro final por CLASSE (para BANC_20_POS)
+            # Filtro de Classe para Bancada 20
             classe_banc20 = None
-            if bancada_selecionada == 'BANC_20_POS' or bancada_selecionada == 'Todas':
-                if not df_filtrado[df_filtrado['Bancada'] == 'BANC_20_POS'].empty:
-                    st.sidebar.markdown("---")
-                    st.sidebar.subheader("⚙️ Config. Bancada 20")
-                    tipo_medidor = st.sidebar.radio("Tipo de Medidor", ["Eletrônico", "Eletromecânico"])
-                    if tipo_medidor == 'Eletromecânico':
-                        classe_banc20 = "ELETROMECANICO"
-                    else:
-                        classe_banc20 = st.sidebar.selectbox("Classe de Exatidão", ['A', 'B', 'C', 'D'], index=1)
+            if (bancada_selecionada == 'BANC_20_POS' or bancada_selecionada == 'Todas') and not df_filtrado[df_filtrado['Bancada'] == 'BANC_20_POS'].empty:
+                st.sidebar.markdown("---")
+                st.sidebar.subheader("⚙️ Config. Bancada 20")
+                tipo_medidor = st.sidebar.radio("Tipo de Medidor", ["Eletrônico", "Eletromecânico"])
+                if tipo_medidor == 'Eletromecânico': classe_banc20 = "ELETROMECANICO"
+                else: classe_banc20 = st.sidebar.selectbox("Classe de Exatidão", ['A', 'B', 'C', 'D'], index=1)
             
             if classe_banc20:
                 todos_medidores = [m for m in todos_medidores if m.get('bancada') != 'BANC_20_POS' or m.get('classe_exatidao') == classe_banc20]
 
-            # 3. Filtro final por STATUS
             if status_filter:
                 todos_medidores = [m for m in todos_medidores if m['status'] in status_filter]
 
-        # --- Exibição dos Resultados (Fora do Spinner) ---
+        # Exibição Final
         if todos_medidores:
-            stats = calcular_estatisticas(todos_medidores)
-            renderizar_resumo(stats)
+            renderizar_resumo(calcular_estatisticas(todos_medidores))
             st.markdown("---")
-
             st.subheader("Detalhes dos Medidores")
             num_colunas = 5
             for i in range(0, len(todos_medidores), num_colunas):
                 cols = st.columns(num_colunas)
                 for j, medidor in enumerate(todos_medidores[i:i + num_colunas]):
-                    with cols[j]:
-                        renderizar_card(medidor)
-                st.write("") # Espaçamento vertical
+                    with cols[j]: renderizar_card(medidor)
+                st.write("")
         else:
-            st.info("Nenhum medidor encontrado com os filtros aplicados.")
+            st.info("Nenhum medidor encontrado.")
+
+# -----------------------------------------------------------------------
+
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL (GRÁFICOS E TENDÊNCIAS)
+def get_stats_por_dia(df_mes):
+    daily_stats = []
+    for data, group in df_mes.groupby('Data_dt'):
+        medidores = []
+        for _, row in group.iterrows(): medidores.extend(processar_ensaio(row, 'B'))
+        aprovados = sum(1 for m in medidores if m['status'] == 'APROVADO')
+        reprovados = sum(1 for m in medidores if m['status'] == 'REPROVADO')
+        daily_stats.append({'Data': data, 'Aprovados': aprovados, 'Reprovados': reprovados})
+    return pd.DataFrame(daily_stats)
 
 def pagina_visao_mensal(df_completo):
     st.sidebar.header("Filtros da Visão Mensal")
@@ -284,13 +248,12 @@ def pagina_visao_mensal(df_completo):
     st.markdown(f"### Análise Consolidada de **{meses[mes_selecionado_num]} de {ano_selecionado}**")
     
     if df_mes.empty:
-        st.info("Nenhum dado encontrado para este mês/ano.")
+        st.info("Nenhum dado encontrado.")
         return
         
-    with st.spinner("Gerando gráficos mensais..."):
+    with st.spinner("Gerando gráficos..."):
         todos_medidores_mes = []
-        for _, row in df_mes.iterrows(): 
-            todos_medidores_mes.extend(processar_ensaio(row, 'B'))
+        for _, row in df_mes.iterrows(): todos_medidores_mes.extend(processar_ensaio(row, 'B'))
             
         stats_mes = {
             "Aprovados": sum(1 for m in todos_medidores_mes if m['status'] == 'APROVADO'), 
@@ -305,28 +268,27 @@ def pagina_visao_mensal(df_completo):
         fig_line = go.Figure()
         fig_line.add_trace(go.Scatter(x=df_daily['Data'], y=df_daily['Aprovados'], mode='lines+markers', name='Aprovados', line=dict(color='#16a34a')))
         fig_line.add_trace(go.Scatter(x=df_daily['Data'], y=df_daily['Reprovados'], mode='lines+markers', name='Reprovados', line=dict(color='#dc2626')))
-        fig_line.update_layout(title='Evolução Diária de Aprovados vs. Reprovados', xaxis_title='Dia', yaxis_title='Quantidade')
         
         col1, col2 = st.columns([1, 2])
         with col1: st.plotly_chart(fig_pie, use_container_width=True)
         with col2: st.plotly_chart(fig_line, use_container_width=True)
 
-# --- LÓGICA PRINCIPAL DE EXECUÇÃO ---
+# -----------------------------------------------------------------------
+
+# [BLOCO 08] - INICIALIZAÇÃO E MENU PRINCIPAL
 def main():
     st.title("📊 Dashboard de Ensaios")
     try:
         df_completo = carregar_dados()
         if not df_completo.empty:
             st.sidebar.title("Menu de Navegação")
-            tipo_visao = st.sidebar.radio("Escolha o tipo de análise:", ('Visão Diária', 'Visão Mensal'))
-            if tipo_visao == 'Visão Diária':
-                pagina_visao_diaria(df_completo)
-            else:
-                pagina_visao_mensal(df_completo)
+            tipo_visao = st.sidebar.radio("Escolha a análise:", ('Visão Diária', 'Visão Mensal'))
+            if tipo_visao == 'Visão Diária': pagina_visao_diaria(df_completo)
+            else: pagina_visao_mensal(df_completo)
         else:
-            st.error("Não foi possível carregar os dados. Verifique se o arquivo Excel está no caminho correto.")
+            st.error("Erro ao carregar dados. Verifique o arquivo Excel.")
     except Exception as e:
-        st.error("Um erro inesperado ocorreu na aplicação principal.")
+        st.error("Erro inesperado na aplicação.")
         st.code(traceback.format_exc())
 
 if __name__ == "__main__":
