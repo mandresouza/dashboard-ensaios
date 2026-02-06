@@ -166,18 +166,19 @@ def pagina_visao_diaria(df_completo):
         if not medidores_para_exibir:
             st.warning("Nenhum medidor encontrado com os filtros de status aplicados.")
         else:
-        # BLOCO NOVO (CORRIGIDO)      
-        # Adicione 4 espaços (ou uma tabulação) aqui
-        num_colunas = 5
-        # E aqui
-        linhas_de_medidores = [medidores_para_exibir[i:i + num_colunas] for i in range(0, len(medidores_para_exibir), num_colunas)]
-        # E em todas as outras linhas do bloco
-        for linha in linhas_de_medidores:
-            cols = st.columns(num_colunas)
-            for i, medidor in enumerate(linha):
-                with cols[i]:
-                    renderizar_card(medidor)
-                    
+        # O CÓDIGO CORRIGIDO
+else:
+    # Adicione 4 espaços (ou uma tabulação) aqui
+    num_colunas = 5
+    # E aqui
+    linhas_de_medidores = [medidores_para_exibir[i:i + num_colunas] for i in range(0, len(medidores_para_exibir), num_colunas)]
+    # E em todas as outras linhas do bloco
+    for linha in linhas_de_medidores:
+        cols = st.columns(num_colunas)
+        for i, medidor in enumerate(linha):
+            with cols[i]:
+                renderizar_card(medidor)
+                
 def pagina_visao_mensal(df_completo):
     st.sidebar.header("Filtros da Visão Mensal")
     anos = sorted(df_completo['Data_dt'].dt.year.unique(), reverse=True)
