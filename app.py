@@ -142,16 +142,14 @@ def pagina_visao_diaria(df_completo):
         if df_filtrado.empty:
             st.info(f"Nenhum ensaio encontrado para os filtros selecionados.")
             return
- def criar_grafico_pizza(df):
+def criar_grafico_pizza(df):
     """Cria e retorna um gráfico de pizza com a contagem de status."""
-    status_counts = df['STATUS'].value_counts()
-    
+    status_counts = df['STATUS'].value_counts()    
     cores = {
         'Aprovado': 'green',
         'Reprovado': 'red',
         'ENSAIADOS': 'orange'
-    }
-    
+    }    
     fig = px.pie(
         status_counts,
         values=status_counts.values,
