@@ -143,6 +143,34 @@ def pagina_visao_diaria(df_completo):
             st.info(f"Nenhum ensaio encontrado para os filtros selecionados.")
             return
 
+        def criar_grafico_pizza(df):
+    """Cria e retorna um gráfico de pizza com a contagem de status."""
+    status_counts = df['STATUS'].value_counts()
+    
+    # Define cores personalizadas para manter a consistência
+    cores = {
+        'Aprovado': 'green',
+        'Reprovado': 'red',
+        'ENSAIADOS': 'orange' # Corrigido conforme sua indicação
+    }
+    
+    fig = px.pie(
+        status_counts,
+        values=status_counts.values,
+        names=status_counts.index,
+        title='Distribuição de Status dos Medidores',
+        color=status_counts.index,
+        color_discrete_map=cores
+    )
+    fig.update_layout(
+        legend_title_text='Status',
+        uniformtext_minsize=12, 
+        uniformtext_mode='hide'
+    )
+    fig.update_traces(textposition='inside', textinfo='percent+label')
+    
+    return fig
+    
         with st.spinner("Processando ensaios... Por favor, aguarde."):
             todos_medidores = []
             classe_banc20 = None
@@ -151,7 +179,14 @@ def pagina_visao_diaria(df_completo):
                 tipo_medidor = st.sidebar.radio("Tipo de Medidor", ["Eletrônico", "Eletromecânico"])
                 if tipo_medidor == 'Eletromecânico': classe_banc20 = "ELETROMECANICO"
                 else: classe_banc20 = st.sidebar.selectbox("Classe de Exatidão", ['A', 'B', 'C', 'D'], index=1)
-            
+            # --- Gráfico de Pizza ---
+            if not medidores_para_exibir:
+                pass
+            else:
+                
+    df_para_grafico = pd.DataFrame(medidores_para_exibir)
+    st.plotly_chart(criar_grafico_pizza(df_para_grafico), use_container_width=True)
+    st.markdown("---") # Adiciona uma linha divisória
             for _, ensaio_row in df_filtrado.iterrows():
                 todos_medidores.extend(processar_ensaio(ensaio_row, classe_banc20))
             
