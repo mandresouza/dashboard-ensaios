@@ -166,16 +166,14 @@ def pagina_visao_diaria(df_completo):
         if not medidores_para_exibir:
             st.warning("Nenhum medidor encontrado com os filtros de status aplicados.")
         else:
-        # BLOCO NOVO (CORRIGIDO)
+        # BLOCO NOVO (CORRIGIDO)      
+        # Adicione 4 espaços (ou uma tabulação) aqui
         num_colunas = 5
-        # Agrupa os medidores em "linhas" de 5
+        # E aqui
         linhas_de_medidores = [medidores_para_exibir[i:i + num_colunas] for i in range(0, len(medidores_para_exibir), num_colunas)]
-        
-        # Itera sobre cada linha de medidores
+        # E em todas as outras linhas do bloco
         for linha in linhas_de_medidores:
-            # Cria um novo conjunto de colunas para ESTA linha
             cols = st.columns(num_colunas)
-            # Preenche as colunas com os cards desta linha
             for i, medidor in enumerate(linha):
                 with cols[i]:
                     renderizar_card(medidor)
