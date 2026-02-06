@@ -167,7 +167,7 @@ def criar_grafico_pizza(df):
     
     return fig
 
-        with st.spinner("Processando ensaios... Por favor, aguarde."):
+with st.spinner("Processando ensaios... Por favor, aguarde."):
             todos_medidores = []
             classe_banc20 = None
             if not df_filtrado[df_filtrado['Bancada'] == 'BANC_20_POS'].empty:
