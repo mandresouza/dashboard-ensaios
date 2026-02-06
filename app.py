@@ -180,7 +180,7 @@ def pagina_visao_diaria(df_completo):
                     with cols[i]:
                         renderizar_card(medidor)
             # ADICIONE ESTA LINHA PARA CRIAR O ESPAÇO VERTICAL
-            st.markdown("
+            st.markdown("  
 ", unsafe_allow_html=True)
                 
 def pagina_visao_mensal(df_completo):
