@@ -168,67 +168,58 @@ def criar_grafico_pizza(df):
     return fig
 
 with st.spinner("Processando ensaios... Por favor, aguarde."):
-            todos_medidores = []
-            classe_banc20 = None
-            if not df_filtrado[df_filtrado['Bancada'] == 'BANC_20_POS'].empty:
-                st.sidebar.markdown("---"); st.sidebar.subheader("⚙️ Config. Bancada 20")
-                tipo_medidor = st.sidebar.radio("Tipo de Medidor", ["Eletrônico", "Eletromecânico"])
-                if tipo_medidor == 'Eletromecânico': classe_banc20 = "ELETROMECANICO"
-                else: classe_banc20 = st.sidebar.selectbox("Classe de Exatidão", ['A', 'B', 'C', 'D'], index=1)
-            # --- Gráfico de Pizza ---
-            if not medidores_para_exibir:
-                pass
-            else:
-                
-    df_para_grafico = pd.DataFrame(medidores_para_exibir)
-    st.plotly_chart(criar_grafico_pizza(df_para_grafico), use_container_width=True)
-    st.markdown("---") # Adiciona uma linha divisória
-            for _, ensaio_row in df_filtrado.iterrows():
-                todos_medidores.extend(processar_ensaio(ensaio_row, classe_banc20))
-            
-            medidores_para_exibir = todos_medidores
-            if status_filter: medidores_para_exibir = [m for m in medidores_para_exibir if m['status'] in status_filter]
-
-        stats = {"aprovados": sum(1 for m in todos_medidores if m['status'] == 'APROVADO'), "reprovados": sum(1 for m in todos_medidores if m['status'] == 'REPROVADO'), "consumidor": sum(1 for m in todos_medidores if m['status'] == 'CONTRA O CONSUMIDOR'), "total": sum(1 for m in todos_medidores if m['status'] != 'NÃO ENTROU')}
-        renderizar_resumo(stats)
-        
-        st.markdown("---")
-        if not medidores_para_exibir:
-        # Se a lista de medidores estiver vazia (devido aos filtros), não faz nada.
-        pass
-    else:
-        # Se houver medidores, cria um DataFrame temporário só com eles
-        df_para_grafico = pd.DataFrame(medidores_para_exibir)
-        # Usa a função que você já inseriu para criar o gráfico
-        st.plotly_chart(criar_grafico_pizza(df_para_grafico), use_container_width=True)
-        # Adiciona uma linha para separar o gráfico dos cards
-        st.markdown("---")
-
-        st.subheader("Detalhes dos Medidores")
-        # --- Início: Bloco do Gráfico de Pizza ---
-        if not medidores_para_exibir:
-        st.warning("Nenhum medidor encontrado com os filtros de status aplicados.")
-    else:
-        # ADICIONE ESTE BLOCO PRIMEIRO
-        # --- Início: Bloco do Gráfico de Pizza ---
-        st.markdown("---") # Linha divisória
-        df_para_grafico = pd.DataFrame(medidores_para_exibir)
-        st.plotly_chart(criar_grafico_pizza(df_para_grafico), use_container_width=True)
-        # --- Fim: Bloco do Gráfico de Pizza ---
+    todos_medidores = []
     
-        # O CÓDIGO ABAIXO JÁ EXISTE E DEVE CONTINUAR AQUI
-        st.subheader("Detalhes dos Medidores") # Adicionando o subheader aqui
-        num_colunas = 5
-        linhas_de_medidores = [medidores_para_exibir[i:i + num_colunas] for i in range(0, len(medidores_para_exibir), num_colunas)]
+    # Processa os ensaios do DataFrame já filtrado por data e bancada
+    for _, ensaio_row in df_filtrado.iterrows():
+        medidores_processados = processar_ensaio(ensaio_row)
+        todos_medidores.extend(medidores_processados)
 
-            for linha_de_medidores in linhas_de_medidores:
-                cols = st.columns(num_colunas)
-                for i, medidor in enumerate(linha_de_medidores):
-                    with cols[i]:
-                        renderizar_card(medidor)
-                
-                # Adiciona um espaço vertical após cada linha de cards
-                st.write("")     
+    # Filtro final por CLASSE (para BANC_20_POS)
+    classe_banc20 = None
+    if bancada_selecionada == 'BANC_20_POS' or bancada_selecionada == 'Todas':
+        if not df_filtrado[df_filtrado['Bancada'] == 'BANC_20_POS'].empty:
+            st.sidebar.markdown("---")
+            st.sidebar.subheader("⚙️ Config. Bancada 20")
+            tipo_medidor = st.sidebar.radio("Tipo de Medidor", ["Eletrônico", "Eletromecânico"])
+            if tipo_medidor == 'Eletromecânico':
+                classe_banc20 = "ELETROMECANICO"
+            else:
+                classe_banc20 = st.sidebar.selectbox("Classe de Exatidão", ['A', 'B', 'C', 'D'], index=1)
+    
+    if classe_banc20:
+        todos_medidores = [m for m in todos_medidores if m.get('bancada') != 'BANC_20_POS' or m.get('classe_exatidao') == classe_banc20]
+
+    # Filtro final por STATUS
+    if status_filter:
+        todos_medidores = [m for m in todos_medidores if m['status'] in status_filter]
+
+# --- Exibição dos Resultados ---
+
+# 1. Renderiza o resumo (se houver medidores)
+if todos_medidores:
+    stats = calcular_estatisticas(todos_medidores)
+    renderizar_resumo(stats)
+    st.markdown("---") # Linha divisória
+
+    # 2. Renderiza o Gráfico de Pizza
+    df_para_grafico = pd.DataFrame(todos_medidores)
+    st.plotly_chart(criar_grafico_pizza(df_para_grafico), use_container_width=True)
+    st.markdown("---") # Linha divisória
+
+# 3. Renderiza os Cards Detalhados
+st.subheader("Detalhes dos Medidores")
+if not todos_medidores:
+    st.info("Nenhum medidor encontrado com os filtros aplicados.")
+else:
+    num_colunas = 5
+    linhas_de_medidores = [todos_medidores[i:i + num_colunas] for i in range(0, len(todos_medidores), num_colunas)]
+    for linha in linhas_de_medidores:
+        cols = st.columns(num_colunas)
+        for i, medidor in enumerate(linha):
+            with cols[i]:
+                renderizar_card(medidor)
+        st.write("") # Espaçamento vertical entre as linhas de cards    
                               
 def pagina_visao_mensal(df_completo):
     st.sidebar.header("Filtros da Visão Mensal")
