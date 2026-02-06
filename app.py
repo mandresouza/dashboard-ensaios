@@ -142,30 +142,6 @@ def pagina_visao_diaria(df_completo):
         if df_filtrado.empty:
             st.info(f"Nenhum ensaio encontrado para os filtros selecionados.")
             return
-def criar_grafico_pizza(df):
-    """Cria e retorna um gráfico de pizza com a contagem de status."""
-    status_counts = df['STATUS'].value_counts()    
-    cores = {
-        'Aprovado': 'green',
-        'Reprovado': 'red',
-        'ENSAIADOS': 'orange'
-    }    
-    fig = px.pie(
-        status_counts,
-        values=status_counts.values,
-        names=status_counts.index,
-        title='Distribuição de Status dos Medidores',
-        color=status_counts.index,
-        color_discrete_map=cores
-    )
-    fig.update_layout(
-        legend_title_text='Status',
-        uniformtext_minsize=12, 
-        uniformtext_mode='hide'
-    )
-    fig.update_traces(textposition='inside', textinfo='percent+label')
-    
-    return fig
 
 with st.spinner("Processando ensaios... Por favor, aguarde."):
     todos_medidores = []
