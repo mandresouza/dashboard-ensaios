@@ -153,17 +153,7 @@ def renderizar_resumo(stats):
 # [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (FILTROS E PROCESSAMENTO)
 def pagina_visao_diaria(df_completo):
     st.sidebar.header("Filtros da Visão Diária")
-    if 'serie_filter_state' not in st.session_state:
-    st.session_state.serie_filter_state = ""
-
-# Cria o campo de texto e o conecta à "memória" da sessão
-st.sidebar.text_input(
-    "Buscar por Número de Série",
-    key="serie_filter_state"  # A 'key' é a mágica que atualiza em tempo real
-)
-
-# A variável que o resto do seu código usa agora vem da "memória"
-serie_filter = st.session_state.serie_filter_state
+    serie_filter = st.sidebar.text_input("Buscar por Número de Série")
 
     if serie_filter:
         st.markdown(f"### Buscando por série: **{serie_filter}**")
