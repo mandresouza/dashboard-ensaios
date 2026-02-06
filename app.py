@@ -142,10 +142,9 @@ def pagina_visao_diaria(df_completo):
         if df_filtrado.empty:
             st.info(f"Nenhum ensaio encontrado para os filtros selecionados.")
             return
-
-        def criar_grafico_pizza(df):
-    """Cria e retorna um gráfico de pizza com a contagem de status."""
-    status_counts = df['STATUS'].value_counts()
+def criar_grafico_pizza(df):
+"""Cria e retorna um gráfico de pizza com a contagem de status."""
+status_counts = df['STATUS'].value_counts()
     
     # Define cores personalizadas para manter a consistência
     cores = {
@@ -197,6 +196,17 @@ def pagina_visao_diaria(df_completo):
         renderizar_resumo(stats)
         
         st.markdown("---")
+        if not medidores_para_exibir:
+        # Se a lista de medidores estiver vazia (devido aos filtros), não faz nada.
+        pass
+    else:
+        # Se houver medidores, cria um DataFrame temporário só com eles
+        df_para_grafico = pd.DataFrame(medidores_para_exibir)
+        # Usa a função que você já inseriu para criar o gráfico
+        st.plotly_chart(criar_grafico_pizza(df_para_grafico), use_container_width=True)
+        # Adiciona uma linha para separar o gráfico dos cards
+        st.markdown("---")
+
         st.subheader("Detalhes dos Medidores")
         if not medidores_para_exibir:
             st.warning("Nenhum medidor encontrado com os filtros de status aplicados.")
