@@ -142,7 +142,33 @@ def pagina_visao_diaria(df_completo):
         if df_filtrado.empty:
             st.info(f"Nenhum ensaio encontrado para os filtros selecionados.")
             return
-            
+ def criar_grafico_pizza(df):
+    """Cria e retorna um gráfico de pizza com a contagem de status."""
+    status_counts = df['STATUS'].value_counts()
+    
+    cores = {
+        'Aprovado': 'green',
+        'Reprovado': 'red',
+        'ENSAIADOS': 'orange'
+    }
+    
+    fig = px.pie(
+        status_counts,
+        values=status_counts.values,
+        names=status_counts.index,
+        title='Distribuição de Status dos Medidores',
+        color=status_counts.index,
+        color_discrete_map=cores
+    )
+    fig.update_layout(
+        legend_title_text='Status',
+        uniformtext_minsize=12, 
+        uniformtext_mode='hide'
+    )
+    fig.update_traces(textposition='inside', textinfo='percent+label')
+    
+    return fig
+
         with st.spinner("Processando ensaios... Por favor, aguarde."):
             todos_medidores = []
             classe_banc20 = None
@@ -181,11 +207,21 @@ def pagina_visao_diaria(df_completo):
         st.markdown("---")
 
         st.subheader("Detalhes dos Medidores")
+        # --- Início: Bloco do Gráfico de Pizza ---
         if not medidores_para_exibir:
-            st.warning("Nenhum medidor encontrado com os filtros de status aplicados.")
-        else:
-            num_colunas = 5
-            linhas_de_medidores = [medidores_para_exibir[i:i + num_colunas] for i in range(0, len(medidores_para_exibir), num_colunas)]
+        st.warning("Nenhum medidor encontrado com os filtros de status aplicados.")
+    else:
+        # ADICIONE ESTE BLOCO PRIMEIRO
+        # --- Início: Bloco do Gráfico de Pizza ---
+        st.markdown("---") # Linha divisória
+        df_para_grafico = pd.DataFrame(medidores_para_exibir)
+        st.plotly_chart(criar_grafico_pizza(df_para_grafico), use_container_width=True)
+        # --- Fim: Bloco do Gráfico de Pizza ---
+    
+        # O CÓDIGO ABAIXO JÁ EXISTE E DEVE CONTINUAR AQUI
+        st.subheader("Detalhes dos Medidores") # Adicionando o subheader aqui
+        num_colunas = 5
+        linhas_de_medidores = [medidores_para_exibir[i:i + num_colunas] for i in range(0, len(medidores_para_exibir), num_colunas)]
 
             for linha_de_medidores in linhas_de_medidores:
                 cols = st.columns(num_colunas)
