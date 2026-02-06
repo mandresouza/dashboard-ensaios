@@ -144,12 +144,10 @@ def pagina_visao_diaria(df_completo):
             return            
 with st.spinner("Processando ensaios... Por favor, aguarde."):
     todos_medidores = []
-    
     # 1. Processa os ensaios do DataFrame já filtrado
     for _, ensaio_row in df_filtrado.iterrows():
         medidores_processados = processar_ensaio(ensaio_row)
         todos_medidores.extend(medidores_processados)
-
     # 2. Filtro final por CLASSE (para BANC_20_POS)
     classe_banc20 = None
     if bancada_selecionada == 'BANC_20_POS' or bancada_selecionada == 'Todas':
@@ -160,23 +158,18 @@ with st.spinner("Processando ensaios... Por favor, aguarde."):
             if tipo_medidor == 'Eletromecânico':
                 classe_banc20 = "ELETROMECANICO"
             else:
-                classe_banc20 = st.sidebar.selectbox("Classe de Exatidão", ['A', 'B', 'C', 'D'], index=1)
-    
+                classe_banc20 = st.sidebar.selectbox("Classe de Exatidão", ['A', 'B', 'C', 'D'], index=1)    
     if classe_banc20:
         todos_medidores = [m for m in todos_medidores if m.get('bancada') != 'BANC_20_POS' or m.get('classe_exatidao') == classe_banc20]
-
     # 3. Filtro final por STATUS
     if status_filter:
         todos_medidores = [m for m in todos_medidores if m['status'] in status_filter]
-
 # --- Exibição dos Resultados (Fora do Spinner) ---
-
 # 1. Renderiza o resumo
 if todos_medidores:
     stats = calcular_estatisticas(todos_medidores)
     renderizar_resumo(stats)
     st.markdown("---")
-
 # 2. Renderiza os Cards Detalhados
 st.subheader("Detalhes dos Medidores")
 if not todos_medidores:
