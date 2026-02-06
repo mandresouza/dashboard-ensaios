@@ -172,17 +172,15 @@ def pagina_visao_diaria(df_completo):
 
             # Itera sobre cada linha de medidores
             for linha in linhas_de_medidores:
-                # Cria um novo conjunto de colunas para ESTA linha
                 cols = st.columns(num_colunas)
-                # Preenche as colunas com os cards desta linha
                 for i, medidor in enumerate(linha):
                     with cols[i]:
                         renderizar_card(medidor)
                 
-                # Adiciona o espaço vertical APÓS desenhar uma linha de cards
+                # ESTA É A LINHA CORRETA E COMPLETA
                 st.markdown("  
-", unsafe_allow_html=True)
-                
+            ", unsafe_allow_html=True)               
+                              
 def pagina_visao_mensal(df_completo):
     st.sidebar.header("Filtros da Visão Mensal")
     anos = sorted(df_completo['Data_dt'].dt.year.unique(), reverse=True)
