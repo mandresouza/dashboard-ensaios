@@ -252,30 +252,30 @@ def pagina_visao_diaria(df_completo):
             if status_filter:
                 todos_medidores = [m for m in todos_medidores if m['status'] in status_filter]
 
-        if todos_medidores:
-        stats = calcular_estatisticas(todos_medidores) # <--- ADICIONE ESTA LINHA
-        renderizar_resumo(stats) # <--- MODIFIQUE ESTA LINHA
-        
-        # Seção para adicionar o botão de download
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("📄 Exportar Relatório")
-        
-        pdf_bytes = gerar_pdf_relatorio(
-            medidores=todos_medidores, 
-            data=data_selecionada_str, 
-            bancada=bancada_selecionada,
-            stats=stats # <--- ADICIONE ESTA LINHA
-        )
-        
-        st.sidebar.download_button(
-            label="📥 Baixar Relatório PDF",
-            data=pdf_bytes,
-            file_name=f"Relatorio_Ensaios_{data_selecionada_dt.strftime('%Y-%m-%d')}.pdf",
-            mime="application/pdf"
-        )
-
-        st.markdown("---")
-        st.subheader("📋 Detalhes dos Medidores")
+            if todos_medidores:
+            stats = calcular_estatisticas(todos_medidores) # <--- ADICIONE ESTA LINHA
+            renderizar_resumo(stats) # <--- MODIFIQUE ESTA LINHA
+            
+            # Seção para adicionar o botão de download
+            st.sidebar.markdown("---")
+            st.sidebar.subheader("📄 Exportar Relatório")
+            
+            pdf_bytes = gerar_pdf_relatorio(
+                medidores=todos_medidores, 
+                data=data_selecionada_str, 
+                bancada=bancada_selecionada,
+                stats=stats # <--- ADICIONE ESTA LINHA
+            )
+            
+            st.sidebar.download_button(
+                label="📥 Baixar Relatório PDF",
+                data=pdf_bytes,
+                file_name=f"Relatorio_Ensaios_{data_selecionada_dt.strftime('%Y-%m-%d')}.pdf",
+                mime="application/pdf"
+            )
+    
+            st.markdown("---")
+            st.subheader("📋 Detalhes dos Medidores")
 
 # -----------------------------------------------------------------------
 
