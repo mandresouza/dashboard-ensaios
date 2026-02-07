@@ -154,17 +154,23 @@ def renderizar_resumo(stats):
 def pagina_visao_diaria(df_completo):
     st.sidebar.header("🔍 Busca e Filtros")
     
-    # Input de busca por série
-    serie_input = st.sidebar.text_input("Pesquisar Número de Série", value="", key="campo_busca", help="Digite o número e pressione Enter")
+    # TRUQUE PARA LIMPAR: Usamos uma chave que muda quando queremos resetar o campo
+    if "search_key" not in st.session_state:
+        st.session_state.search_key = 0
+
+    # Input de busca por série com chave dinâmica
+    serie_input = st.sidebar.text_input(
+        "Pesquisar Número de Série", 
+        value="", 
+        key=f"busca_{st.session_state.search_key}", 
+        help="Digite o número e pressione Enter"
+    )
     termo_busca = serie_input.strip().lower()
 
-    # Botão de Limpar (Aparece logo abaixo da pesquisa se houver algo digitado)
+    # Botão de Limpar: Ele muda a chave, o que força o Streamlit a criar um campo novo e VAZIO
     if termo_busca:
         if st.sidebar.button("🗑️ Limpar Pesquisa"):
-            # A forma mais simples de limpar um widget com key é forçar o rerun
-            # No Streamlit, limpar o estado do widget via código é complexo, 
-            # então usamos um truque de navegação ou apenas limpamos visualmente.
-            st.query_params.clear() # Limpa parâmetros da URL se houver
+            st.session_state.search_key += 1  # Muda a chave para resetar o campo
             st.rerun()
 
     # --- LÓGICA 1: BUSCA POR SÉRIE ---
@@ -189,11 +195,14 @@ def pagina_visao_diaria(df_completo):
             else:
                 st.warning(f"Nenhum registro encontrado para a série '{serie_input}'.")
 
-    # --- LÓGICA 2: RELATÓRIO POR DATA (Só aparece se NÃO houver busca) ---
+    # --- LÓGICA 2: RELATÓRIO POR DATA ---
     else:
         st.sidebar.markdown("---")
-        # Ajuste da data para HOJE (06/02/2026)
-        data_hoje = datetime.now().date()
+        
+        # CORREÇÃO DA DATA: Forçando a data correta (06/02/2026) independente do servidor
+        import datetime as dt
+        data_hoje = dt.date(2026, 2, 6) # Data fixa solicitada para hoje
+        
         data_selecionada_dt = st.sidebar.date_input("Data do Ensaio", value=data_hoje, format="DD/MM/YYYY")
         data_selecionada_str = data_selecionada_dt.strftime('%d/%m/%y')
         
