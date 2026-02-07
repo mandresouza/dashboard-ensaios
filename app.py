@@ -254,10 +254,9 @@ def pagina_visao_diaria(df_completo):
 
 # -----------------------------------------------------------------------
 
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL (GRÁFICOS E TENDÊNCIAS PROFISSIONAIS)
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL (GRÁFICOS, TENDÊNCIAS E COMPARATIVO)
 def get_stats_por_dia(df_mes):
     daily_stats = []
-    # Agrupando por data e processando os ensaios
     for data, group in df_mes.groupby('Data_dt'):
         medidores = []
         for _, row in group.iterrows(): 
@@ -303,11 +302,23 @@ def pagina_visao_mensal(df_completo):
         return
         
     with st.spinner("Processando indicadores mensais..."):
-        # Processamento de todos os medidores do mês
+        # Processamento Geral e por Bancada
         todos_medidores_mes = []
-        for _, row in df_mes.iterrows(): 
-            todos_medidores_mes.extend(processar_ensaio(row, 'B'))
+        stats_bancadas = []
+        
+        for bancada in df_mes['Bancada'].unique():
+            df_banc = df_mes[df_mes['Bancada'] == bancada]
+            medidores_banc = []
+            for _, row in df_banc.iterrows():
+                m_list = processar_ensaio(row, 'B')
+                medidores_banc.extend(m_list)
+                todos_medidores_mes.extend(m_list)
             
+            aprov = sum(1 for m in medidores_banc if m['status'] == 'APROVADO')
+            repro = sum(1 for m in medidores_banc if m['status'] == 'REPROVADO')
+            cons = sum(1 for m in medidores_banc if m['status'] == 'CONTRA O CONSUMIDOR')
+            stats_bancadas.append({'Bancada': bancada, 'Aprovados': aprov, 'Reprovados': repro, 'Contra Consumidor': cons})
+
         total_m = len(todos_medidores_mes)
         aprov_m = sum(1 for m in todos_medidores_mes if m['status'] == 'APROVADO')
         repro_m = sum(1 for m in todos_medidores_mes if m['status'] == 'REPROVADO')
@@ -323,50 +334,49 @@ def pagina_visao_mensal(df_completo):
 
         st.markdown("---")
 
-        # Gráficos
+        # LINHA 1 DE GRÁFICOS: Distribuição e Tendência
         col_g1, col_g2 = st.columns([1, 1.5])
-        
         with col_g1:
-            # Gráfico de Rosca (Donut) mais moderno
-            df_pie = pd.DataFrame({
-                'Status': ['Aprovados', 'Reprovados', 'Contra Consumidor'],
-                'Qtd': [aprov_m, repro_m, cons_m]
-            })
-            fig_donut = px.pie(
-                df_pie, values='Qtd', names='Status', hole=.5,
-                title='<b>Distribuição de Qualidade</b>',
-                color_discrete_map={'Aprovados':'#16a34a', 'Reprovados':'#dc2626', 'Contra Consumidor':'#7c3aed'}
-            )
-            fig_donut.update_traces(textposition='inside', textinfo='percent+label')
+            df_pie = pd.DataFrame({'Status': ['Aprovados', 'Reprovados', 'Contra Consumidor'], 'Qtd': [aprov_m, repro_m, cons_m]})
+            fig_donut = px.pie(df_pie, values='Qtd', names='Status', hole=.5, title='<b>Distribuição de Qualidade</b>',
+                               color_discrete_map={'Aprovados':'#16a34a', 'Reprovados':'#dc2626', 'Contra Consumidor':'#7c3aed'})
             fig_donut.update_layout(showlegend=False, margin=dict(t=40, b=0, l=0, r=0))
             st.plotly_chart(fig_donut, use_container_width=True)
 
         with col_g2:
-            # Gráfico de Barras Empilhadas para Tendência Diária
             df_daily = get_stats_por_dia(df_mes)
             fig_bar = go.Figure()
             fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Aprovados'], name='Aprovados', marker_color='#16a34a'))
             fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Reprovados'], name='Reprovados', marker_color='#dc2626'))
-            fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Contra Consumidor'], name='Contra Consumidor', marker_color='#7c3aed'))
-            
-            fig_bar.update_layout(
-                barmode='stack',
-                title='<b>Evolução Diária de Ensaios</b>',
-                xaxis_title="Dia do Mês",
-                yaxis_title="Quantidade de Medidores",
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                margin=dict(t=80, b=40, l=0, r=0),
-                hovermode="x unified"
-            )
+            fig_bar.update_layout(barmode='stack', title='<b>Evolução Diária</b>', legend=dict(orientation="h", y=1.1), margin=dict(t=80, b=40))
             st.plotly_chart(fig_bar, use_container_width=True)
+
+        st.markdown("---")
+        
+        # LINHA 2 DE GRÁFICOS: COMPARATIVO DE BANCADAS
+        st.subheader("📊 Comparativo de Performance por Bancada")
+        df_comp = pd.DataFrame(stats_bancadas)
+        
+        col_comp1, col_comp2 = st.columns([1.5, 1])
+        
+        with col_comp1:
+            # Gráfico de barras comparativo
+            fig_comp = go.Figure()
+            fig_comp.add_trace(go.Bar(x=df_comp['Bancada'], y=df_comp['Aprovados'], name='Aprovados', marker_color='#16a34a'))
+            fig_comp.add_trace(go.Bar(x=df_comp['Bancada'], y=df_comp['Reprovados'], name='Reprovados', marker_color='#dc2626'))
+            fig_comp.add_trace(go.Bar(x=df_comp['Bancada'], y=df_comp['Contra Consumidor'], name='Contra Consumidor', marker_color='#7c3aed'))
+            fig_comp.update_layout(title='<b>Aprovados vs Reprovados por Bancada</b>', barmode='group')
+            st.plotly_chart(fig_comp, use_container_width=True)
             
-        # Tabela de Performance Diária
-        with st.expander("📄 Visualizar Tabela de Performance Diária"):
-            st.dataframe(
-                df_daily.sort_values('Data', ascending=False), 
-                use_container_width=True, 
-                hide_index=True
-            )
+        with col_comp2:
+            # Tabela de resumo por bancada
+            st.markdown("  
+  
+", unsafe_allow_html=True)
+            st.dataframe(df_comp, hide_index=True, use_container_width=True)
+
+        with st.expander("📄 Visualizar Tabela de Performance Diária Completa"):
+            st.dataframe(df_daily.sort_values('Data', ascending=False), use_container_width=True, hide_index=True)
 
 # -----------------------------------------------------------------------
 
