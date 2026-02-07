@@ -189,7 +189,7 @@ def renderizar_grafico_reprovacoes(medidores):
 
 # -----------------------------------------------------------------------
 
-# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA
+# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (COM CORREÇÃO PARA DATA VAZIA)
 def pagina_visao_diaria(df_completo):
     st.sidebar.header("🔍 Busca e Filtros")
     
@@ -235,6 +235,13 @@ def pagina_visao_diaria(df_completo):
         st.sidebar.markdown("---")
         
         st.session_state.filtro_data = st.sidebar.date_input("Data do Ensaio", value=st.session_state.filtro_data, format="DD/MM/YYYY")
+        
+        # *** CORREÇÃO APLICADA AQUI ***
+        # Verifica se a data não é None antes de continuar
+        if st.session_state.filtro_data is None:
+            st.info("Por favor, selecione uma data para visualizar os ensaios.")
+            return # Interrompe a execução da função se não houver data
+
         data_selecionada_str = st.session_state.filtro_data.strftime('%d/%m/%y')
         
         bancadas_disponiveis = df_completo['Bancada'].unique().tolist()
