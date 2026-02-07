@@ -168,7 +168,9 @@ def renderizar_resumo(stats):
 
 # -----------------------------------------------------------------------
 
-# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA
+# =======================================================================
+# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (VERSÃO CORRIGIDA E COMPLETA)
+# =======================================================================
 def pagina_visao_diaria(df_completo):
     st.sidebar.header("🔍 Busca e Filtros")
     
@@ -253,29 +255,42 @@ def pagina_visao_diaria(df_completo):
                 todos_medidores = [m for m in todos_medidores if m['status'] in status_filter]
 
         if todos_medidores:
-        stats = calcular_estatisticas(todos_medidores) # <--- ADICIONE ESTA LINHA
-        renderizar_resumo(stats) # <--- MODIFIQUE ESTA LINHA
-        
-        # Seção para adicionar o botão de download
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("📄 Exportar Relatório")
-        
-        pdf_bytes = gerar_pdf_relatorio(
-            medidores=todos_medidores, 
-            data=data_selecionada_str, 
-            bancada=bancada_selecionada,
-            stats=stats # <--- ADICIONE ESTA LINHA
-        )
-        
-        st.sidebar.download_button(
-            label="📥 Baixar Relatório PDF",
-            data=pdf_bytes,
-            file_name=f"Relatorio_Ensaios_{data_selecionada_dt.strftime('%Y-%m-%d')}.pdf",
-            mime="application/pdf"
-        )
+            # Calcula as estatísticas
+            stats = calcular_estatisticas(todos_medidores)
+            
+            # Renderiza o resumo com base nas estatísticas
+            renderizar_resumo(stats)
+            
+            # Adiciona o botão de download na barra lateral
+            st.sidebar.markdown("---")
+            st.sidebar.subheader("📄 Exportar Relatório")
+            
+            pdf_bytes = gerar_pdf_relatorio(
+                medidores=todos_medidores, 
+                data=data_selecionada_str, 
+                bancada=bancada_selecionada,
+                stats=stats
+            )
+            
+            st.sidebar.download_button(
+                label="📥 Baixar Relatório PDF",
+                data=pdf_bytes,
+                file_name=f"Relatorio_Ensaios_{data_selecionada_dt.strftime('%Y-%m-%d')}.pdf",
+                mime="application/pdf"
+            )
 
-        st.markdown("---")
-        st.subheader("📋 Detalhes dos Medidores")
+            # Continua com a renderização dos cards
+            st.markdown("---")
+            st.subheader("📋 Detalhes dos Medidores")
+            num_colunas = 5
+            for i in range(0, len(todos_medidores), num_colunas):
+                cols = st.columns(num_colunas)
+                for j, medidor in enumerate(todos_medidores[i:i + num_colunas]):
+                    with cols[j]:
+                        renderizar_card(medidor)
+                st.write("")
+        else:
+            st.info("Nenhum medidor encontrado para os filtros selecionados.")
 
 # -----------------------------------------------------------------------
 
