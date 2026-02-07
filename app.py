@@ -161,7 +161,7 @@ def renderizar_resumo(stats):
 
 # -----------------------------------------------------------------------
 
-# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (FILTROS E PROCESSAMENTO)
+# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (FILTROS E PROCESSAMENTO COM DATA AUTOMÁTICA)
 def pagina_visao_diaria(df_completo):
     st.sidebar.header("🔍 Busca e Filtros")
     
@@ -210,9 +210,9 @@ def pagina_visao_diaria(df_completo):
     else:
         st.sidebar.markdown("---")
         
-        # CORREÇÃO DA DATA: Forçando a data correta (06/02/2026) independente do servidor
-        import datetime as dt
-        data_hoje = dt.date(2026, 2, 6) # Data fixa solicitada para hoje
+        # --- AJUSTE DA DATA: Agora pega o dia de hoje automaticamente ---
+        from datetime import date
+        data_hoje = date.today() 
         
         data_selecionada_dt = st.sidebar.date_input("Data do Ensaio", value=data_hoje, format="DD/MM/YYYY")
         data_selecionada_str = data_selecionada_dt.strftime('%d/%m/%y')
@@ -226,27 +226,33 @@ def pagina_visao_diaria(df_completo):
         df_filtrado = df_completo[df_completo['Data'] == data_selecionada_str].copy()
         if bancada_selecionada != 'Todas': 
             df_filtrado = df_filtrado[df_filtrado['Bancada'] == bancada_selecionada]
-        
+
         if df_filtrado.empty:
             st.info(f"Não constam ensaios registrados para o dia {data_selecionada_str}.")
             return
 
         with st.spinner("Carregando dados..."):
             todos_medidores = []
-            for _, ensaio_row in df_filtrado.iterrows():
-                todos_medidores.extend(processar_ensaio(ensaio_row))
-
+            
+            # Configuração específica para Bancada 20 (Eletromecânico/Eletrônico)
             classe_banc20 = None
             if (bancada_selecionada == 'BANC_20_POS' or bancada_selecionada == 'Todas') and not df_filtrado[df_filtrado['Bancada'] == 'BANC_20_POS'].empty:
                 st.sidebar.markdown("---")
                 st.sidebar.subheader("⚙️ Config. Bancada 20")
                 tipo_medidor = st.sidebar.radio("Tipo de Medidor", ["Eletrônico", "Eletromecânico"])
-                if tipo_medidor == 'Eletromecânico': classe_banc20 = "ELETROMECANICO"
-                else: classe_banc20 = st.sidebar.selectbox("Classe de Exatidão", ['A', 'B', 'C', 'D'], index=1)
+                if tipo_medidor == 'Eletromecânico': 
+                    classe_banc20 = "ELETROMECANICO"
+                else: 
+                    classe_banc20 = st.sidebar.selectbox("Classe de Exatidão", ['A', 'B', 'C', 'D'], index=1)
             
-            if classe_banc20:
-                todos_medidores = [m for m in todos_medidores if m.get('bancada') != 'BANC_20_POS' or m.get('classe_exatidao') == classe_banc20]
+            # Processa os ensaios aplicando a classe da Bancada 20 se necessário
+            for _, ensaio_row in df_filtrado.iterrows():
+                if ensaio_row['Bancada'] == 'BANC_20_POS':
+                    todos_medidores.extend(processar_ensaio(ensaio_row, classe_banc20))
+                else:
+                    todos_medidores.extend(processar_ensaio(ensaio_row))
 
+            # Aplica filtro de status se selecionado
             if status_filter:
                 todos_medidores = [m for m in todos_medidores if m['status'] in status_filter]
 
