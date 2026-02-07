@@ -1,5 +1,5 @@
 # =======================================================================
-# ARQUIVO: app.py (VERSÃO COM EXPORTAÇÃO PDF - FINAL CORRIGIDA)
+# ARQUIVO: app.py (VERSÃO ESTÁVEL - SEM PDF)
 # =======================================================================
 
 # [BLOCO 01] - IMPORTAÇÕES E CONFIGURAÇÕES INICIAIS
@@ -9,7 +9,6 @@ from datetime import datetime, date
 import plotly.express as px
 import plotly.graph_objects as go
 import traceback
-from fpdf import FPDF # Biblioteca para gerar PDF
 
 st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="wide")
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
@@ -254,23 +253,6 @@ def pagina_visao_diaria(df_completo):
 
         if todos_medidores:
             renderizar_resumo(calcular_estatisticas(todos_medidores))
-            
-            st.sidebar.markdown("---")
-            st.sidebar.subheader("📄 Exportar Relatório")
-            
-            pdf_bytes = gerar_pdf_relatorio(
-                medidores=todos_medidores, 
-                data=data_selecionada_str, 
-                bancada=bancada_selecionada
-            )
-            
-            st.sidebar.download_button(
-                label="📥 Baixar Relatório PDF",
-                data=pdf_bytes,
-                file_name=f"Relatorio_Ensaios_{data_selecionada_dt.strftime('%Y-%m-%d')}.pdf",
-                mime="application/pdf"
-            )
-
             st.markdown("---")
             st.subheader("📋 Detalhes dos Medidores")
             num_colunas = 5
@@ -411,73 +393,7 @@ def main():
 
 # -----------------------------------------------------------------------
 
-# =======================================================================
-# [BLOCO 09] - GERAÇÃO DE RELATÓRIO PDF (VERSÃO CORRIGIDA E ROBUSTA)
-# =======================================================================
-class PDF(FPDF):
-    def header(self):
-        # Garante que o título seja compatível com a codificação do PDF
-        titulo = 'Relatório de Fiscalização de Ensaios'
-        self.set_font('Arial', 'B', 12)
-        self.cell(0, 10, titulo, 0, 1, 'C')
-        self.ln(5)
+# PONTO DE ENTRADA PRINCIPAL DO SCRIPT
+if __name__ == "__main__":
+    main()
 
-    def footer(self):
-        self.set_y(-15)
-        self.set_font('Arial', 'I', 8)
-        pagina_num = f'Página {self.page_no()}'
-        self.cell(0, 10, pagina_num, 0, 0, 'C')
-
-# Função auxiliar para limpar texto para o PDF
-def limpar_texto_pdf(texto_original):
-    """Converte texto para a codificação 'latin-1' usada pelo FPDF, substituindo caracteres incompatíveis."""
-    return str(texto_original).encode('latin-1', 'replace').decode('latin-1')
-
-def gerar_pdf_relatorio(medidores, data, bancada):
-    pdf = PDF()
-    pdf.add_page()
-    
-    # Cabeçalho do relatório
-    pdf.set_font('Arial', '', 11)
-    pdf.cell(0, 8, limpar_texto_pdf(f"Data do Relatório: {data}"), 0, 1)
-    pdf.cell(0, 8, limpar_texto_pdf(f"Bancada(s) Inclusa(s): {bancada}"), 0, 1)
-    pdf.ln(10)
-
-    # Resumo
-    stats = calcular_estatisticas(medidores)
-    pdf.set_font('Arial', 'B', 12)
-    pdf.cell(0, 10, "Resumo dos Resultados", 0, 1, 'L')
-    pdf.set_font('Arial', '', 11)
-    pdf.cell(95, 8, limpar_texto_pdf(f"Total de Medidores Ensaiados: {stats['total']}"), 1, 0)
-    pdf.cell(95, 8, limpar_texto_pdf(f"Medidores Aprovados: {stats['aprovados']}"), 1, 1)
-    pdf.cell(95, 8, limpar_texto_pdf(f"Medidores Reprovados: {stats['reprovados']}"), 1, 0)
-    pdf.cell(95, 8, limpar_texto_pdf(f"Irregularidade (Contra Consumidor): {stats['consumidor']}"), 1, 1)
-    pdf.ln(10)
-
-    # Tabela de detalhes
-    pdf.set_font('Arial', 'B', 12)
-    pdf.cell(0, 10, "Detalhes dos Medidores", 0, 1, 'L')
-    
-    pdf.set_font('Arial', 'B', 9)
-    pdf.cell(15, 7, "Pos.", 1)
-    pdf.cell(40, 7, "Série", 1)
-    pdf.cell(45, 7, "Status", 1)
-    pdf.cell(90, 7, "Motivo da Reprovação", 1)
-    pdf.ln()
-
-    pdf.set_font('Arial', '', 8)
-    for medidor in medidores:
-        # Usa a função de limpeza para todos os dados de texto
-        pos = limpar_texto_pdf(medidor['pos'])
-        serie = limpar_texto_pdf(medidor['serie'])[:20]
-        status = limpar_texto_pdf(medidor['status'].replace('_', ' '))
-        motivo = limpar_texto_pdf(medidor['motivo'])[:50]
-        
-        pdf.cell(15, 7, pos, 1)
-        pdf.cell(40, 7, serie, 1)
-        pdf.cell(45, 7, status, 1)
-        pdf.cell(90, 7, motivo, 1)
-        pdf.ln()
-    
-    # Retorna o PDF como bytes, sem .encode()
-    return pdf.output()
