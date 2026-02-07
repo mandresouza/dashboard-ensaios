@@ -1,5 +1,5 @@
 # =======================================================================
-# ARQUIVO: app.py (VERSÃO COM GRÁFICO DIÁRIO, UX E VISÃO MENSAL CORRIGIDA)
+# ARQUIVO: app.py (VERSÃO COM ASSINATURA PDF E TEMPERATURAS)
 # =======================================================================
 
 # [BLOCO 01] - IMPORTAÇÕES E CONFIGURAÇÕES INICIAIS
@@ -14,35 +14,26 @@ from pdf_generator import gerar_pdf_relatorio
 st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="wide")
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
-# -----------------------------------------------------------------------
-
-# [BLOCO 02] - CARREGAMENTO AUTOMÁTICO (GOOGLE SHEETS)
+# [BLOCO 02] - CARREGAMENTO DE DADOS
 @st.cache_data(ttl=600)
 def carregar_dados():
     try:
         sheet_id = "1QxZ7bCSBClsmXLG1JOrFKNkMWZMK3P5Sp4LP81HV3Rs"
         url_banc10 = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=BANC_10_POS"
         url_banc20 = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=BANC_20_POS"
-        
         df_banc10 = pd.read_csv(url_banc10 )
         df_banc10['Bancada'] = 'BANC_10_POS'
-        
         df_banc20 = pd.read_csv(url_banc20)
         df_banc20['Bancada'] = 'BANC_20_POS'
-
         df_completo = pd.concat([df_banc10, df_banc20], ignore_index=True)
-        
         df_completo['Data_dt'] = pd.to_datetime(df_completo['Data'], errors='coerce', dayfirst=True)
         df_completo = df_completo.dropna(subset=['Data_dt'])
         df_completo['Data'] = df_completo['Data_dt'].dt.strftime('%d/%m/%y')
-        
         return df_completo
     except Exception as e:
         st.error(f"ERRO AO ACESSAR GOOGLE SHEETS: {e}")
         st.info("Verifique se a planilha está compartilhada como 'Qualquer pessoa com o link' (Leitor).")
         return pd.DataFrame()
-
-# -----------------------------------------------------------------------
 
 # [BLOCO 03] - FUNÇÕES AUXILIARES
 def valor_num(v):
@@ -62,12 +53,13 @@ def calcular_estatisticas(todos_medidores):
     consumidor = sum(1 for m in todos_medidores if m['status'] == 'CONTRA O CONSUMIDOR')
     return {"total": total, "aprovados": aprovados, "reprovados": reprovados, "consumidor": consumidor}
 
-# -----------------------------------------------------------------------
-
 # [BLOCO 04] - PROCESSAMENTO TÉCNICO
 def processar_ensaio(row, classe_banc20=None):
     medidores = []
     bancada = row.get('Bancada')
+    temp_inicio = texto(row.get("Temp_inicio", "N/A"))
+    temp_fim = texto(row.get("Temp_fim", "N/A"))
+    
     tamanho_bancada = 20 if bancada == 'BANC_20_POS' else 10
     classe = str(row.get("Classe", "")).upper()
     
@@ -86,9 +78,7 @@ def processar_ensaio(row, classe_banc20=None):
         
         if not (pd.isna(cn) and pd.isna(cp) and pd.isna(ci)):
             v_cn, v_cp, v_ci = valor_num(cn), valor_num(cp), valor_num(ci)
-            
             erro_exatidao = any(v is not None and abs(v) > limite for v in [v_cn, v_cp, v_ci])
-            
             reg_ini, reg_fim = valor_num(row.get(f"P{pos}_REG_Inicio")), valor_num(row.get(f"P{pos}_REG_Fim"))
             
             if reg_ini is not None and reg_fim is not None:
@@ -100,7 +90,6 @@ def processar_ensaio(row, classe_banc20=None):
                 incremento_maior = False
 
             mv_reprovado = str(texto(row.get(f"P{pos}_MV"))).upper() in ["REPROVADO", "NOK", "FAIL", "-"]
-            
             pontos_contra = sum([sum(1 for v in [v_cn, v_cp, v_ci] if v is not None and v > 0 and abs(v) > limite) >= 1, mv_reprovado, incremento_maior])
             
             if pontos_contra >= 2: 
@@ -121,11 +110,11 @@ def processar_ensaio(row, classe_banc20=None):
             "mv": texto(row.get(f"P{pos}_MV")), "reg_ini": texto(row.get(f"P{pos}_REG_Inicio")), 
             "reg_fim": texto(row.get(f"P{pos}_REG_Fim")), "status": status, 
             "detalhe": detalhe, "motivo": motivo, "limite": limite, "bancada": bancada,
-            "reg_err": texto(reg_err)
+            "reg_err": texto(reg_err),
+            "temp_inicio": temp_inicio,
+            "temp_fim": temp_fim
         })
     return medidores
-
-# -----------------------------------------------------------------------
 
 # [BLOCO 05] - COMPONENTES VISUAIS
 def renderizar_card(medidor):
@@ -134,7 +123,10 @@ def renderizar_card(medidor):
     st.markdown(f"""
         <div style="background:{cor}; border-radius:12px; padding:16px; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left: 6px solid rgba(0,0,0,0.1); display: flex; flex-direction: column; justify-content: space-between; height: 100%;">
             <div>
-                <div style="font-size:18px; font-weight:700; border-bottom:2px solid rgba(0,0,0,0.15); margin-bottom:12px; padding-bottom: 8px;">🔢 Posição {medidor['pos']}</div>
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom:2px solid rgba(0,0,0,0.15); margin-bottom:12px; padding-bottom: 8px;">
+                    <span style="font-size:18px; font-weight:700;">🔢 Posição {medidor['pos']}</span>
+                    <span style="font-size:12px; color: #555;">🌡️ {medidor.get('temp_inicio', '--')}°C / {medidor.get('temp_fim', '--')}°C</span>
+                </div>
                 <p style="margin:0 0 12px 0;"><b>Série:</b> {medidor['serie']}</p>
                 <div style="background: rgba(0,0,0,0.05); padding: 10px; border-radius: 8px; margin-bottom:12px;">
                     <b style="display: block; margin-bottom: 8px;">Exatidão (±{medidor['limite']}%)</b>
@@ -187,9 +179,7 @@ def renderizar_grafico_reprovacoes(medidores):
     fig.update_traces(textposition='outside')
     st.plotly_chart(fig, use_container_width=True)
 
-# -----------------------------------------------------------------------
-
-# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (COM CORREÇÃO PARA DATA VAZIA)
+# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA
 def pagina_visao_diaria(df_completo):
     st.sidebar.header("🔍 Busca e Filtros")
     
@@ -236,11 +226,9 @@ def pagina_visao_diaria(df_completo):
         
         st.session_state.filtro_data = st.sidebar.date_input("Data do Ensaio", value=st.session_state.filtro_data, format="DD/MM/YYYY")
         
-        # *** CORREÇÃO APLICADA AQUI ***
-        # Verifica se a data não é None antes de continuar
         if st.session_state.filtro_data is None:
             st.info("Por favor, selecione uma data para visualizar os ensaios.")
-            return # Interrompe a execução da função se não houver data
+            return
 
         data_selecionada_str = st.session_state.filtro_data.strftime('%d/%m/%y')
         
@@ -314,9 +302,7 @@ def pagina_visao_diaria(df_completo):
         else:
             st.info("Nenhum medidor encontrado para os filtros selecionados.")
 
-# -----------------------------------------------------------------------
-
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL (CÓDIGO RESTAURADO)
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL
 def get_stats_por_dia(df_mes):
     daily_stats = []
     for data, group in df_mes.groupby('Data_dt'):
@@ -328,26 +314,15 @@ def get_stats_por_dia(df_mes):
         reprovados = sum(1 for m in medidores if m['status'] == 'REPROVADO')
         consumidor = sum(1 for m in medidores if m['status'] == 'CONTRA O CONSUMIDOR')
         total = aprovados + reprovados + consumidor
-        
         taxa_aprovacao = (aprovados / total * 100) if total > 0 else 0
         
-        daily_stats.append({
-            'Data': data, 
-            'Aprovados': aprovados, 
-            'Reprovados': reprovados, 
-            'Contra Consumidor': consumidor,
-            'Total': total,
-            'Taxa de Aprovação (%)': round(taxa_aprovacao, 1)
-        })
+        daily_stats.append({'Data': data, 'Aprovados': aprovados, 'Reprovados': reprovados, 'Contra Consumidor': consumidor, 'Total': total, 'Taxa de Aprovação (%)': round(taxa_aprovacao, 1)})
     return pd.DataFrame(daily_stats)
 
 def pagina_visao_mensal(df_completo):
     st.sidebar.header("📅 Filtros Mensais")
     anos = sorted(df_completo['Data_dt'].dt.year.unique(), reverse=True)
-    meses_dict = {
-        1: 'Janeiro', 2: 'Fevereiro', 3: 'Março', 4: 'Abril', 5: 'Maio', 6: 'Junho', 
-        7: 'Julho', 8: 'Agosto', 9: 'Setembro', 10: 'Outubro', 11: 'Novembro', 12: 'Dezembro'
-    }
+    meses_dict = {1: 'Janeiro', 2: 'Fevereiro', 3: 'Março', 4: 'Abril', 5: 'Maio', 6: 'Junho', 7: 'Julho', 8: 'Agosto', 9: 'Setembro', 10: 'Outubro', 11: 'Novembro', 12: 'Dezembro'}
     
     col_filt1, col_filt2 = st.sidebar.columns(2)
     with col_filt1:
@@ -385,15 +360,8 @@ def pagina_visao_mensal(df_completo):
         col_g1, col_g2 = st.columns([1, 1.5])
         
         with col_g1:
-            df_pie = pd.DataFrame({
-                'Status': ['Aprovados', 'Reprovados', 'Contra Consumidor'],
-                'Qtd': [aprov_m, repro_m, cons_m]
-            })
-            fig_donut = px.pie(
-                df_pie, values='Qtd', names='Status', hole=.5,
-                title='<b>Distribuição de Qualidade</b>',
-                color_discrete_map={'Aprovados':'#16a34a', 'Reprovados':'#dc2626', 'Contra Consumidor':'#7c3aed'}
-            )
+            df_pie = pd.DataFrame({'Status': ['Aprovados', 'Reprovados', 'Contra Consumidor'], 'Qtd': [aprov_m, repro_m, cons_m]})
+            fig_donut = px.pie(df_pie, values='Qtd', names='Status', hole=.5, title='<b>Distribuição de Qualidade</b>', color_discrete_map={'Aprovados':'#16a34a', 'Reprovados':'#dc2626', 'Contra Consumidor':'#7c3aed'})
             fig_donut.update_traces(textposition='inside', textinfo='percent+label')
             fig_donut.update_layout(showlegend=False, margin=dict(t=40, b=0, l=0, r=0))
             st.plotly_chart(fig_donut, use_container_width=True)
@@ -405,25 +373,11 @@ def pagina_visao_mensal(df_completo):
             fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Reprovados'], name='Reprovados', marker_color='#dc2626'))
             fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Contra Consumidor'], name='Contra Consumidor', marker_color='#7c3aed'))
             
-            fig_bar.update_layout(
-                barmode='stack',
-                title='<b>Evolução Diária de Ensaios</b>',
-                xaxis_title="Dia do Mês",
-                yaxis_title="Quantidade de Medidores",
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                margin=dict(t=80, b=40, l=0, r=0),
-                hovermode="x unified"
-            )
+            fig_bar.update_layout(barmode='stack', title='<b>Evolução Diária de Ensaios</b>', xaxis_title="Dia do Mês", yaxis_title="Quantidade de Medidores", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), margin=dict(t=80, b=40, l=0, r=0), hovermode="x unified")
             st.plotly_chart(fig_bar, use_container_width=True)
             
         with st.expander("📄 Visualizar Tabela de Performance Diária"):
-            st.dataframe(
-                df_daily.sort_values('Data', ascending=False), 
-                use_container_width=True, 
-                hide_index=True
-            )
-
-# -----------------------------------------------------------------------
+            st.dataframe(df_daily.sort_values('Data', ascending=False), use_container_width=True, hide_index=True)
 
 # [BLOCO 08] - INICIALIZAÇÃO E MENU PRINCIPAL
 def main():
@@ -436,15 +390,12 @@ def main():
             if tipo_visao == 'Visão Diária':
                 pagina_visao_diaria(df_completo)
             else:
-                # Chamada da função da visão mensal restaurada
                 pagina_visao_mensal(df_completo)
         else:
             st.error("Erro ao carregar dados. Verifique a conexão com o Google Sheets.")
     except Exception as e:
         st.error("Ocorreu um erro inesperado na aplicação.")
         st.code(traceback.format_exc())
-
-# -----------------------------------------------------------------------
 
 # PONTO DE ENTRADA PRINCIPAL DO SCRIPT
 if __name__ == "__main__":
