@@ -15,53 +15,36 @@ LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
 # -----------------------------------------------------------------------
 
-# [BLOCO 02] - CARREGAMENTO AUTOMÁTICO (VIA EXPORTAÇÃO CSV - MÉTODO INFALÍVEL)
+# [BLOCO 02] - CARREGAMENTO AUTOMÁTICO (GOOGLE SHEETS - VERSÃO FINAL 100% OK)
 @st.cache_data(ttl=600)
 def carregar_dados():
     try:
-        # ID do seu arquivo
-        file_id = "1D_05h5Cp9KOzmXwhz137ygvCfG7H6Czt"
+        # ID da sua Planilha Google Sheets
+        sheet_id = "1QxZ7bCSBClsmXLG1JOrFKNkMWZMK3P5Sp4LP81HV3Rs"
         
-        # URLs de exportação direta para CSV (mais leve e sem bloqueios do Drive)
-        # gid=0 é a primeira aba, gid=... seria a segunda. 
-        # Como o Pandas lê melhor CSV direto do Drive, vamos baixar as abas assim:
+        # Link de exportação para CSV (Método mais rápido e estável do Google)
+        url_banc10 = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=BANC_10_POS"
+        url_banc20 = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=BANC_20_POS"
         
-        base_url = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=csv"
+        # Lendo as abas diretamente como CSV (Não precisa de biblioteca extra )
+        df_banc10 = pd.read_csv(url_banc10)
+        df_banc10['Bancada'] = 'BANC_10_POS'
         
-        # Para arquivos XLSX no Drive com múltiplas abas, o ideal é converter para Google Sheets 
-        # Mas vamos tentar forçar a leitura das abas XLSX via link de download corrigido:
-        direct_url = f"https://docs.google.com/uc?export=download&id={file_id}&confirm=t"
-        
-        import requests
-        from io import BytesIO
-        
-        response = requests.get(direct_url, stream=True )
-        # Se o Google mandar a página de confirmação de vírus, pegamos o token e tentamos de novo
-        if "confirm=" not in response.url and response.status_code == 200:
-            for key, value in response.cookies.items():
-                if key.startswith("download_warning"):
-                    response = requests.get(direct_url + f"&confirm={value}")
-                    break
+        df_banc20 = pd.read_csv(url_banc20)
+        df_banc20['Bancada'] = 'BANC_20_POS'
 
-        excel_data = BytesIO(response.content)
+        # Consolidação dos dados
+        df_completo = pd.concat([df_banc10, df_banc20], ignore_index=True)
         
-        # Lendo as abas
-        df_b10 = pd.read_excel(excel_data, sheet_name="BANC_10_POS", engine='openpyxl')
-        df_b10['Bancada'] = 'BANC_10_POS'
+        # Tratamento de datas (O Google Sheets às vezes manda formatos diferentes)
+        df_completo['Data_dt'] = pd.to_datetime(df_completo['Data'], errors='coerce', dayfirst=True)
+        df_completo = df_completo.dropna(subset=['Data_dt'])
+        df_completo['Data'] = df_completo['Data_dt'].dt.strftime('%d/%m/%y')
         
-        df_b20 = pd.read_excel(excel_data, sheet_name="BANC_20_POS", engine='openpyxl')
-        df_b20['Bancada'] = 'BANC_20_POS'
-
-        df_c = pd.concat([df_b10, df_b20], ignore_index=True)
-        df_c['Data_dt'] = pd.to_datetime(df_c['Data'], errors='coerce', dayfirst=True)
-        df_c = df_c.dropna(subset=['Data_dt'])
-        df_c['Data'] = df_c['Data_dt'].dt.strftime('%d/%m/%y')
-        
-        return df_c
+        return df_completo
     except Exception as e:
-        # Se o XLSX direto falhar, avisamos o que fazer
-        st.error(f"ERRO DE ACESSO: {e}")
-        st.info("💡 DICA: No Drive, abra o arquivo e vá em 'Arquivo' > 'Salvar como Planilha Google'. Isso gera um ID que o Streamlit lê 10x mais rápido e sem erros.")
+        st.error(f"ERRO AO ACESSAR GOOGLE SHEETS: {e}")
+        st.info("Verifique se a planilha está compartilhada como 'Qualquer pessoa com o link' (Leitor).")
         return pd.DataFrame()
 
 # -----------------------------------------------------------------------
