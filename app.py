@@ -414,11 +414,11 @@ def main():
 
 # -----------------------------------------------------------------------
 
-# ADIÇÃO 3: Bloco para geração de PDF
-# [BLOCO 09] - GERAÇÃO DE RELATÓRIO PDF
+# [BLOCO 09] - GERAÇÃO DE RELATÓRIO PDF (CORREÇÃO FINAL)
 class PDF(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 12)
+        # Texto sem acentos para máxima compatibilidade
         self.cell(0, 10, 'Relatorio de Fiscalizacao de Ensaios', 0, 1, 'C')
         self.ln(5)
 
@@ -471,11 +471,6 @@ def gerar_pdf_relatorio(medidores, data, bancada):
         pdf.cell(90, 7, texto_pdf(medidor['motivo'])[:50], 1)
         pdf.ln()
     
-    # Retorna o PDF como bytes
-    return pdf.output()
-
-# -----------------------------------------------------------------------
-
-# PONTO DE ENTRADA PRINCIPAL DO SCRIPT
-if __name__ == "__main__":
-    main()
+    # *** CORREÇÃO FINAL APLICADA AQUI ***
+    # Converte o 'bytearray' retornado pelo fpdf para 'bytes', que é o que o Streamlit espera.
+    return bytes(pdf.output())
