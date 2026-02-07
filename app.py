@@ -154,18 +154,18 @@ def renderizar_resumo(stats):
 def pagina_visao_diaria(df_completo):
     st.sidebar.header("🔍 Busca e Filtros")
     
-    # 1. Campo de busca por série
-    serie_input = st.sidebar.text_input("Pesquisar Número de Série", value="", help="Digite e pressione Enter para buscar no histórico")
+    # Input de busca por série - Requer Enter para processar
+    serie_input = st.sidebar.text_input("Pesquisar Número de Série", value="", help="Digite o número e pressione Enter")
     termo_busca = serie_input.strip().lower()
 
-    # --- LÓGICA DE PESQUISA POR SÉRIE ---
+    # --- LÓGICA 1: BUSCA POR SÉRIE (Ativa apenas se houver texto no campo) ---
     if termo_busca:
-        st.markdown(f"### 🔎 Resultado da Busca por Série: **{serie_input}**")
+        # Título específico para busca de série
+        st.markdown(f"### 🔍 Busca de Série do Medidor: **{serie_input}**")
         
         with st.spinner("Localizando medidor no histórico..."):
             resultados_encontrados = []
             for _, ensaio_row in df_completo.iterrows():
-                # Busca apenas nas colunas de série para ser mais rápido
                 colunas_serie = [c for c in ensaio_row.index if "_Série" in str(c)]
                 if any(termo_busca in str(ensaio_row[col]).lower() for col in colunas_serie if pd.notna(ensaio_row[col])):
                     medidores_do_ensaio = processar_ensaio(ensaio_row)
@@ -181,10 +181,11 @@ def pagina_visao_diaria(df_completo):
             else:
                 st.warning(f"Nenhum registro encontrado para a série '{serie_input}'.")
         
-        if st.sidebar.button("⬅️ Voltar para Visão Diária"):
+        # Botão para limpar a busca e voltar à visão por data
+        if st.sidebar.button("⬅️ Voltar para Relatório Diário"):
             st.rerun()
 
-    # --- LÓGICA DO RELATÓRIO DIÁRIO (VISÃO PADRÃO) ---
+    # --- LÓGICA 2: RELATÓRIO POR DATA (Só aparece se NÃO houver busca por série) ---
     else:
         st.sidebar.markdown("---")
         data_selecionada_dt = st.sidebar.date_input("Data do Ensaio", value=datetime.today(), format="DD/MM/YYYY")
@@ -194,7 +195,7 @@ def pagina_visao_diaria(df_completo):
         bancada_selecionada = st.sidebar.selectbox("Bancada", options=['Todas'] + bancadas_disponiveis)
         status_filter = st.sidebar.multiselect("Filtrar Status", options=["APROVADO", "REPROVADO", "CONTRA O CONSUMIDOR"])
         
-        # Título profissional e correto
+        # Título específico para o relatório diário
         st.markdown(f"### 📅 Relatório de Ensaios Realizados em: **{data_selecionada_str}**")
         
         df_filtrado = df_completo[df_completo['Data'] == data_selecionada_str].copy()
@@ -210,7 +211,6 @@ def pagina_visao_diaria(df_completo):
             for _, ensaio_row in df_filtrado.iterrows():
                 todos_medidores.extend(processar_ensaio(ensaio_row))
 
-            # Configurações extras de Bancada 20
             classe_banc20 = None
             if (bancada_selecionada == 'BANC_20_POS' or bancada_selecionada == 'Todas') and not df_filtrado[df_filtrado['Bancada'] == 'BANC_20_POS'].empty:
                 st.sidebar.markdown("---")
