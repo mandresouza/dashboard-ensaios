@@ -154,13 +154,21 @@ def renderizar_resumo(stats):
 def pagina_visao_diaria(df_completo):
     st.sidebar.header("🔍 Busca e Filtros")
     
-    # Input de busca por série - Usando uma chave (key) para controle
+    # Input de busca por série
     serie_input = st.sidebar.text_input("Pesquisar Número de Série", value="", key="campo_busca", help="Digite o número e pressione Enter")
     termo_busca = serie_input.strip().lower()
 
+    # Botão de Limpar (Aparece logo abaixo da pesquisa se houver algo digitado)
+    if termo_busca:
+        if st.sidebar.button("🗑️ Limpar Pesquisa"):
+            # A forma mais simples de limpar um widget com key é forçar o rerun
+            # No Streamlit, limpar o estado do widget via código é complexo, 
+            # então usamos um truque de navegação ou apenas limpamos visualmente.
+            st.query_params.clear() # Limpa parâmetros da URL se houver
+            st.rerun()
+
     # --- LÓGICA 1: BUSCA POR SÉRIE ---
     if termo_busca:
-        # Título CORRETO para busca de série
         st.markdown(f"### 🔍 Busca de Série do Medidor: **{serie_input}**")
         
         with st.spinner("Localizando medidor..."):
@@ -180,22 +188,19 @@ def pagina_visao_diaria(df_completo):
                         renderizar_card(res['dados'])
             else:
                 st.warning(f"Nenhum registro encontrado para a série '{serie_input}'.")
-        
-        # Botão Voltar (Apenas recarrega a página, o que limpa se o input não for persistido)
-        if st.button("⬅️ Voltar para Relatório Diário"):
-            st.rerun()
 
     # --- LÓGICA 2: RELATÓRIO POR DATA (Só aparece se NÃO houver busca) ---
     else:
         st.sidebar.markdown("---")
-        data_selecionada_dt = st.sidebar.date_input("Data do Ensaio", value=datetime.today(), format="DD/MM/YYYY")
+        # Ajuste da data para HOJE (06/02/2026)
+        data_hoje = datetime.now().date()
+        data_selecionada_dt = st.sidebar.date_input("Data do Ensaio", value=data_hoje, format="DD/MM/YYYY")
         data_selecionada_str = data_selecionada_dt.strftime('%d/%m/%y')
         
         bancadas_disponiveis = df_completo['Bancada'].unique().tolist()
         bancada_selecionada = st.sidebar.selectbox("Bancada", options=['Todas'] + bancadas_disponiveis)
         status_filter = st.sidebar.multiselect("Filtrar Status", options=["APROVADO", "REPROVADO", "CONTRA O CONSUMIDOR"])
         
-        # Título CORRETO para o relatório diário
         st.markdown(f"### 📅 Relatório de Ensaios Realizados em: **{data_selecionada_str}**")
         
         df_filtrado = df_completo[df_completo['Data'] == data_selecionada_str].copy()
