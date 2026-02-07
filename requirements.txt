@@ -1,8 +1,6 @@
 streamlit
-gspread
-google-auth-oauthlib
 pandas
-openpyxl
 plotly
-gdown
 fpdf2
+openpyxl
+requests
