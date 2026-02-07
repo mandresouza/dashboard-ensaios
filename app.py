@@ -2,16 +2,47 @@
 # ARQUIVO: app.py (VERSÃO ORGANIZADA POR BLOCOS NUMERADOS)
 # =======================================================================
 
-# [BLOCO 01] - IMPORTAÇÕES E CONFIGURAÇÕES INICIAIS
+# [BLOCO 01] - IMPORTAÇÕES E CONFIGURAÇÕES
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date
 import plotly.express as px
 import plotly.graph_objects as go
-import traceback
+from fpdf import FPDF # Certifique-se de ter fpdf2 no requirements.txt
+import requests
+from io import BytesIO
 
 st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="wide")
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
+
+# -----------------------------------------------------------------------
+
+# [FUNCÇÃO PDF] 
+def gerar_pdf_fiscalizacao(lista_medidores, data_str):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("helvetica", "B", 16)
+    pdf.cell(190, 10, "RELATÓRIO DE FISCALIZAÇÃO - INMETRO", ln=True, align='C')
+    pdf.set_font("helvetica", "", 12)
+    pdf.cell(190, 10, f"Data do Ensaio: {data_str}", ln=True, align='C')
+    pdf.ln(10)
+    
+    pdf.set_fill_color(230, 230, 230)
+    pdf.set_font("helvetica", "B", 10)
+    pdf.cell(20, 10, "Pos", 1, 0, 'C', True)
+    pdf.cell(40, 10, "Série", 1, 0, 'C', True)
+    pdf.cell(50, 10, "Status", 1, 0, 'C', True)
+    pdf.cell(80, 10, "Irregularidade", 1, 1, 'C', True)
+    
+    pdf.set_font("helvetica", "", 9)
+    for m in lista_medidores:
+        if m['status'] in ["REPROVADO", "CONTRA O CONSUMIDOR"]:
+            pdf.cell(20, 10, str(m['pos']), 1, 0, 'C')
+            pdf.cell(40, 10, m['serie'], 1, 0, 'C')
+            pdf.cell(50, 10, m['status'], 1, 0, 'C')
+            pdf.cell(80, 10, str(m.get('motivo', 'N/A')), 1, 1, 'L')
+            
+    return pdf.output()
 
 # -----------------------------------------------------------------------
 
@@ -165,40 +196,8 @@ def renderizar_resumo(stats):
     with col4: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#7c3aed;">{stats["consumidor"]}</div><div class="metric-label">Contra Consumidor</div></div>', unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------
-# Função de Geração de PDF
-from fpdf import FPDF
 
-def gerar_pdf_fiscalizacao(lista_medidores, data_str):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(190, 10, "RELATÓRIO DE FISCALIZAÇÃO - INMETRO", ln=True, align='C')
-    pdf.set_font("Arial", "", 12)
-    pdf.cell(190, 10, f"Data do Ensaio: {data_str}", ln=True, align='C')
-    pdf.ln(10)
-    
-    # Cabeçalho da Tabela
-    pdf.set_fill_color(200, 200, 200)
-    pdf.set_font("Arial", "B", 10)
-    pdf.cell(20, 10, "Pos", 1, 0, 'C', True)
-    pdf.cell(40, 10, "Série", 1, 0, 'C', True)
-    pdf.cell(50, 10, "Status", 1, 0, 'C', True)
-    pdf.cell(80, 10, "Motivo da Irregularidade", 1, 1, 'C', True)
-    
-    # Dados (Apenas Reprovados e Contra Consumidor)
-    pdf.set_font("Arial", "", 9)
-    for m in lista_medidores:
-        if m['status'] in ["REPROVADO", "CONTRA O CONSUMIDOR"]:
-            pdf.cell(20, 10, str(m['pos']), 1, 0, 'C')
-            pdf.cell(40, 10, m['serie'], 1, 0, 'C')
-            pdf.cell(50, 10, m['status'], 1, 0, 'C')
-            pdf.cell(80, 10, m['motivo'], 1, 1, 'L')
-            
-    return pdf.output(dest='S').encode('latin-1')
-
-# -----------------------------------------------------------------------
-
-# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (FILTROS E PROCESSAMENTO COM DATA AUTOMÁTICA)
+# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (COMPLETO COM BOTÃO PDF E DATA AUTOMÁTICA)
 def pagina_visao_diaria(df_completo):
     st.sidebar.header("🔍 Busca e Filtros")
     
@@ -247,7 +246,7 @@ def pagina_visao_diaria(df_completo):
     else:
         st.sidebar.markdown("---")
         
-        # --- AJUSTE DA DATA: Agora pega o dia de hoje automaticamente ---
+        # --- DATA AUTOMÁTICA ---
         from datetime import date
         data_hoje = date.today() 
         
@@ -271,7 +270,7 @@ def pagina_visao_diaria(df_completo):
         with st.spinner("Carregando dados..."):
             todos_medidores = []
             
-            # Configuração específica para Bancada 20 (Eletromecânico/Eletrônico)
+            # Configuração específica para Bancada 20
             classe_banc20 = None
             if (bancada_selecionada == 'BANC_20_POS' or bancada_selecionada == 'Todas') and not df_filtrado[df_filtrado['Bancada'] == 'BANC_20_POS'].empty:
                 st.sidebar.markdown("---")
@@ -282,19 +281,35 @@ def pagina_visao_diaria(df_completo):
                 else: 
                     classe_banc20 = st.sidebar.selectbox("Classe de Exatidão", ['A', 'B', 'C', 'D'], index=1)
             
-            # Processa os ensaios aplicando a classe da Bancada 20 se necessário
             for _, ensaio_row in df_filtrado.iterrows():
                 if ensaio_row['Bancada'] == 'BANC_20_POS':
                     todos_medidores.extend(processar_ensaio(ensaio_row, classe_banc20))
                 else:
                     todos_medidores.extend(processar_ensaio(ensaio_row))
 
-            # Aplica filtro de status se selecionado
             if status_filter:
                 todos_medidores = [m for m in todos_medidores if m['status'] in status_filter]
 
         if todos_medidores:
             renderizar_resumo(calcular_estatisticas(todos_medidores))
+            
+            # --- BOTÃO DE EXPORTAR PDF (APENAS SE HOUVER REPROVADOS) ---
+            reprovados = [m for m in todos_medidores if m['status'] in ["REPROVADO", "CONTRA O CONSUMIDOR"]]
+            if reprovados:
+                st.markdown("---")
+                col_pdf1, col_pdf2 = st.columns([3, 1])
+                with col_pdf2:
+                    try:
+                        pdf_data = gerar_pdf_fiscalizacao(todos_medidores, data_selecionada_str)
+                        st.download_button(
+                            label="📄 Baixar Relatório PDF",
+                            data=pdf_data,
+                            file_name=f"Fiscalizacao_{data_selecionada_str.replace('/','-')}.pdf",
+                            mime="application/pdf"
+                        )
+                    except Exception as e:
+                        st.error(f"Erro ao gerar PDF: {e}")
+            
             st.markdown("---")
             st.subheader("📋 Detalhes dos Medidores")
             num_colunas = 5
@@ -305,17 +320,6 @@ def pagina_visao_diaria(df_completo):
                 st.write("")
         else:
             st.info("Nenhum medidor encontrado.")
-        if todos_medidores:
-        st.markdown("---")
-        col_pdf1, col_pdf2 = st.columns([3, 1])
-        with col_pdf2:
-            pdf_bytes = gerar_pdf_fiscalizacao(todos_medidores, data_sel_str)
-            st.download_button(
-                label="📄 Baixar Relatório PDF",
-                data=pdf_bytes,
-                file_name=f"Relatorio_Fiscalizacao_{data_sel_str.replace('/','-')}.pdf",
-                mime="application/pdf"
-            )
 
 # -----------------------------------------------------------------------
 
