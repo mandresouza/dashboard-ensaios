@@ -1,5 +1,5 @@
 # =======================================================================
-# ARQUIVO: app.py (VERSÃO COM EXPORTAÇÃO PDF)
+# ARQUIVO: app.py (VERSÃO COM EXPORTAÇÃO PDF - FINAL CORRIGIDA)
 # =======================================================================
 
 # [BLOCO 01] - IMPORTAÇÕES E CONFIGURAÇÕES INICIAIS
@@ -9,7 +9,7 @@ from datetime import datetime, date
 import plotly.express as px
 import plotly.graph_objects as go
 import traceback
-from fpdf import FPDF # *** NOVO: Biblioteca para gerar PDF ***
+from fpdf import FPDF # Biblioteca para gerar PDF
 
 st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="wide")
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
@@ -255,25 +255,21 @@ def pagina_visao_diaria(df_completo):
         if todos_medidores:
             renderizar_resumo(calcular_estatisticas(todos_medidores))
             
-            # *** NOVO: BOTÃO DE DOWNLOAD DO PDF ***
             st.sidebar.markdown("---")
             st.sidebar.subheader("📄 Exportar Relatório")
             
-            # Gera o PDF em memória
             pdf_bytes = gerar_pdf_relatorio(
                 medidores=todos_medidores, 
                 data=data_selecionada_str, 
                 bancada=bancada_selecionada
             )
             
-            # Cria o botão de download
             st.sidebar.download_button(
                 label="📥 Baixar Relatório PDF",
                 data=pdf_bytes,
                 file_name=f"Relatorio_Ensaios_{data_selecionada_dt.strftime('%Y-%m-%d')}.pdf",
                 mime="application/pdf"
             )
-            # *** FIM DA SEÇÃO NOVA ***
 
             st.markdown("---")
             st.subheader("📋 Detalhes dos Medidores")
@@ -410,12 +406,12 @@ def main():
         else:
             st.error("Erro ao carregar dados. Verifique o arquivo Excel ou a conexão com o Google Sheets.")
     except Exception as e:
-        st.error("Erro inesperado na aplicação.")
+        st.error("Ocorreu um erro inesperado na aplicação.")
         st.code(traceback.format_exc())
 
 # -----------------------------------------------------------------------
 
-# *** NOVO: BLOCO 09 - GERAÇÃO DE RELATÓRIO PDF ***
+# [BLOCO 09] - GERAÇÃO DE RELATÓRIO PDF
 class PDF(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 12)
@@ -431,13 +427,11 @@ def gerar_pdf_relatorio(medidores, data, bancada):
     pdf = PDF()
     pdf.add_page()
     
-    # Adiciona informações do cabeçalho do relatório
     pdf.set_font('Arial', '', 11)
     pdf.cell(0, 8, f"Data do Relatório: {data}", 0, 1)
     pdf.cell(0, 8, f"Bancada(s) Inclusa(s): {bancada}", 0, 1)
     pdf.ln(10)
 
-    # Adiciona o resumo estatístico
     stats = calcular_estatisticas(medidores)
     pdf.set_font('Arial', 'B', 12)
     pdf.cell(0, 10, "Resumo dos Resultados", 0, 1, 'L')
@@ -448,11 +442,9 @@ def gerar_pdf_relatorio(medidores, data, bancada):
     pdf.cell(95, 8, f"Irregularidade (Contra Consumidor): {stats['consumidor']}", 1, 1)
     pdf.ln(10)
 
-    # Adiciona a tabela de detalhes dos medidores
     pdf.set_font('Arial', 'B', 12)
     pdf.cell(0, 10, "Detalhes dos Medidores", 0, 1, 'L')
     
-    # Cabeçalho da tabela
     pdf.set_font('Arial', 'B', 9)
     pdf.cell(15, 7, "Pos.", 1)
     pdf.cell(40, 7, "Série", 1)
@@ -460,12 +452,22 @@ def gerar_pdf_relatorio(medidores, data, bancada):
     pdf.cell(90, 7, "Motivo da Reprovação", 1)
     pdf.ln()
 
-    # Corpo da tabela
     pdf.set_font('Arial', '', 8)
     for medidor in medidores:
-        # Trunca textos longos para caber na célula
         serie = medidor['serie'][:20] if len(medidor['serie']) > 20 else medidor['serie']
+        status = medidor['status'].replace('_', ' ')
         motivo = medidor['motivo'][:50] if len(medidor['motivo']) > 50 else medidor['motivo']
         
         pdf.cell(15, 7, str(medidor['pos']), 1)
         pdf.cell(40, 7, serie, 1)
+        pdf.cell(45, 7, status, 1)
+        pdf.cell(90, 7, motivo, 1)
+        pdf.ln()
+    
+    return pdf.output(dest='S').encode('latin-1')
+
+# -----------------------------------------------------------------------
+
+# PONTO DE ENTRADA PRINCIPAL DO SCRIPT
+if __name__ == "__main__":
+    main()
