@@ -1,5 +1,5 @@
 # =======================================================================
-# ARQUIVO: app.py (VERSÃO CORRIGIDA)
+# ARQUIVO: app.py (VERSÃO COM EXPORTAÇÃO PDF)
 # =======================================================================
 
 # [BLOCO 01] - IMPORTAÇÕES E CONFIGURAÇÕES INICIAIS
@@ -9,6 +9,7 @@ from datetime import datetime, date
 import plotly.express as px
 import plotly.graph_objects as go
 import traceback
+from fpdf import FPDF # *** NOVO: Biblioteca para gerar PDF ***
 
 st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="wide")
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
@@ -81,7 +82,7 @@ def processar_ensaio(row, classe_banc20=None):
         cn, cp, ci = row.get(f"P{pos}_CN"), row.get(f"P{pos}_CP"), row.get(f"P{pos}_CI")
         
         status, detalhe, motivo = "NÃO ENTROU", "", "N/A"
-        reg_err = None # Inicializa a variável de erro do registrador
+        reg_err = None
         
         if not (pd.isna(cn) and pd.isna(cp) and pd.isna(ci)):
             v_cn, v_cp, v_ci = valor_num(cn), valor_num(cp), valor_num(ci)
@@ -90,7 +91,6 @@ def processar_ensaio(row, classe_banc20=None):
             
             reg_ini, reg_fim = valor_num(row.get(f"P{pos}_REG_Inicio")), valor_num(row.get(f"P{pos}_REG_Fim"))
             
-            # *** CORREÇÃO 1: CALCULAR O ERRO DO REGISTRADOR AQUI ***
             if reg_ini is not None and reg_fim is not None:
                 reg_err = reg_fim - reg_ini
                 erro_registrador = (reg_err != 1)
@@ -121,7 +121,7 @@ def processar_ensaio(row, classe_banc20=None):
             "mv": texto(row.get(f"P{pos}_MV")), "reg_ini": texto(row.get(f"P{pos}_REG_Inicio")), 
             "reg_fim": texto(row.get(f"P{pos}_REG_Fim")), "status": status, 
             "detalhe": detalhe, "motivo": motivo, "limite": limite, "bancada": bancada,
-            "reg_err": texto(reg_err) # *** CORREÇÃO 2: ADICIONAR A CHAVE AO DICIONÁRIO ***
+            "reg_err": texto(reg_err)
         })
     return medidores
 
@@ -254,6 +254,27 @@ def pagina_visao_diaria(df_completo):
 
         if todos_medidores:
             renderizar_resumo(calcular_estatisticas(todos_medidores))
+            
+            # *** NOVO: BOTÃO DE DOWNLOAD DO PDF ***
+            st.sidebar.markdown("---")
+            st.sidebar.subheader("📄 Exportar Relatório")
+            
+            # Gera o PDF em memória
+            pdf_bytes = gerar_pdf_relatorio(
+                medidores=todos_medidores, 
+                data=data_selecionada_str, 
+                bancada=bancada_selecionada
+            )
+            
+            # Cria o botão de download
+            st.sidebar.download_button(
+                label="📥 Baixar Relatório PDF",
+                data=pdf_bytes,
+                file_name=f"Relatorio_Ensaios_{data_selecionada_dt.strftime('%Y-%m-%d')}.pdf",
+                mime="application/pdf"
+            )
+            # *** FIM DA SEÇÃO NOVA ***
+
             st.markdown("---")
             st.subheader("📋 Detalhes dos Medidores")
             num_colunas = 5
@@ -263,7 +284,7 @@ def pagina_visao_diaria(df_completo):
                     with cols[j]: renderizar_card(medidor)
                 st.write("")
         else:
-            st.info("Nenhum medidor encontrado.")
+            st.info("Nenhum medidor encontrado para os filtros selecionados.")
 
 # -----------------------------------------------------------------------
 
@@ -392,5 +413,59 @@ def main():
         st.error("Erro inesperado na aplicação.")
         st.code(traceback.format_exc())
 
-if __name__ == "__main__":
-    main()
+# -----------------------------------------------------------------------
+
+# *** NOVO: BLOCO 09 - GERAÇÃO DE RELATÓRIO PDF ***
+class PDF(FPDF):
+    def header(self):
+        self.set_font('Arial', 'B', 12)
+        self.cell(0, 10, 'Relatório de Fiscalização de Ensaios', 0, 1, 'C')
+        self.ln(5)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Arial', 'I', 8)
+        self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
+
+def gerar_pdf_relatorio(medidores, data, bancada):
+    pdf = PDF()
+    pdf.add_page()
+    
+    # Adiciona informações do cabeçalho do relatório
+    pdf.set_font('Arial', '', 11)
+    pdf.cell(0, 8, f"Data do Relatório: {data}", 0, 1)
+    pdf.cell(0, 8, f"Bancada(s) Inclusa(s): {bancada}", 0, 1)
+    pdf.ln(10)
+
+    # Adiciona o resumo estatístico
+    stats = calcular_estatisticas(medidores)
+    pdf.set_font('Arial', 'B', 12)
+    pdf.cell(0, 10, "Resumo dos Resultados", 0, 1, 'L')
+    pdf.set_font('Arial', '', 11)
+    pdf.cell(95, 8, f"Total de Medidores Ensaiados: {stats['total']}", 1, 0)
+    pdf.cell(95, 8, f"Medidores Aprovados: {stats['aprovados']}", 1, 1)
+    pdf.cell(95, 8, f"Medidores Reprovados: {stats['reprovados']}", 1, 0)
+    pdf.cell(95, 8, f"Irregularidade (Contra Consumidor): {stats['consumidor']}", 1, 1)
+    pdf.ln(10)
+
+    # Adiciona a tabela de detalhes dos medidores
+    pdf.set_font('Arial', 'B', 12)
+    pdf.cell(0, 10, "Detalhes dos Medidores", 0, 1, 'L')
+    
+    # Cabeçalho da tabela
+    pdf.set_font('Arial', 'B', 9)
+    pdf.cell(15, 7, "Pos.", 1)
+    pdf.cell(40, 7, "Série", 1)
+    pdf.cell(45, 7, "Status", 1)
+    pdf.cell(90, 7, "Motivo da Reprovação", 1)
+    pdf.ln()
+
+    # Corpo da tabela
+    pdf.set_font('Arial', '', 8)
+    for medidor in medidores:
+        # Trunca textos longos para caber na célula
+        serie = medidor['serie'][:20] if len(medidor['serie']) > 20 else medidor['serie']
+        motivo = medidor['motivo'][:50] if len(medidor['motivo']) > 50 else medidor['motivo']
+        
+        pdf.cell(15, 7, str(medidor['pos']), 1)
+        pdf.cell(40, 7, serie, 1)
