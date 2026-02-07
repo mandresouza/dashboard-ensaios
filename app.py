@@ -9,6 +9,7 @@ from datetime import datetime, date
 import plotly.express as px
 import plotly.graph_objects as go
 import traceback
+from pdf_generator import gerar_pdf_relatorio
 
 st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="wide")
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
@@ -252,17 +253,29 @@ def pagina_visao_diaria(df_completo):
                 todos_medidores = [m for m in todos_medidores if m['status'] in status_filter]
 
         if todos_medidores:
-            renderizar_resumo(calcular_estatisticas(todos_medidores))
-            st.markdown("---")
-            st.subheader("📋 Detalhes dos Medidores")
-            num_colunas = 5
-            for i in range(0, len(todos_medidores), num_colunas):
-                cols = st.columns(num_colunas)
-                for j, medidor in enumerate(todos_medidores[i:i + num_colunas]):
-                    with cols[j]: renderizar_card(medidor)
-                st.write("")
-        else:
-            st.info("Nenhum medidor encontrado para os filtros selecionados.")
+        stats = calcular_estatisticas(todos_medidores) # <--- ADICIONE ESTA LINHA
+        renderizar_resumo(stats) # <--- MODIFIQUE ESTA LINHA
+        
+        # Seção para adicionar o botão de download
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("📄 Exportar Relatório")
+        
+        pdf_bytes = gerar_pdf_relatorio(
+            medidores=todos_medidores, 
+            data=data_selecionada_str, 
+            bancada=bancada_selecionada,
+            stats=stats # <--- ADICIONE ESTA LINHA
+        )
+        
+        st.sidebar.download_button(
+            label="📥 Baixar Relatório PDF",
+            data=pdf_bytes,
+            file_name=f"Relatorio_Ensaios_{data_selecionada_dt.strftime('%Y-%m-%d')}.pdf",
+            mime="application/pdf"
+        )
+
+        st.markdown("---")
+        st.subheader("📋 Detalhes dos Medidores")
 
 # -----------------------------------------------------------------------
 
