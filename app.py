@@ -1,5 +1,5 @@
 # =======================================================================
-# ARQUIVO: app.py (VERSÃO ESTÁVEL - SEM PDF)
+# ARQUIVO: app.py (VERSÃO ESTÁVEL + PDF SEGURO)
 # =======================================================================
 
 # [BLOCO 01] - IMPORTAÇÕES E CONFIGURAÇÕES INICIAIS
@@ -9,13 +9,15 @@ from datetime import datetime, date
 import plotly.express as px
 import plotly.graph_objects as go
 import traceback
+# ADIÇÃO 1: Importar a biblioteca FPDF
+from fpdf import FPDF
 
 st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="wide")
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
 # -----------------------------------------------------------------------
 
-# [BLOCO 02] - CARREGAMENTO AUTOMÁTICO (GOOGLE SHEETS)
+# [BLOCO 02] - CARREGAMENTO AUTOMÁTICO (GOOGLE SHEETS) - Sem alterações
 @st.cache_data(ttl=600)
 def carregar_dados():
     try:
@@ -43,7 +45,7 @@ def carregar_dados():
 
 # -----------------------------------------------------------------------
 
-# [BLOCO 03] - FUNÇÕES AUXILIARES (CONVERSÃO E ESTATÍSTICAS)
+# [BLOCO 03] - FUNÇÕES AUXILIARES - Sem alterações
 def valor_num(v):
     try:
         if pd.isna(v): return None
@@ -63,7 +65,7 @@ def calcular_estatisticas(todos_medidores):
 
 # -----------------------------------------------------------------------
 
-# [BLOCO 04] - PROCESSAMENTO TÉCNICO (COM IDENTIFICAÇÃO DE IRREGULARIDADE)
+# [BLOCO 04] - PROCESSAMENTO TÉCNICO - Sem alterações
 def processar_ensaio(row, classe_banc20=None):
     medidores = []
     bancada = row.get('Bancada')
@@ -126,7 +128,7 @@ def processar_ensaio(row, classe_banc20=None):
 
 # -----------------------------------------------------------------------
 
-# [BLOCO 05] - COMPONENTES VISUAIS (CARDS E RESUMO)
+# [BLOCO 05] - COMPONENTES VISUAIS - Sem alterações
 def renderizar_card(medidor):
     status_cor = {"APROVADO": "#dcfce7", "REPROVADO": "#fee2e2", "CONTRA O CONSUMIDOR": "#ede9fe", "NÃO ENTROU": "#e5e7eb"}
     cor = status_cor.get(medidor['status'], "#f3f4f6")
@@ -253,6 +255,25 @@ def pagina_visao_diaria(df_completo):
 
         if todos_medidores:
             renderizar_resumo(calcular_estatisticas(todos_medidores))
+            
+            # ADIÇÃO 2: Botão de Download na barra lateral
+            st.sidebar.markdown("---")
+            st.sidebar.subheader("📄 Exportar Relatório")
+            
+            # Gera o PDF em memória quando o botão é preparado
+            pdf_bytes = gerar_pdf_relatorio(
+                medidores=todos_medidores, 
+                data=data_selecionada_str, 
+                bancada=bancada_selecionada
+            )
+            
+            st.sidebar.download_button(
+                label="📥 Baixar Relatório PDF",
+                data=pdf_bytes,
+                file_name=f"Relatorio_Ensaios_{data_selecionada_dt.strftime('%Y-%m-%d')}.pdf",
+                mime="application/pdf"
+            )
+
             st.markdown("---")
             st.subheader("📋 Detalhes dos Medidores")
             num_colunas = 5
@@ -266,7 +287,7 @@ def pagina_visao_diaria(df_completo):
 
 # -----------------------------------------------------------------------
 
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL - Sem alterações
 def get_stats_por_dia(df_mes):
     daily_stats = []
     for data, group in df_mes.groupby('Data_dt'):
@@ -393,7 +414,68 @@ def main():
 
 # -----------------------------------------------------------------------
 
+# ADIÇÃO 3: Bloco para geração de PDF
+# [BLOCO 09] - GERAÇÃO DE RELATÓRIO PDF
+class PDF(FPDF):
+    def header(self):
+        self.set_font('Arial', 'B', 12)
+        self.cell(0, 10, 'Relatorio de Fiscalizacao de Ensaios', 0, 1, 'C')
+        self.ln(5)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Arial', 'I', 8)
+        self.cell(0, 10, f'Pagina {self.page_no()}', 0, 0, 'C')
+
+def gerar_pdf_relatorio(medidores, data, bancada):
+    pdf = PDF()
+    pdf.add_page()
+    
+    # Função interna para garantir que o texto é compatível com a fonte do PDF (latin-1)
+    def texto_pdf(txt):
+        return str(txt).encode('latin-1', 'replace').decode('latin-1')
+
+    # Cabeçalho do relatório
+    pdf.set_font('Arial', '', 11)
+    pdf.cell(0, 8, texto_pdf(f"Data do Relatorio: {data}"), 0, 1)
+    pdf.cell(0, 8, texto_pdf(f"Bancada(s) Inclusa(s): {bancada}"), 0, 1)
+    pdf.ln(10)
+
+    # Tabela de resumo
+    stats = calcular_estatisticas(medidores)
+    pdf.set_font('Arial', 'B', 12)
+    pdf.cell(0, 10, "Resumo dos Resultados", 0, 1, 'L')
+    pdf.set_font('Arial', '', 11)
+    pdf.cell(95, 8, texto_pdf(f"Total de Medidores Ensaiados: {stats['total']}"), 1, 0)
+    pdf.cell(95, 8, texto_pdf(f"Medidores Aprovados: {stats['aprovados']}"), 1, 1)
+    pdf.cell(95, 8, texto_pdf(f"Medidores Reprovados: {stats['reprovados']}"), 1, 0)
+    pdf.cell(95, 8, texto_pdf(f"Irregularidade (Contra Consumidor): {stats['consumidor']}"), 1, 1)
+    pdf.ln(10)
+
+    # Tabela de detalhes
+    pdf.set_font('Arial', 'B', 12)
+    pdf.cell(0, 10, "Detalhes dos Medidores", 0, 1, 'L')
+    pdf.set_font('Arial', 'B', 9)
+    pdf.cell(15, 7, "Pos.", 1)
+    pdf.cell(40, 7, "Serie", 1)
+    pdf.cell(45, 7, "Status", 1)
+    pdf.cell(90, 7, "Motivo da Reprovacao", 1)
+    pdf.ln()
+
+    # Corpo da tabela
+    pdf.set_font('Arial', '', 8)
+    for medidor in medidores:
+        pdf.cell(15, 7, texto_pdf(medidor['pos']), 1)
+        pdf.cell(40, 7, texto_pdf(medidor['serie'])[:20], 1)
+        pdf.cell(45, 7, texto_pdf(medidor['status'].replace('_', ' ')), 1)
+        pdf.cell(90, 7, texto_pdf(medidor['motivo'])[:50], 1)
+        pdf.ln()
+    
+    # Retorna o PDF como bytes
+    return pdf.output()
+
+# -----------------------------------------------------------------------
+
 # PONTO DE ENTRADA PRINCIPAL DO SCRIPT
 if __name__ == "__main__":
     main()
-
