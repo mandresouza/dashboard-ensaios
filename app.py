@@ -150,91 +150,74 @@ def renderizar_resumo(stats):
 
 # -----------------------------------------------------------------------
 
-# COLE ESTE BLOCO INTEIRO NO LUGAR DO SEU BLOCO 06 ATUAL
-
 # [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (FILTROS E PROCESSAMENTO)
 def pagina_visao_diaria(df_completo):
-    st.sidebar.header("Filtros da Visão Diária")
+    st.sidebar.header("🔍 Busca e Filtros")
+    
+    # Input de busca por série - Usando uma chave (key) para controle
+    serie_input = st.sidebar.text_input("Pesquisar Número de Série", value="", key="campo_busca", help="Digite o número e pressione Enter")
+    termo_busca = serie_input.strip().lower()
 
-    # --- Lógica da Busca em Tempo Real ---
-    if 'serie_filter_state' not in st.session_state:
-        st.session_state.serie_filter_state = ""
-    st.sidebar.text_input(
-        "Buscar por Número de Série",
-        key="serie_filter_state"
-    )
-    serie_filter = st.session_state.serie_filter_state
-
-    # --- Lógica Principal da Página ---
-    if serie_filter:
-        # --- MODO: BUSCA POR SÉRIE ---
+    # --- LÓGICA 1: BUSCA POR SÉRIE ---
+    if termo_busca:
+        # Título CORRETO para busca de série
+        st.markdown(f"### 🔍 Busca de Série do Medidor: **{serie_input}**")
         
-        # 1. Título e Botão de Voltar
-        st.markdown(f"### 🔬 Buscando por série: **{serie_filter}**")
-        if st.button("⬅️ Limpar Busca e Voltar"):
-            st.session_state.serie_filter_state = "" # Limpa o campo de busca
-            st.rerun() # Recarrega a página
-
-        # 2. Lógica da Busca
-        with st.spinner("Buscando em todo o banco de dados..."):
-            medidor_encontrado = False
+        with st.spinner("Localizando medidor..."):
+            resultados_encontrados = []
             for _, ensaio_row in df_completo.iterrows():
-                for i in range(1, 21):
-                    serie_col = f'P{i}_Série'
-                    if serie_col in ensaio_row and pd.notna(ensaio_row[serie_col]):
-                        if serie_filter.strip().lower() in str(ensaio_row[serie_col]).lower():
-                            medidores_processados = processar_ensaio(ensaio_row)
-                            for medidor in medidores_processados:
-                                if serie_filter.strip().lower() in medidor.get('serie', '').lower():
-                                    st.info(f"Medidor encontrado no ensaio de **{ensaio_row.get('Data', 'N/A')}** na bancada **{ensaio_row.get('Bancada', 'N/A')}**.")
-                                    renderizar_card(medidor)
-                                    medidor_encontrado = True
-                                    break # Para o loop interno de medidores
-                if medidor_encontrado:
-                    break # Para o loop externo de ensaios
-        
-        if not medidor_encontrado:
-            st.warning("Nenhum medidor encontrado com este número de série em todo o banco de dados.")
+                colunas_serie = [c for c in ensaio_row.index if "_Série" in str(c)]
+                if any(termo_busca in str(ensaio_row[col]).lower() for col in colunas_serie if pd.notna(ensaio_row[col])):
+                    medidores_do_ensaio = processar_ensaio(ensaio_row)
+                    for medidor in medidores_do_ensaio:
+                        if termo_busca in medidor['serie'].lower():
+                            resultados_encontrados.append({"data": ensaio_row['Data'], "bancada": ensaio_row['Bancada'], "dados": medidor})
 
+            if resultados_encontrados:
+                st.success(f"Encontrado(s) {len(resultados_encontrados)} registro(s).")
+                for res in resultados_encontrados:
+                    with st.expander(f"📍 Data: {res['data']} | Bancada: {res['bancada']}", expanded=True):
+                        renderizar_card(res['dados'])
+            else:
+                st.warning(f"Nenhum registro encontrado para a série '{serie_input}'.")
+        
+        # Botão Voltar (Apenas recarrega a página, o que limpa se o input não for persistido)
+        if st.button("⬅️ Voltar para Relatório Diário"):
+            st.rerun()
+
+    # --- LÓGICA 2: RELATÓRIO POR DATA (Só aparece se NÃO houver busca) ---
     else:
-        # --- MODO: RELATÓRIO POR DATA ---
-
-        # 1. Filtros de Data, Bancada e Status
-        data_selecionada_dt = st.sidebar.date_input("Selecione a Data", value=datetime.today(), format="DD/MM/YYYY")
-        data_selecionada_str = data_selecionada_dt.strftime('%d/%m/%y')
-        bancadas_disponiveis = df_completo['Bancada'].unique().tolist()
-        bancada_selecionada = st.sidebar.selectbox("Selecione a Bancada", options=['Todas'] + bancadas_disponiveis)
         st.sidebar.markdown("---")
-        status_filter = st.sidebar.multiselect("Filtrar por Status", options=["APROVADO", "REPROVADO", "CONTRA O CONSUMIDOR"], placeholder="Selecione um ou mais status")
+        data_selecionada_dt = st.sidebar.date_input("Data do Ensaio", value=datetime.today(), format="DD/MM/YYYY")
+        data_selecionada_str = data_selecionada_dt.strftime('%d/%m/%y')
         
-        # 2. Filtragem do DataFrame
+        bancadas_disponiveis = df_completo['Bancada'].unique().tolist()
+        bancada_selecionada = st.sidebar.selectbox("Bancada", options=['Todas'] + bancadas_disponiveis)
+        status_filter = st.sidebar.multiselect("Filtrar Status", options=["APROVADO", "REPROVADO", "CONTRA O CONSUMIDOR"])
+        
+        # Título CORRETO para o relatório diário
+        st.markdown(f"### 📅 Relatório de Ensaios Realizados em: **{data_selecionada_str}**")
+        
         df_filtrado = df_completo[df_completo['Data'] == data_selecionada_str].copy()
-        if bancada_selecionada != 'Todas':
+        if bancada_selecionada != 'Todas': 
             df_filtrado = df_filtrado[df_filtrado['Bancada'] == bancada_selecionada]
         
-        # 3. Título e Verificação de Dados
-        st.markdown(f"### 📅 Relatório do dia: **{data_selecionada_str}**")
         if df_filtrado.empty:
-            st.info(f"Nenhum ensaio encontrado para os filtros selecionados.")
+            st.info(f"Não constam ensaios registrados para o dia {data_selecionada_str}.")
             return
 
-        # 4. Processamento e Exibição dos Dados
-        with st.spinner("Processando ensaios... Por favor, aguarde."):
+        with st.spinner("Carregando dados..."):
             todos_medidores = []
             for _, ensaio_row in df_filtrado.iterrows():
-                medidores_processados = processar_ensaio(ensaio_row)
-                todos_medidores.extend(medidores_processados)
+                todos_medidores.extend(processar_ensaio(ensaio_row))
 
             classe_banc20 = None
-            if bancada_selecionada == 'BANC_20_POS' or bancada_selecionada == 'Todas':
-                if not df_filtrado[df_filtrado['Bancada'] == 'BANC_20_POS'].empty:
-                    st.sidebar.markdown("---")
-                    st.sidebar.subheader("⚙️ Config. Bancada 20")
-                    tipo_medidor = st.sidebar.radio("Tipo de Medidor", ["Eletrônico", "Eletromecânico"])
-                    if tipo_medidor == 'Eletromecânico':
-                        classe_banc20 = "ELETROMECANICO"
-                    else:
-                        classe_banc20 = st.sidebar.selectbox("Classe de Exatidão", ['A', 'B', 'C', 'D'], index=1)
+            if (bancada_selecionada == 'BANC_20_POS' or bancada_selecionada == 'Todas') and not df_filtrado[df_filtrado['Bancada'] == 'BANC_20_POS'].empty:
+                st.sidebar.markdown("---")
+                st.sidebar.subheader("⚙️ Config. Bancada 20")
+                tipo_medidor = st.sidebar.radio("Tipo de Medidor", ["Eletrônico", "Eletromecânico"])
+                if tipo_medidor == 'Eletromecânico': classe_banc20 = "ELETROMECANICO"
+                else: classe_banc20 = st.sidebar.selectbox("Classe de Exatidão", ['A', 'B', 'C', 'D'], index=1)
             
             if classe_banc20:
                 todos_medidores = [m for m in todos_medidores if m.get('bancada') != 'BANC_20_POS' or m.get('classe_exatidao') == classe_banc20]
@@ -242,24 +225,18 @@ def pagina_visao_diaria(df_completo):
             if status_filter:
                 todos_medidores = [m for m in todos_medidores if m['status'] in status_filter]
 
-        # 5. Exibição dos Resultados
         if todos_medidores:
-            stats = calcular_estatisticas(todos_medidores)
-            renderizar_resumo(stats)
+            renderizar_resumo(calcular_estatisticas(todos_medidores))
             st.markdown("---")
-
-        st.subheader("Detalhes dos Medidores")
-        if not todos_medidores:
-            st.info("Nenhum medidor encontrado com os filtros aplicados.")
-        else:
+            st.subheader("📋 Detalhes dos Medidores")
             num_colunas = 5
-            linhas_de_medidores = [todos_medidores[i:i + num_colunas] for i in range(0, len(todos_medidores), num_colunas)]
-            for linha in linhas_de_medidores:
+            for i in range(0, len(todos_medidores), num_colunas):
                 cols = st.columns(num_colunas)
-                for i, medidor in enumerate(linha):
-                    with cols[i]:
-                        renderizar_card(medidor)
+                for j, medidor in enumerate(todos_medidores[i:i + num_colunas]):
+                    with cols[j]: renderizar_card(medidor)
                 st.write("")
+        else:
+            st.info("Nenhum medidor encontrado.")
 
 # -----------------------------------------------------------------------
 
