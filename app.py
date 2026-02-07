@@ -168,9 +168,7 @@ def renderizar_resumo(stats):
 
 # -----------------------------------------------------------------------
 
-# =======================================================================
-# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (VERSÃO CORRIGIDA E COMPLETA)
-# =======================================================================
+# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (COM FILTRO DE IRREGULARIDADE)
 def pagina_visao_diaria(df_completo):
     st.sidebar.header("🔍 Busca e Filtros")
     
@@ -191,6 +189,7 @@ def pagina_visao_diaria(df_completo):
             st.rerun()
 
     if termo_busca:
+        # ... (a lógica de busca por série não muda)
         st.markdown(f"### 🔍 Busca de Série do Medidor: **{serie_input}**")
         
         with st.spinner("Localizando medidor..."):
@@ -212,6 +211,7 @@ def pagina_visao_diaria(df_completo):
                 st.warning(f"Nenhum registro encontrado para a série '{serie_input}'.")
 
     else:
+        # --- LÓGICA PRINCIPAL DE FILTROS ---
         st.sidebar.markdown("---")
         
         data_hoje = date.today() 
@@ -220,7 +220,21 @@ def pagina_visao_diaria(df_completo):
         
         bancadas_disponiveis = df_completo['Bancada'].unique().tolist()
         bancada_selecionada = st.sidebar.selectbox("Bancada", options=['Todas'] + bancadas_disponiveis)
-        status_filter = st.sidebar.multiselect("Filtrar Status", options=["APROVADO", "REPROVADO", "CONTRA O CONSUMIDOR"])
+        
+        # Filtro de Status principal
+        status_options = ["APROVADO", "REPROVADO", "CONTRA O CONSUMIDOR"]
+        status_filter = st.sidebar.multiselect("Filtrar Status", options=status_options)
+        
+        # *** NOVO: Filtro de Irregularidade ***
+        # Este filtro só aparece se "REPROVADO" estiver selecionado no filtro de status
+        irregularidade_filter = []
+        if "REPROVADO" in status_filter:
+            irregularidade_options = ["Exatidão", "Registrador", "Mostrador/MV"]
+            irregularidade_filter = st.sidebar.multiselect(
+                "Filtrar por Tipo de Irregularidade", 
+                options=irregularidade_options
+            )
+        # *** FIM DA SEÇÃO NOVA ***
         
         st.markdown(f"### 📅 Relatório de Ensaios Realizados em: **{data_selecionada_str}**")
         
@@ -232,7 +246,7 @@ def pagina_visao_diaria(df_completo):
             st.info(f"Não constam ensaios registrados para o dia {data_selecionada_str}.")
             return
 
-        with st.spinner("Carregando dados..."):
+        with st.spinner("Carregando e filtrando dados..."):
             todos_medidores = []
             
             classe_banc20 = None
@@ -251,22 +265,35 @@ def pagina_visao_diaria(df_completo):
                 else:
                     todos_medidores.extend(processar_ensaio(ensaio_row))
 
-            if status_filter:
-                todos_medidores = [m for m in todos_medidores if m['status'] in status_filter]
+            # --- LÓGICA DE FILTRAGEM APRIMORADA ---
+            medidores_filtrados = []
+            if not status_filter and not irregularidade_filter:
+                medidores_filtrados = todos_medidores
+            else:
+                for medidor in todos_medidores:
+                    # Verifica o filtro de status
+                    status_match = not status_filter or medidor['status'] in status_filter
+                    
+                    # *** NOVO: Verifica o filtro de irregularidade ***
+                    # Só aplica este filtro se o medidor for REPROVADO
+                    irregularidade_match = True
+                    if irregularidade_filter and medidor['status'] == 'REPROVADO':
+                        # Verifica se ALGUM dos motivos selecionados está no campo 'motivo' do medidor
+                        irregularidade_match = any(irr in medidor['motivo'] for irr in irregularidade_filter)
+                    
+                    # O medidor só é incluído se passar em ambos os filtros
+                    if status_match and irregularidade_match:
+                        medidores_filtrados.append(medidor)
 
-        if todos_medidores:
-            # Calcula as estatísticas
-            stats = calcular_estatisticas(todos_medidores)
-            
-            # Renderiza o resumo com base nas estatísticas
+        if medidores_filtrados:
+            stats = calcular_estatisticas(medidores_filtrados)
             renderizar_resumo(stats)
             
-            # Adiciona o botão de download na barra lateral
             st.sidebar.markdown("---")
             st.sidebar.subheader("📄 Exportar Relatório")
             
             pdf_bytes = gerar_pdf_relatorio(
-                medidores=todos_medidores, 
+                medidores=medidores_filtrados, 
                 data=data_selecionada_str, 
                 bancada=bancada_selecionada,
                 stats=stats
@@ -279,13 +306,12 @@ def pagina_visao_diaria(df_completo):
                 mime="application/pdf"
             )
 
-            # Continua com a renderização dos cards
             st.markdown("---")
             st.subheader("📋 Detalhes dos Medidores")
             num_colunas = 5
-            for i in range(0, len(todos_medidores), num_colunas):
+            for i in range(0, len(medidores_filtrados), num_colunas):
                 cols = st.columns(num_colunas)
-                for j, medidor in enumerate(todos_medidores[i:i + num_colunas]):
+                for j, medidor in enumerate(medidores_filtrados[i:i + num_colunas]):
                     with cols[j]:
                         renderizar_card(medidor)
                 st.write("")
