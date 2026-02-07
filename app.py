@@ -411,37 +411,50 @@ def main():
 
 # -----------------------------------------------------------------------
 
-# [BLOCO 09] - GERAÇÃO DE RELATÓRIO PDF
+# =======================================================================
+# [BLOCO 09] - GERAÇÃO DE RELATÓRIO PDF (VERSÃO CORRIGIDA E ROBUSTA)
+# =======================================================================
 class PDF(FPDF):
     def header(self):
+        # Garante que o título seja compatível com a codificação do PDF
+        titulo = 'Relatório de Fiscalização de Ensaios'
         self.set_font('Arial', 'B', 12)
-        self.cell(0, 10, 'Relatório de Fiscalização de Ensaios', 0, 1, 'C')
+        self.cell(0, 10, titulo, 0, 1, 'C')
         self.ln(5)
 
     def footer(self):
         self.set_y(-15)
         self.set_font('Arial', 'I', 8)
-        self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
+        pagina_num = f'Página {self.page_no()}'
+        self.cell(0, 10, pagina_num, 0, 0, 'C')
+
+# Função auxiliar para limpar texto para o PDF
+def limpar_texto_pdf(texto_original):
+    """Converte texto para a codificação 'latin-1' usada pelo FPDF, substituindo caracteres incompatíveis."""
+    return str(texto_original).encode('latin-1', 'replace').decode('latin-1')
 
 def gerar_pdf_relatorio(medidores, data, bancada):
     pdf = PDF()
     pdf.add_page()
     
+    # Cabeçalho do relatório
     pdf.set_font('Arial', '', 11)
-    pdf.cell(0, 8, f"Data do Relatório: {data}", 0, 1)
-    pdf.cell(0, 8, f"Bancada(s) Inclusa(s): {bancada}", 0, 1)
+    pdf.cell(0, 8, limpar_texto_pdf(f"Data do Relatório: {data}"), 0, 1)
+    pdf.cell(0, 8, limpar_texto_pdf(f"Bancada(s) Inclusa(s): {bancada}"), 0, 1)
     pdf.ln(10)
 
+    # Resumo
     stats = calcular_estatisticas(medidores)
     pdf.set_font('Arial', 'B', 12)
     pdf.cell(0, 10, "Resumo dos Resultados", 0, 1, 'L')
     pdf.set_font('Arial', '', 11)
-    pdf.cell(95, 8, f"Total de Medidores Ensaiados: {stats['total']}", 1, 0)
-    pdf.cell(95, 8, f"Medidores Aprovados: {stats['aprovados']}", 1, 1)
-    pdf.cell(95, 8, f"Medidores Reprovados: {stats['reprovados']}", 1, 0)
-    pdf.cell(95, 8, f"Irregularidade (Contra Consumidor): {stats['consumidor']}", 1, 1)
+    pdf.cell(95, 8, limpar_texto_pdf(f"Total de Medidores Ensaiados: {stats['total']}"), 1, 0)
+    pdf.cell(95, 8, limpar_texto_pdf(f"Medidores Aprovados: {stats['aprovados']}"), 1, 1)
+    pdf.cell(95, 8, limpar_texto_pdf(f"Medidores Reprovados: {stats['reprovados']}"), 1, 0)
+    pdf.cell(95, 8, limpar_texto_pdf(f"Irregularidade (Contra Consumidor): {stats['consumidor']}"), 1, 1)
     pdf.ln(10)
 
+    # Tabela de detalhes
     pdf.set_font('Arial', 'B', 12)
     pdf.cell(0, 10, "Detalhes dos Medidores", 0, 1, 'L')
     
@@ -454,22 +467,17 @@ def gerar_pdf_relatorio(medidores, data, bancada):
 
     pdf.set_font('Arial', '', 8)
     for medidor in medidores:
-        # Tenta decodificar para UTF-8 para evitar problemas com caracteres especiais no PDF
-        try:
-            serie = medidor['serie'].encode('latin-1', 'replace').decode('latin-1')[:20]
-            status = medidor['status'].replace('_', ' ').encode('latin-1', 'replace').decode('latin-1')
-            motivo = medidor['motivo'].encode('latin-1', 'replace').decode('latin-1')[:50]
-        except:
-            serie = medidor['serie'][:20]
-            status = medidor['status'].replace('_', ' ')
-            motivo = medidor['motivo'][:50]
-
-        pdf.cell(15, 7, str(medidor['pos']), 1)
+        # Usa a função de limpeza para todos os dados de texto
+        pos = limpar_texto_pdf(medidor['pos'])
+        serie = limpar_texto_pdf(medidor['serie'])[:20]
+        status = limpar_texto_pdf(medidor['status'].replace('_', ' '))
+        motivo = limpar_texto_pdf(medidor['motivo'])[:50]
+        
+        pdf.cell(15, 7, pos, 1)
         pdf.cell(40, 7, serie, 1)
         pdf.cell(45, 7, status, 1)
         pdf.cell(90, 7, motivo, 1)
         pdf.ln()
     
-    # *** CORREÇÃO APLICADA AQUI ***
-    # A função output() já retorna bytes, então não precisamos chamar .encode()
+    # Retorna o PDF como bytes, sem .encode()
     return pdf.output()
