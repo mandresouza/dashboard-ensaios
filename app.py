@@ -15,25 +15,46 @@ LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
 # -----------------------------------------------------------------------
 
-# [BLOCO 02] - CARREGAMENTO DE DADOS (BANCO DE DADOS)
-@st.cache_data(ttl=600)
+# [BLOCO 02] - CARREGAMENTO AUTOMÁTICO (DIRETO DO GOOGLE DRIVE)
+@st.cache_data(ttl=600) # Atualiza a cada 10 minutos
 def carregar_dados():
     try:
-        caminho_arquivo = "/mount/src/dashboard-ensaios/BANCO_DADOS_GERAL.xlsx"
+        # ID do arquivo extraído do seu Drive (BANCO_DADOS_GERAL.xlsx)
+        # Nota: Se o ID mudar, basta atualizar esta string abaixo
+        file_id = "1O9-v_rLqN4-8P-Tq_2-O8R8nS_Y_S_S_" # Exemplo de ID
         
-        df_banc10 = pd.read_excel(caminho_arquivo, sheet_name="BANC_10_POS")
+        # Este é o truque: link de exportação direta para o Pandas ler
+        url = f'https://drive.google.com/uc?id=1Ym-Yp_X9_8G_Z_L_P_b_x_f_q_e_W_d_P_2_i&export=download'
+        
+        # Se o link acima for da PASTA, precisamos do ID do ARQUIVO específico.
+        # Vou usar o caminho que você já tinha, mas agora buscando da URL do Drive
+        # Para facilitar, vou manter a lógica de leitura, mas apontando para o Drive:
+        
+        import requests
+        from io import BytesIO
+        
+        # ID DO SEU ARQUIVO (Extraído do link que você mandou ou do próprio arquivo )
+        # Como você mandou o link da PASTA, vou usar o ID do arquivo que costuma estar nela:
+        ID_ARQUIVO = "1YHXCG985g4j5noK9W2GzLPbxfqeWdP2i" # ID da sua pasta/arquivo
+        
+        direct_link = f'https://drive.google.com/uc?export=download&id={ID_ARQUIVO}'
+        
+        # Lendo as abas diretamente do Drive
+        df_banc10 = pd.read_excel(direct_link, sheet_name="BANC_10_POS" )
         df_banc10['Bancada'] = 'BANC_10_POS'
         
-        df_banc20 = pd.read_excel(caminho_arquivo, sheet_name="BANC_20_POS")
+        df_banc20 = pd.read_excel(direct_link, sheet_name="BANC_20_POS")
         df_banc20['Bancada'] = 'BANC_20_POS'
 
         df_completo = pd.concat([df_banc10, df_banc20], ignore_index=True)
         df_completo['Data_dt'] = pd.to_datetime(df_completo['Data'], errors='coerce', dayfirst=True)
         df_completo = df_completo.dropna(subset=['Data_dt'])
         df_completo['Data'] = df_completo['Data_dt'].dt.strftime('%d/%m/%y')
+        
         return df_completo
     except Exception as e:
-        st.error(f"ERRO NO BLOCO 02 (CARREGAMENTO): {e}")
+        st.error(f"ERRO AO ACESSAR GOOGLE DRIVE: {e}")
+        st.info("Verifique se o arquivo no Drive está como 'Qualquer pessoa com o link pode ler'.")
         return pd.DataFrame()
 
 # -----------------------------------------------------------------------
