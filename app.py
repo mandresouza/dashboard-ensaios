@@ -454,20 +454,22 @@ def gerar_pdf_relatorio(medidores, data, bancada):
 
     pdf.set_font('Arial', '', 8)
     for medidor in medidores:
-        serie = medidor['serie'][:20] if len(medidor['serie']) > 20 else medidor['serie']
-        status = medidor['status'].replace('_', ' ')
-        motivo = medidor['motivo'][:50] if len(medidor['motivo']) > 50 else medidor['motivo']
-        
+        # Tenta decodificar para UTF-8 para evitar problemas com caracteres especiais no PDF
+        try:
+            serie = medidor['serie'].encode('latin-1', 'replace').decode('latin-1')[:20]
+            status = medidor['status'].replace('_', ' ').encode('latin-1', 'replace').decode('latin-1')
+            motivo = medidor['motivo'].encode('latin-1', 'replace').decode('latin-1')[:50]
+        except:
+            serie = medidor['serie'][:20]
+            status = medidor['status'].replace('_', ' ')
+            motivo = medidor['motivo'][:50]
+
         pdf.cell(15, 7, str(medidor['pos']), 1)
         pdf.cell(40, 7, serie, 1)
         pdf.cell(45, 7, status, 1)
         pdf.cell(90, 7, motivo, 1)
         pdf.ln()
     
-    return pdf.output(dest='S').encode('latin-1')
-
-# -----------------------------------------------------------------------
-
-# PONTO DE ENTRADA PRINCIPAL DO SCRIPT
-if __name__ == "__main__":
-    main()
+    # *** CORREÇÃO APLICADA AQUI ***
+    # A função output() já retorna bytes, então não precisamos chamar .encode()
+    return pdf.output()
