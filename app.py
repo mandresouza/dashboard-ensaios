@@ -165,6 +165,38 @@ def renderizar_resumo(stats):
     with col4: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#7c3aed;">{stats["consumidor"]}</div><div class="metric-label">Contra Consumidor</div></div>', unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------
+# Função de Geração de PDF
+from fpdf import FPDF
+
+def gerar_pdf_fiscalizacao(lista_medidores, data_str):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(190, 10, "RELATÓRIO DE FISCALIZAÇÃO - INMETRO", ln=True, align='C')
+    pdf.set_font("Arial", "", 12)
+    pdf.cell(190, 10, f"Data do Ensaio: {data_str}", ln=True, align='C')
+    pdf.ln(10)
+    
+    # Cabeçalho da Tabela
+    pdf.set_fill_color(200, 200, 200)
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(20, 10, "Pos", 1, 0, 'C', True)
+    pdf.cell(40, 10, "Série", 1, 0, 'C', True)
+    pdf.cell(50, 10, "Status", 1, 0, 'C', True)
+    pdf.cell(80, 10, "Motivo da Irregularidade", 1, 1, 'C', True)
+    
+    # Dados (Apenas Reprovados e Contra Consumidor)
+    pdf.set_font("Arial", "", 9)
+    for m in lista_medidores:
+        if m['status'] in ["REPROVADO", "CONTRA O CONSUMIDOR"]:
+            pdf.cell(20, 10, str(m['pos']), 1, 0, 'C')
+            pdf.cell(40, 10, m['serie'], 1, 0, 'C')
+            pdf.cell(50, 10, m['status'], 1, 0, 'C')
+            pdf.cell(80, 10, m['motivo'], 1, 1, 'L')
+            
+    return pdf.output(dest='S').encode('latin-1')
+
+# -----------------------------------------------------------------------
 
 # [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (FILTROS E PROCESSAMENTO COM DATA AUTOMÁTICA)
 def pagina_visao_diaria(df_completo):
@@ -273,6 +305,17 @@ def pagina_visao_diaria(df_completo):
                 st.write("")
         else:
             st.info("Nenhum medidor encontrado.")
+        if todos_medidores:
+        st.markdown("---")
+        col_pdf1, col_pdf2 = st.columns([3, 1])
+        with col_pdf2:
+            pdf_bytes = gerar_pdf_fiscalizacao(todos_medidores, data_sel_str)
+            st.download_button(
+                label="📄 Baixar Relatório PDF",
+                data=pdf_bytes,
+                file_name=f"Relatorio_Fiscalizacao_{data_sel_str.replace('/','-')}.pdf",
+                mime="application/pdf"
+            )
 
 # -----------------------------------------------------------------------
 
