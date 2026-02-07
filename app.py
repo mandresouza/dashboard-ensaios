@@ -1,8 +1,6 @@
 # =======================================================================
-# ARQUIVO: app.py (VERSÃO ORGANIZADA POR BLOCOS NUMERADOS)
+# ARQUIVO app.py (VERSÃO CORRIGIDA)
 # =======================================================================
-
-# [BLOCO 01] - IMPORTAÇÕES E CONFIGURAÇÕES INICIAIS
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -10,46 +8,36 @@ import plotly.express as px
 import plotly.graph_objects as go
 import traceback
 
+# --- CONFIGURAÇÕES GLOBAIS ---
 st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="wide")
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
-# -----------------------------------------------------------------------
-
-# [BLOCO 02] - CARREGAMENTO AUTOMÁTICO (GOOGLE SHEETS - VERSÃO FINAL 100% OK)
+# --- FUNÇÃO DE CARREGAMENTO ROBUSTA (VERSÃO PANDAS) ---
 @st.cache_data(ttl=600)
 def carregar_dados():
     try:
-        # ID da sua Planilha Google Sheets
-        sheet_id = "1QxZ7bCSBClsmXLG1JOrFKNkMWZMK3P5Sp4LP81HV3Rs"
+        # Caminho direto para o arquivo
+        caminho_arquivo = "/mount/src/dashboard-ensaios/BANCO_DADOS_GERAL.xlsx"
         
-        # Link de exportação para CSV (Método mais rápido e estável do Google)
-        url_banc10 = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=BANC_10_POS"
-        url_banc20 = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=BANC_20_POS"
-        
-        # Lendo as abas diretamente como CSV (Não precisa de biblioteca extra )
-        df_banc10 = pd.read_csv(url_banc10)
+        # Lendo as abas
+        df_banc10 = pd.read_excel(caminho_arquivo, sheet_name="BANC_10_POS")
         df_banc10['Bancada'] = 'BANC_10_POS'
         
-        df_banc20 = pd.read_csv(url_banc20)
+        df_banc20 = pd.read_excel(caminho_arquivo, sheet_name="BANC_20_POS")
         df_banc20['Bancada'] = 'BANC_20_POS'
 
-        # Consolidação dos dados
         df_completo = pd.concat([df_banc10, df_banc20], ignore_index=True)
-        
-        # Tratamento de datas (O Google Sheets às vezes manda formatos diferentes)
         df_completo['Data_dt'] = pd.to_datetime(df_completo['Data'], errors='coerce', dayfirst=True)
         df_completo = df_completo.dropna(subset=['Data_dt'])
         df_completo['Data'] = df_completo['Data_dt'].dt.strftime('%d/%m/%y')
-        
         return df_completo
     except Exception as e:
-        st.error(f"ERRO AO ACESSAR GOOGLE SHEETS: {e}")
-        st.info("Verifique se a planilha está compartilhada como 'Qualquer pessoa com o link' (Leitor).")
+        st.error("ERRO CRÍTICO AO CARREGAR DADOS COM PANDAS:")
+        st.error(f"Detalhes: {e}")
+        st.code(traceback.format_exc())
         return pd.DataFrame()
 
-# -----------------------------------------------------------------------
-
-# [BLOCO 03] - FUNÇÕES AUXILIARES (CONVERSÃO E ESTATÍSTICAS)
+# --- FUNÇÕES DE PROCESSAMENTO E RENDERIZAÇÃO ---
 def valor_num(v):
     try:
         if pd.isna(v): return None
@@ -65,11 +53,13 @@ def calcular_estatisticas(todos_medidores):
     aprovados = sum(1 for m in todos_medidores if m['status'] == 'APROVADO')
     reprovados = sum(1 for m in todos_medidores if m['status'] == 'REPROVADO')
     consumidor = sum(1 for m in todos_medidores if m['status'] == 'CONTRA O CONSUMIDOR')
-    return {"total": total, "aprovados": aprovados, "reprovados": reprovados, "consumidor": consumidor}
+    return {
+        "total": total,
+        "aprovados": aprovados,
+        "reprovados": reprovados,
+        "consumidor": consumidor
+    }
 
-# -----------------------------------------------------------------------
-
-# [BLOCO 04] - PROCESSAMENTO TÉCNICO (COM IDENTIFICAÇÃO DE IRREGULARIDADE)
 def processar_ensaio(row, classe_banc20=None):
     medidores = []
     bancada = row.get('Bancada')
@@ -78,54 +68,69 @@ def processar_ensaio(row, classe_banc20=None):
     
     if not classe and bancada == 'BANC_20_POS' and classe_banc20: 
         classe = classe_banc20
-    if not classe: classe = 'B'
+    if not classe: 
+        classe = 'B'
         
     limite = 4.0 if "ELETROMEC" in classe else LIMITES_CLASSE.get(classe.replace("ELETROMEC", "").strip(), 1.3)
     
     for pos in range(1, tamanho_bancada + 1):
         serie = texto(row.get(f"P{pos}_Série"))
-        cn, cp, ci = row.get(f"P{pos}_CN"), row.get(f"P{pos}_CP"), row.get(f"P{pos}_CI")
+        cn = row.get(f"P{pos}_CN")
+        cp = row.get(f"P{pos}_CP")
+        ci = row.get(f"P{pos}_CI")
         
-        status, detalhe, motivo = "NÃO ENTROU", "", "N/A"
-        
-        if not (pd.isna(cn) and pd.isna(cp) and pd.isna(ci)):
-            v_cn, v_cp, v_ci = valor_num(cn), valor_num(cp), valor_num(ci)
-            
-            # Verificações de Irregularidade
-            erro_exatidao = any(v is not None and abs(v) > limite for v in [v_cn, v_cp, v_ci])
-            
+        if pd.isna(cn) and pd.isna(cp) and pd.isna(ci): 
+            status, detalhe = "NÃO ENTROU", ""
+        else:
+            cargas_positivas_acima = sum(1 for v in [cn, cp, ci] if valor_num(v) is not None and valor_num(v) > 0 and abs(valor_num(v)) > limite)
             reg_ini, reg_fim = valor_num(row.get(f"P{pos}_REG_Inicio")), valor_num(row.get(f"P{pos}_REG_Fim"))
-            erro_registrador = (reg_ini is not None and reg_fim is not None and (reg_fim - reg_ini) != 1)
-            incremento_maior = (reg_ini is not None and reg_fim is not None and (reg_fim - reg_ini) > 1)
-            
+            reg_incremento_maior = (reg_ini is not None and reg_fim is not None and (reg_fim - reg_ini) > 1)
+            reg_ok = (reg_ini is not None and reg_fim is not None and (reg_fim - reg_ini) == 1)
             mv_reprovado = str(texto(row.get(f"P{pos}_MV"))).upper() in ["REPROVADO", "NOK", "FAIL", "-"]
             
-            pontos_contra = sum([sum(1 for v in [v_cn, v_cp, v_ci] if v is not None and v > 0 and abs(v) > limite) >= 1, mv_reprovado, incremento_maior])
+            pontos_contra = sum([cargas_positivas_acima >= 1, mv_reprovado, reg_incremento_maior])
             
             if pontos_contra >= 2: 
-                status, detalhe, motivo = "CONTRA O CONSUMIDOR", "⚠️ Medição a mais", "Contra Consumidor"
-            elif erro_exatidao or erro_registrador or mv_reprovado:
-                status = "REPROVADO"
-                m_list = []
-                if erro_exatidao: m_list.append("Exatidão")
-                if erro_registrador: m_list.append("Registrador")
-                if mv_reprovado: m_list.append("Mostrador/MV")
-                motivo = " / ".join(m_list)
-                detalhe = "⚠️ Verifique este medidor"
+                status, detalhe = "CONTRA O CONSUMIDOR", "<b>⚠️ Medição a mais</b>"
             else:
-                status, detalhe, motivo = "APROVADO", "", "Nenhum"
+                aprovado = all(valor_num(v) is None or abs(valor_num(v)) <= limite for v in [cn, cp, ci]) and reg_ok and not mv_reprovado
+                if aprovado: 
+                    status, detalhe = "APROVADO", ""
+                else:
+                    status = "REPROVADO"
+                    normais = sum(1 for v in [cn, cp, ci] if valor_num(v) is not None and abs(valor_num(v)) <= limite)
+                    reprovados = sum(1 for v in [cn, cp, ci] if valor_num(v) is not None and abs(valor_num(v)) > limite)
+                    detalhe = "<b>⚠️ Verifique este medidor</b>" if normais >= 1 and reprovados >= 1 else ""
                     
         medidores.append({
-            "pos": pos, "serie": serie, "cn": texto(cn), "cp": texto(cp), "ci": texto(ci), 
-            "mv": texto(row.get(f"P{pos}_MV")), "reg_ini": texto(row.get(f"P{pos}_REG_Inicio")), 
-            "reg_fim": texto(row.get(f"P{pos}_REG_Fim")), "status": status, 
-            "detalhe": detalhe, "motivo": motivo, "limite": limite, "bancada": bancada
+            "pos": pos, 
+            "serie": serie, 
+            "cn": texto(cn), 
+            "cp": texto(cp), 
+            "ci": texto(ci), 
+            "mv": texto(row.get(f"P{pos}_MV")), 
+            "reg_ini": texto(row.get(f"P{pos}_REG_Inicio")), 
+            "reg_fim": texto(row.get(f"P{pos}_REG_Fim")), 
+            "reg_err": texto(row.get(f"P{pos}_REG_Erro")), 
+            "status": status, 
+            "detalhe": detalhe, 
+            "limite": limite,
+            "bancada": bancada,
+            "classe_exatidao": classe
         })
     return medidores
 
-# -----------------------------------------------------------------------
+def get_stats_por_dia(df_mes):
+    daily_stats = []
+    for data, group in df_mes.groupby('Data_dt'):
+        medidores = []
+        for _, row in group.iterrows(): 
+            medidores.extend(processar_ensaio(row, 'B'))
+        aprovados = sum(1 for m in medidores if m['status'] == 'APROVADO')
+        reprovados = sum(1 for m in medidores if m['status'] == 'REPROVADO')
+        daily_stats.append({'Data': data, 'Aprovados': aprovados, 'Reprovados': reprovados})
+    return pd.DataFrame(daily_stats)
 
-# [BLOCO 05] - COMPONENTES VISUAIS (CARDS E RESUMO)
 def renderizar_card(medidor):
     status_cor = {"APROVADO": "#dcfce7", "REPROVADO": "#fee2e2", "CONTRA O CONSUMIDOR": "#ede9fe", "NÃO ENTROU": "#e5e7eb"}
     cor = status_cor.get(medidor['status'], "#f3f4f6")
@@ -137,14 +142,17 @@ def renderizar_card(medidor):
                 <div style="background: rgba(0,0,0,0.05); padding: 10px; border-radius: 8px; margin-bottom:12px;">
                     <b style="display: block; margin-bottom: 8px;">Exatidão (±{medidor['limite']}%)</b>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px;">
-                        <span><b>CN:</b> {medidor['cn']}%</span><span><b>CP:</b> {medidor['cp']}%</span>
-                        <span><b>CI:</b> {medidor['ci']}%</span><span><b>MV:</b> {medidor['mv']}</span>
+                        <span><b>CN:</b> {medidor['cn']}%</span>
+                        <span><b>CP:</b> {medidor['cp']}%</span>
+                        <span><b>CI:</b> {medidor['ci']}%</span>
+                        <span><b>MV:</b> {medidor['mv']}</span>
                     </div>
                 </div>
                 <div style="background: rgba(0,0,0,0.05); padding: 10px; border-radius: 8px;">
                     <b style="display: block; margin-bottom: 8px;">Registrador</b>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px;">
-                        <span><b>Início:</b> {medidor['reg_ini']}</span><span><b>Fim:</b> {medidor['reg_fim']}</span>
+                        <span><b>Início:</b> {medidor['reg_ini']}</span>
+                        <span><b>Fim:</b> {medidor['reg_fim']}</span>
                         <span style="grid-column: span 2;"><b>Erro:</b> {medidor['reg_err']}</span>
                     </div>
                 </div>
@@ -157,255 +165,157 @@ def renderizar_card(medidor):
     """, unsafe_allow_html=True)
 
 def renderizar_resumo(stats):
-    st.markdown("""<style>.metric-card{background-color:#FFFFFF;padding:20px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.05);text-align:center;}.metric-value{font-size:32px;font-weight:700;}.metric-label{font-size:16px;color:#64748b;}</style>""", unsafe_allow_html=True)
+    st.markdown("""
+        <style>
+        .metric-card{background-color:#FFFFFF;padding:20px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.05);text-align:center;}
+        .metric-value{font-size:32px;font-weight:700;}
+        .metric-label{font-size:16px;color:#64748b;}
+        </style>
+    """, unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns(4)
     with col1: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#1e293b;">{stats["total"]}</div><div class="metric-label">Total Ensaiados</div></div>', unsafe_allow_html=True)
     with col2: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#16a34a;">{stats["aprovados"]}</div><div class="metric-label">Aprovados</div></div>', unsafe_allow_html=True)
     with col3: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#dc2626;">{stats["reprovados"]}</div><div class="metric-label">Reprovados</div></div>', unsafe_allow_html=True)
     with col4: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#7c3aed;">{stats["consumidor"]}</div><div class="metric-label">Contra Consumidor</div></div>', unsafe_allow_html=True)
 
-# -----------------------------------------------------------------------
-
-# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (FILTROS E PROCESSAMENTO COM DATA AUTOMÁTICA)
 def pagina_visao_diaria(df_completo):
-    st.sidebar.header("🔍 Busca e Filtros")
-    
-    # TRUQUE PARA LIMPAR: Usamos uma chave que muda quando queremos resetar o campo
-    if "search_key" not in st.session_state:
-        st.session_state.search_key = 0
+    st.sidebar.header("Filtros da Visão Diária")
+    serie_filter = st.sidebar.text_input("Buscar por Número de Série")
 
-    # Input de busca por série com chave dinâmica
-    serie_input = st.sidebar.text_input(
-        "Pesquisar Número de Série", 
-        value="", 
-        key=f"busca_{st.session_state.search_key}", 
-        help="Digite o número e pressione Enter"
-    )
-    termo_busca = serie_input.strip().lower()
-
-    # Botão de Limpar: Ele muda a chave, o que força o Streamlit a criar um campo novo e VAZIO
-    if termo_busca:
-        if st.sidebar.button("🗑️ Limpar Pesquisa"):
-            st.session_state.search_key += 1  # Muda a chave para resetar o campo
-            st.rerun()
-
-    # --- LÓGICA 1: BUSCA POR SÉRIE ---
-    if termo_busca:
-        st.markdown(f"### 🔍 Busca de Série do Medidor: **{serie_input}**")
-        
-        with st.spinner("Localizando medidor..."):
-            resultados_encontrados = []
+    if serie_filter:
+        st.markdown(f"### Buscando por série: **{serie_filter}**")
+        with st.spinner("Buscando em todo o banco de dados..."):
+            encontrado = False
             for _, ensaio_row in df_completo.iterrows():
-                colunas_serie = [c for c in ensaio_row.index if "_Série" in str(c)]
-                if any(termo_busca in str(ensaio_row[col]).lower() for col in colunas_serie if pd.notna(ensaio_row[col])):
-                    medidores_do_ensaio = processar_ensaio(ensaio_row)
-                    for medidor in medidores_do_ensaio:
-                        if termo_busca in medidor['serie'].lower():
-                            resultados_encontrados.append({"data": ensaio_row['Data'], "bancada": ensaio_row['Bancada'], "dados": medidor})
-
-            if resultados_encontrados:
-                st.success(f"Encontrado(s) {len(resultados_encontrados)} registro(s).")
-                for res in resultados_encontrados:
-                    with st.expander(f"📍 Data: {res['data']} | Bancada: {res['bancada']}", expanded=True):
-                        renderizar_card(res['dados'])
-            else:
-                st.warning(f"Nenhum registro encontrado para a série '{serie_input}'.")
-
-    # --- LÓGICA 2: RELATÓRIO POR DATA ---
+                for i in range(1, 21):
+                    serie_col = f'P{i}_Série'
+                    if serie_col in ensaio_row and pd.notna(ensaio_row[serie_col]):
+                        if serie_filter.strip().lower() in str(ensaio_row[serie_col]).lower():
+                            medidores_processados = processar_ensaio(ensaio_row)
+                            for medidor in medidores_processados:
+                                if serie_filter.strip().lower() in medidor['serie'].lower():
+                                    st.info(f"Medidor encontrado no ensaio de **{ensaio_row['Data']}** na bancada **{ensaio_row['Bancada']}**.")
+                                    renderizar_card(medidor)
+                                    encontrado = True
+                                    break
+                if encontrado: break
+            if not encontrado:
+                st.warning("Nenhum medidor encontrado com este número de série em todo o banco de dados.")
     else:
-        st.sidebar.markdown("---")
-        
-        # --- AJUSTE DA DATA: Agora pega o dia de hoje automaticamente ---
-        from datetime import date
-        data_hoje = date.today() 
-        
-        data_selecionada_dt = st.sidebar.date_input("Data do Ensaio", value=data_hoje, format="DD/MM/YYYY")
+        data_selecionada_dt = st.sidebar.date_input("Selecione a Data", value=datetime.today(), format="DD/MM/YYYY")
         data_selecionada_str = data_selecionada_dt.strftime('%d/%m/%y')
-        
         bancadas_disponiveis = df_completo['Bancada'].unique().tolist()
-        bancada_selecionada = st.sidebar.selectbox("Bancada", options=['Todas'] + bancadas_disponiveis)
-        status_filter = st.sidebar.multiselect("Filtrar Status", options=["APROVADO", "REPROVADO", "CONTRA O CONSUMIDOR"])
-        
-        st.markdown(f"### 📅 Relatório de Ensaios Realizados em: **{data_selecionada_str}**")
+        bancada_selecionada = st.sidebar.selectbox("Selecione a Bancada", options=['Todas'] + bancadas_disponiveis)
+        st.sidebar.markdown("---")
+        status_filter = st.sidebar.multiselect("Filtrar por Status", options=["APROVADO", "REPROVADO", "CONTRA O CONSUMIDOR"], placeholder="Selecione um ou mais status")
         
         df_filtrado = df_completo[df_completo['Data'] == data_selecionada_str].copy()
         if bancada_selecionada != 'Todas': 
             df_filtrado = df_filtrado[df_filtrado['Bancada'] == bancada_selecionada]
-
+        
+        st.markdown(f"### Relatório do dia: **{data_selecionada_str}**")
         if df_filtrado.empty:
-            st.info(f"Não constam ensaios registrados para o dia {data_selecionada_str}.")
+            st.info(f"Nenhum ensaio encontrado para os filtros selecionados.")
             return
 
-        with st.spinner("Carregando dados..."):
+        with st.spinner("Processando ensaios... Por favor, aguarde."):
             todos_medidores = []
             
-            # Configuração específica para Bancada 20 (Eletromecânico/Eletrônico)
-            classe_banc20 = None
-            if (bancada_selecionada == 'BANC_20_POS' or bancada_selecionada == 'Todas') and not df_filtrado[df_filtrado['Bancada'] == 'BANC_20_POS'].empty:
-                st.sidebar.markdown("---")
-                st.sidebar.subheader("⚙️ Config. Bancada 20")
-                tipo_medidor = st.sidebar.radio("Tipo de Medidor", ["Eletrônico", "Eletromecânico"])
-                if tipo_medidor == 'Eletromecânico': 
-                    classe_banc20 = "ELETROMECANICO"
-                else: 
-                    classe_banc20 = st.sidebar.selectbox("Classe de Exatidão", ['A', 'B', 'C', 'D'], index=1)
-            
-            # Processa os ensaios aplicando a classe da Bancada 20 se necessário
+            # 1. Processa os ensaios do DataFrame já filtrado
             for _, ensaio_row in df_filtrado.iterrows():
-                if ensaio_row['Bancada'] == 'BANC_20_POS':
-                    todos_medidores.extend(processar_ensaio(ensaio_row, classe_banc20))
-                else:
-                    todos_medidores.extend(processar_ensaio(ensaio_row))
+                medidores_processados = processar_ensaio(ensaio_row)
+                todos_medidores.extend(medidores_processados)
 
-            # Aplica filtro de status se selecionado
+            # 2. Filtro final por CLASSE (para BANC_20_POS)
+            classe_banc20 = None
+            if bancada_selecionada == 'BANC_20_POS' or bancada_selecionada == 'Todas':
+                if not df_filtrado[df_filtrado['Bancada'] == 'BANC_20_POS'].empty:
+                    st.sidebar.markdown("---")
+                    st.sidebar.subheader("⚙️ Config. Bancada 20")
+                    tipo_medidor = st.sidebar.radio("Tipo de Medidor", ["Eletrônico", "Eletromecânico"])
+                    if tipo_medidor == 'Eletromecânico':
+                        classe_banc20 = "ELETROMECANICO"
+                    else:
+                        classe_banc20 = st.sidebar.selectbox("Classe de Exatidão", ['A', 'B', 'C', 'D'], index=1)
+            
+            if classe_banc20:
+                todos_medidores = [m for m in todos_medidores if m.get('bancada') != 'BANC_20_POS' or m.get('classe_exatidao') == classe_banc20]
+
+            # 3. Filtro final por STATUS
             if status_filter:
                 todos_medidores = [m for m in todos_medidores if m['status'] in status_filter]
 
+        # --- Exibição dos Resultados (Fora do Spinner) ---
         if todos_medidores:
-            renderizar_resumo(calcular_estatisticas(todos_medidores))
+            stats = calcular_estatisticas(todos_medidores)
+            renderizar_resumo(stats)
             st.markdown("---")
-            st.subheader("📋 Detalhes dos Medidores")
+
+            st.subheader("Detalhes dos Medidores")
             num_colunas = 5
             for i in range(0, len(todos_medidores), num_colunas):
                 cols = st.columns(num_colunas)
                 for j, medidor in enumerate(todos_medidores[i:i + num_colunas]):
-                    with cols[j]: renderizar_card(medidor)
-                st.write("")
+                    with cols[j]:
+                        renderizar_card(medidor)
+                st.write("") # Espaçamento vertical
         else:
-            st.info("Nenhum medidor encontrado.")
-
-# -----------------------------------------------------------------------
-
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL (GRÁFICOS E TENDÊNCIAS PROFISSIONAIS)
-def get_stats_por_dia(df_mes):
-    daily_stats = []
-    # Agrupando por data e processando os ensaios
-    for data, group in df_mes.groupby('Data_dt'):
-        medidores = []
-        for _, row in group.iterrows(): 
-            medidores.extend(processar_ensaio(row, 'B'))
-        
-        aprovados = sum(1 for m in medidores if m['status'] == 'APROVADO')
-        reprovados = sum(1 for m in medidores if m['status'] == 'REPROVADO')
-        consumidor = sum(1 for m in medidores if m['status'] == 'CONTRA O CONSUMIDOR')
-        total = aprovados + reprovados + consumidor
-        
-        taxa_aprovacao = (aprovados / total * 100) if total > 0 else 0
-        
-        daily_stats.append({
-            'Data': data, 
-            'Aprovados': aprovados, 
-            'Reprovados': reprovados, 
-            'Contra Consumidor': consumidor,
-            'Total': total,
-            'Taxa de Aprovação (%)': round(taxa_aprovacao, 1)
-        })
-    return pd.DataFrame(daily_stats)
+            st.info("Nenhum medidor encontrado com os filtros aplicados.")
 
 def pagina_visao_mensal(df_completo):
-    st.sidebar.header("📅 Filtros Mensais")
+    st.sidebar.header("Filtros da Visão Mensal")
     anos = sorted(df_completo['Data_dt'].dt.year.unique(), reverse=True)
-    meses_dict = {
-        1: 'Janeiro', 2: 'Fevereiro', 3: 'Março', 4: 'Abril', 5: 'Maio', 6: 'Junho', 
-        7: 'Julho', 8: 'Agosto', 9: 'Setembro', 10: 'Outubro', 11: 'Novembro', 12: 'Dezembro'
-    }
-    
-    col_filt1, col_filt2 = st.sidebar.columns(2)
-    with col_filt1:
-        ano_selecionado = st.selectbox("Ano", anos)
-    with col_filt2:
-        mes_selecionado_num = st.selectbox("Mês", options=list(meses_dict.keys()), format_func=lambda x: meses_dict[x])
+    meses = {1: 'Janeiro', 2: 'Fevereiro', 3: 'Março', 4: 'Abril', 5: 'Maio', 6: 'Junho', 7: 'Julho', 8: 'Agosto', 9: 'Setembro', 10: 'Outubro', 11: 'Novembro', 12: 'Dezembro'}
+    ano_selecionado = st.sidebar.selectbox("Selecione o Ano", anos)
+    mes_selecionado_num = st.sidebar.selectbox("Selecione o Mês", options=list(meses.keys()), format_func=lambda x: meses[x])
     
     df_mes = df_completo[(df_completo['Data_dt'].dt.year == ano_selecionado) & (df_completo['Data_dt'].dt.month == mes_selecionado_num)]
-    
-    st.markdown(f"## 📈 Análise Consolidada: {meses_dict[mes_selecionado_num]} / {ano_selecionado}")
+    st.markdown(f"### Análise Consolidada de **{meses[mes_selecionado_num]} de {ano_selecionado}**")
     
     if df_mes.empty:
-        st.info(f"Nenhum dado encontrado para {meses_dict[mes_selecionado_num]} de {ano_selecionado}.")
+        st.info("Nenhum dado encontrado para este mês/ano.")
         return
         
-    with st.spinner("Processando indicadores mensais..."):
-        # Processamento de todos os medidores do mês
+    with st.spinner("Gerando gráficos mensais..."):
         todos_medidores_mes = []
         for _, row in df_mes.iterrows(): 
             todos_medidores_mes.extend(processar_ensaio(row, 'B'))
             
-        total_m = len(todos_medidores_mes)
-        aprov_m = sum(1 for m in todos_medidores_mes if m['status'] == 'APROVADO')
-        repro_m = sum(1 for m in todos_medidores_mes if m['status'] == 'REPROVADO')
-        cons_m = sum(1 for m in todos_medidores_mes if m['status'] == 'CONTRA O CONSUMIDOR')
-        taxa_m = (aprov_m / total_m * 100) if total_m > 0 else 0
-
-        # Cards de Resumo Executivo
-        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-        col_m1.metric("Total Ensaiados", total_m)
-        col_m2.metric("Taxa de Aprovação", f"{taxa_m:.1f}%", delta=f"{taxa_m-95:.1f}% vs Meta (95%)" if taxa_m > 0 else None)
-        col_m3.metric("Total Reprovados", repro_m, delta=repro_m, delta_color="inverse")
-        col_m4.metric("Contra Consumidor", cons_m, delta=cons_m, delta_color="inverse")
-
-        st.markdown("---")
-
-        # Gráficos
-        col_g1, col_g2 = st.columns([1, 1.5])
+        stats_mes = {
+            "Aprovados": sum(1 for m in todos_medidores_mes if m['status'] == 'APROVADO'), 
+            "Reprovados": sum(1 for m in todos_medidores_mes if m['status'] == 'REPROVADO'), 
+            "Contra o Consumidor": sum(1 for m in todos_medidores_mes if m['status'] == 'CONTRA O CONSUMIDOR')
+        }
         
-        with col_g1:
-            # Gráfico de Rosca (Donut) mais moderno
-            df_pie = pd.DataFrame({
-                'Status': ['Aprovados', 'Reprovados', 'Contra Consumidor'],
-                'Qtd': [aprov_m, repro_m, cons_m]
-            })
-            fig_donut = px.pie(
-                df_pie, values='Qtd', names='Status', hole=.5,
-                title='<b>Distribuição de Qualidade</b>',
-                color_discrete_map={'Aprovados':'#16a34a', 'Reprovados':'#dc2626', 'Contra Consumidor':'#7c3aed'}
-            )
-            fig_donut.update_traces(textposition='inside', textinfo='percent+label')
-            fig_donut.update_layout(showlegend=False, margin=dict(t=40, b=0, l=0, r=0))
-            st.plotly_chart(fig_donut, use_container_width=True)
+        df_pie = pd.DataFrame(list(stats_mes.items()), columns=['Status', 'Quantidade'])
+        fig_pie = px.pie(df_pie, values='Quantidade', names='Status', title='Consolidado do Mês', color_discrete_map={'Aprovados':'#16a34a', 'Reprovados':'#dc2626', 'Contra o Consumidor':'#7c3aed'})
+        
+        df_daily = get_stats_por_dia(df_mes)
+        fig_line = go.Figure()
+        fig_line.add_trace(go.Scatter(x=df_daily['Data'], y=df_daily['Aprovados'], mode='lines+markers', name='Aprovados', line=dict(color='#16a34a')))
+        fig_line.add_trace(go.Scatter(x=df_daily['Data'], y=df_daily['Reprovados'], mode='lines+markers', name='Reprovados', line=dict(color='#dc2626')))
+        fig_line.update_layout(title='Evolução Diária de Aprovados vs. Reprovados', xaxis_title='Dia', yaxis_title='Quantidade')
+        
+        col1, col2 = st.columns([1, 2])
+        with col1: st.plotly_chart(fig_pie, use_container_width=True)
+        with col2: st.plotly_chart(fig_line, use_container_width=True)
 
-        with col_g2:
-            # Gráfico de Barras Empilhadas para Tendência Diária
-            df_daily = get_stats_por_dia(df_mes)
-            fig_bar = go.Figure()
-            fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Aprovados'], name='Aprovados', marker_color='#16a34a'))
-            fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Reprovados'], name='Reprovados', marker_color='#dc2626'))
-            fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Contra Consumidor'], name='Contra Consumidor', marker_color='#7c3aed'))
-            
-            fig_bar.update_layout(
-                barmode='stack',
-                title='<b>Evolução Diária de Ensaios</b>',
-                xaxis_title="Dia do Mês",
-                yaxis_title="Quantidade de Medidores",
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                margin=dict(t=80, b=40, l=0, r=0),
-                hovermode="x unified"
-            )
-            st.plotly_chart(fig_bar, use_container_width=True)
-            
-        # Tabela de Performance Diária
-        with st.expander("📄 Visualizar Tabela de Performance Diária"):
-            st.dataframe(
-                df_daily.sort_values('Data', ascending=False), 
-                use_container_width=True, 
-                hide_index=True
-            )
-
-# -----------------------------------------------------------------------
-
-# [BLOCO 08] - INICIALIZAÇÃO E MENU PRINCIPAL
+# --- LÓGICA PRINCIPAL DE EXECUÇÃO ---
 def main():
     st.title("📊 Dashboard de Ensaios")
     try:
         df_completo = carregar_dados()
         if not df_completo.empty:
             st.sidebar.title("Menu de Navegação")
-            tipo_visao = st.sidebar.radio("Escolha a análise:", ('Visão Diária', 'Visão Mensal'))
-            if tipo_visao == 'Visão Diária': pagina_visao_diaria(df_completo)
-            else: pagina_visao_mensal(df_completo)
+            tipo_visao = st.sidebar.radio("Escolha o tipo de análise:", ('Visão Diária', 'Visão Mensal'))
+            if tipo_visao == 'Visão Diária':
+                pagina_visao_diaria(df_completo)
+            else:
+                pagina_visao_mensal(df_completo)
         else:
-            st.error("Erro ao carregar dados. Verifique o arquivo Excel.")
+            st.error("Não foi possível carregar os dados. Verifique se o arquivo Excel está no caminho correto.")
     except Exception as e:
-        st.error("Erro inesperado na aplicação.")
+        st.error("Um erro inesperado ocorreu na aplicação principal.")
         st.code(traceback.format_exc())
 
 if __name__ == "__main__":
