@@ -15,29 +15,34 @@ LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
 # -----------------------------------------------------------------------
 
-# [BLOCO 02] - CARREGAMENTO AUTOMÁTICO (VIA GDOWN - MAIS ESTÁVEL)
+# [BLOCO 02] - CARREGAMENTO AUTOMÁTICO (GOOGLE DRIVE - VERSÃO DEFINITIVA)
 @st.cache_data(ttl=600)
 def carregar_dados():
     try:
-        import gdown
-        import os
+        import requests
+        from io import BytesIO
         
-        # ID do seu ARQUIVO (extraído do seu link)
-        file_id = "1YHXCG985g4j5noK9W2GzLPbxfqeWdP2i"
-        url = f'https://drive.google.com/uc?id={file_id}'
-        output = 'BANCO_DADOS_LOCAL.xlsx'
+        # ID do seu ARQUIVO extraído do link que você enviou
+        file_id = "1D_05h5Cp9KOzmXwhz137ygvCfG7H6Czt"
         
-        # Baixa o arquivo do Drive para o servidor do Streamlit
-        if not os.path.exists(output ) or (datetime.now().minute % 10 == 0):
-            gdown.download(url, output, quiet=False, fuzzy=True)
+        # Link de download direto que o Google Drive aceita
+        url = f'https://drive.google.com/uc?export=download&id={file_id}'
         
-        # Lê o arquivo baixado localmente
-        df_banc10 = pd.read_excel(output, sheet_name="BANC_10_POS")
+        # Baixa o conteúdo do arquivo
+        response = requests.get(url )
+        response.raise_for_status() # Verifica se o download deu certo
+        
+        # Transforma o conteúdo baixado em um arquivo que o Pandas entende
+        excel_data = BytesIO(response.content)
+        
+        # Lê as abas do Excel
+        df_banc10 = pd.read_excel(excel_data, sheet_name="BANC_10_POS")
         df_banc10['Bancada'] = 'BANC_10_POS'
         
-        df_banc20 = pd.read_excel(output, sheet_name="BANC_20_POS")
+        df_banc20 = pd.read_excel(excel_data, sheet_name="BANC_20_POS")
         df_banc20['Bancada'] = 'BANC_20_POS'
 
+        # Consolidação dos dados
         df_completo = pd.concat([df_banc10, df_banc20], ignore_index=True)
         df_completo['Data_dt'] = pd.to_datetime(df_completo['Data'], errors='coerce', dayfirst=True)
         df_completo = df_completo.dropna(subset=['Data_dt'])
@@ -45,7 +50,8 @@ def carregar_dados():
         
         return df_completo
     except Exception as e:
-        st.error(f"ERRO CRÍTICO NO DRIVE: {e}")
+        st.error(f"ERRO AO ACESSAR O DRIVE: {e}")
+        st.info("Certifique-se de que o arquivo está compartilhado como 'Qualquer pessoa com o link'.")
         return pd.DataFrame()
 
 # -----------------------------------------------------------------------
