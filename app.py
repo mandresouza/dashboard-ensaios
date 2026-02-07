@@ -254,96 +254,60 @@ def pagina_visao_diaria(df_completo):
 
 # -----------------------------------------------------------------------
 
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL (COMPLETO E PROFISSIONAL)
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO ULTRA SEGURA)
 def get_stats_por_dia(df_mes):
-    daily_stats = []
-    for data, group in df_mes.groupby('Data_dt'):
-        medidores = []
-        for _, row in group.iterrows(): 
-            medidores.extend(processar_ensaio(row, 'B'))
-        ap = sum(1 for m in medidores if m['status'] == 'APROVADO')
-        rp = sum(1 for m in medidores if m['status'] == 'REPROVADO')
-        cs = sum(1 for m in medidores if m['status'] == 'CONTRA O CONSUMIDOR')
-        tt = ap + rp + cs
+    ds = []
+    for d, g in df_mes.groupby('Data_dt'):
+        m = []
+        for _, r in g.iterrows(): m.extend(processar_ensaio(r, 'B'))
+        ap = sum(1 for x in m if x['status'] == 'APROVADO')
+        rp = sum(1 for x in m if x['status'] == 'REPROVADO')
+        tt = len(m)
         tx = (ap / tt * 100) if tt > 0 else 0
-        daily_stats.append({
-            'Data': data, 'Aprovados': ap, 'Reprovados': rp, 
-            'Contra': cs, 'Total': tt, 'Taxa (%)': round(tx, 1)
-        })
-    return pd.DataFrame(daily_stats)
+        ds.append({'Data': d, 'Aprovados': ap, 'Reprovados': rp, 'Taxa (%)': round(tx, 1)})
+    return pd.DataFrame(ds)
 
 def pagina_visao_mensal(df_completo):
-    st.sidebar.header("📅 Filtros Mensais")
+    st.sidebar.subheader("Filtros")
     anos = sorted(df_completo['Data_dt'].dt.year.unique(), reverse=True)
-    meses_n = {1:'Jan', 2:'Fev', 3:'Mar', 4:'Abr', 5:'Mai', 6:'Jun', 7:'Jul', 8:'Ago', 9:'Set', 10:'Out', 11:'Nov', 12:'Dez'}
+    meses = {1:'Jan', 2:'Fev', 3:'Mar', 4:'Abr', 5:'Mai', 6:'Jun', 7:'Jul', 8:'Ago', 9:'Set', 10:'Out', 11:'Nov', 12:'Dez'}
+    ano = st.sidebar.selectbox("Ano", anos)
+    mes = st.sidebar.selectbox("Mês", list(meses.keys()), format_func=lambda x: meses[x])
     
-    c_f1, c_f2 = st.sidebar.columns(2)
-    ano_sel = c_f1.selectbox("Ano", anos)
-    mes_sel = c_f2.selectbox("Mês", list(meses_n.keys()), format_func=lambda x: meses_n[x])
-    
-    df_m = df_completo[(df_completo['Data_dt'].dt.year == ano_sel) & (df_completo['Data_dt'].dt.month == mes_sel)]
-    
+    df_m = df_completo[(df_completo['Data_dt'].dt.year == ano) & (df_completo['Data_dt'].dt.month == mes)]
     if df_m.empty:
-        st.info("Sem dados para este período.")
+        st.warning("Sem dados.")
         return
 
-    # Processamento consolidado
-    all_meds, b_stats = [], []
+    all_m, b_st = [], []
     for b in df_m['Bancada'].unique():
         df_b = df_m[df_m['Bancada'] == b]
         m_b = []
         for _, r in df_b.iterrows():
             l = processar_ensaio(r, 'B')
-            m_b.extend(l); all_meds.extend(l)
+            m_b.extend(l); all_m.extend(l)
         ap_b = sum(1 for x in m_b if x['status'] == 'APROVADO')
-        rp_b = sum(1 for x in m_b if x['status'] == 'REPROVADO')
         tt_b = len(m_b)
-        tx_b = (ap_b / tt_b * 100) if tt_b > 0 else 0
-        b_stats.append({'Bancada': b, 'Aprovados': ap_b, 'Reprovados': rp_b, 'Eficiência (%)': round(tx_b, 1)})
+        b_st.append({'Bancada': b, 'Aprovados': ap_b, 'Total': tt_b, 'Eficiência (%)': round((ap_b/tt_b*100),1) if tt_b>0 else 0})
 
-    ap_m = sum(1 for x in all_meds if x['status'] == 'APROVADO')
-    rp_m = sum(1 for x in all_meds if x['status'] == 'REPROVADO')
-    cs_m = sum(1 for x in all_meds if x['status'] == 'CONTRA O CONSUMIDOR')
-    tt_m = len(all_meds)
+    tt_m = len(all_m)
+    ap_m = sum(1 for x in all_m if x['status'] == 'APROVADO')
     tx_m = (ap_m / tt_m * 100) if tt_m > 0 else 0
 
-    # UI - Cabeçalho e Métricas
-    st.markdown(f"### 📊 Consolidado: {meses_n[mes_sel]} / {ano_sel}")
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Total", tt_m)
-    m2.metric("Aprovação", f"{tx_m:.1f}%", delta=f"{tx_m-95:.1f}% vs Meta")
-    m3.metric("Reprovados", rp_m, delta=rp_m, delta_color="inverse")
-    m4.metric("Contra Cons.", cs_m, delta=cs_m, delta_color="inverse")
+    st.header(f"Resumo: {meses[mes]}/{ano}")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Total", tt_m)
+    c2.metric("Aprovação", f"{tx_m:.1f}%", delta=f"{tx_m-95:.1f}%")
+    c3.metric("Eficiência", f"{tx_m:.1f}%")
 
-    st.markdown("---")
+    st.subheader("Tendência Diária")
+    df_d = get_stats_por_dia(df_m)
+    st.line_chart(df_d.set_index('Data')[['Aprovados', 'Reprovados']])
 
-    # UI - Gráficos de Qualidade e Tendência
-    g1, g2 = st.columns([1, 1.5])
-    with g1:
-        fig_p = px.pie(values=[ap_m, rp_m, cs_m], names=['Aprov', 'Reprov', 'Contra'], hole=.5, title="Qualidade Geral")
-        fig_p.update_layout(showlegend=False, margin=dict(t=30, b=0, l=0, r=0))
-        st.plotly_chart(fig_p, use_container_width=True)
-    with g2:
-        df_d = get_stats_por_dia(df_m)
-        fig_t = px.line(df_d, x='Data', y=['Aprovados', 'Reprovados'], markers=True, title="Tendência Diária")
-        fig_t.update_layout(margin=dict(t=30, b=0), legend=dict(orientation="h", y=1.1))
-        st.plotly_chart(fig_t, use_container_width=True)
-
-    st.markdown("---")
-
-    # UI - Comparativo de Bancadas
-    st.subheader("⚖️ Comparativo de Bancadas")
-    df_c = pd.DataFrame(b_stats)
-    c_g1, c_g2 = st.columns([1.5, 1])
-    with c_g1:
-        fig_c = px.bar(df_c, x='Bancada', y=['Aprovados', 'Reprovados'], barmode='group', title="Performance por Bancada")
-        st.plotly_chart(fig_c, use_container_width=True)
-    with c_g2:
-        st.markdown("  
-", unsafe_allow_html=True)
-        st.dataframe(df_c, hide_index=True, use_container_width=True)
-        if not df_c.empty:
-            st.success(f"🏆 Melhor: {df_c.loc[df_c['Eficiência (%)'].idxmax()]['Bancada']}")
+    st.subheader("Comparativo de Bancadas")
+    df_c = pd.DataFrame(b_st)
+    st.bar_chart(df_c.set_index('Bancada')[['Aprovados', 'Total']])
+    st.table(df_c)
 
 # -----------------------------------------------------------------------
 
