@@ -69,7 +69,7 @@ def calcular_estatisticas(todos_medidores):
 
 # -----------------------------------------------------------------------
 
-# [BLOCO 04] - PROCESSAMENTO TÉCNICO DOS ENSAIOS (LÓGICA DE APROVAÇÃO)
+# [BLOCO 04] - PROCESSAMENTO TÉCNICO (COM IDENTIFICAÇÃO DE IRREGULARIDADE)
 def processar_ensaio(row, classe_banc20=None):
     medidores = []
     bancada = row.get('Bancada')
@@ -78,8 +78,7 @@ def processar_ensaio(row, classe_banc20=None):
     
     if not classe and bancada == 'BANC_20_POS' and classe_banc20: 
         classe = classe_banc20
-    if not classe: 
-        classe = 'B'
+    if not classe: classe = 'B'
         
     limite = 4.0 if "ELETROMEC" in classe else LIMITES_CLASSE.get(classe.replace("ELETROMEC", "").strip(), 1.3)
     
@@ -87,34 +86,40 @@ def processar_ensaio(row, classe_banc20=None):
         serie = texto(row.get(f"P{pos}_Série"))
         cn, cp, ci = row.get(f"P{pos}_CN"), row.get(f"P{pos}_CP"), row.get(f"P{pos}_CI")
         
-        if pd.isna(cn) and pd.isna(cp) and pd.isna(ci): 
-            status, detalhe = "NÃO ENTROU", ""
-        else:
-            cargas_positivas_acima = sum(1 for v in [cn, cp, ci] if valor_num(v) is not None and valor_num(v) > 0 and abs(valor_num(v)) > limite)
+        status, detalhe, motivo = "NÃO ENTROU", "", "N/A"
+        
+        if not (pd.isna(cn) and pd.isna(cp) and pd.isna(ci)):
+            v_cn, v_cp, v_ci = valor_num(cn), valor_num(cp), valor_num(ci)
+            
+            # Verificações de Irregularidade
+            erro_exatidao = any(v is not None and abs(v) > limite for v in [v_cn, v_cp, v_ci])
+            
             reg_ini, reg_fim = valor_num(row.get(f"P{pos}_REG_Inicio")), valor_num(row.get(f"P{pos}_REG_Fim"))
-            reg_incremento_maior = (reg_ini is not None and reg_fim is not None and (reg_fim - reg_ini) > 1)
-            reg_ok = (reg_ini is not None and reg_fim is not None and (reg_fim - reg_ini) == 1)
+            erro_registrador = (reg_ini is not None and reg_fim is not None and (reg_fim - reg_ini) != 1)
+            incremento_maior = (reg_ini is not None and reg_fim is not None and (reg_fim - reg_ini) > 1)
+            
             mv_reprovado = str(texto(row.get(f"P{pos}_MV"))).upper() in ["REPROVADO", "NOK", "FAIL", "-"]
             
-            pontos_contra = sum([cargas_positivas_acima >= 1, mv_reprovado, reg_incremento_maior])
+            pontos_contra = sum([sum(1 for v in [v_cn, v_cp, v_ci] if v is not None and v > 0 and abs(v) > limite) >= 1, mv_reprovado, incremento_maior])
             
             if pontos_contra >= 2: 
-                status, detalhe = "CONTRA O CONSUMIDOR", "<b>⚠️ Medição a mais</b>"
+                status, detalhe, motivo = "CONTRA O CONSUMIDOR", "⚠️ Medição a mais", "Contra Consumidor"
+            elif erro_exatidao or erro_registrador or mv_reprovado:
+                status = "REPROVADO"
+                m_list = []
+                if erro_exatidao: m_list.append("Exatidão")
+                if erro_registrador: m_list.append("Registrador")
+                if mv_reprovado: m_list.append("Mostrador/MV")
+                motivo = " / ".join(m_list)
+                detalhe = "⚠️ Verifique este medidor"
             else:
-                aprovado = all(valor_num(v) is None or abs(valor_num(v)) <= limite for v in [cn, cp, ci]) and reg_ok and not mv_reprovado
-                if aprovado: 
-                    status, detalhe = "APROVADO", ""
-                else:
-                    status = "REPROVADO"
-                    normais = sum(1 for v in [cn, cp, ci] if valor_num(v) is not None and abs(valor_num(v)) <= limite)
-                    reprovados = sum(1 for v in [cn, cp, ci] if valor_num(v) is not None and abs(valor_num(v)) > limite)
-                    detalhe = "<b>⚠️ Verifique este medidor</b>" if normais >= 1 and reprovados >= 1 else ""
+                status, detalhe, motivo = "APROVADO", "", "Nenhum"
                     
         medidores.append({
             "pos": pos, "serie": serie, "cn": texto(cn), "cp": texto(cp), "ci": texto(ci), 
             "mv": texto(row.get(f"P{pos}_MV")), "reg_ini": texto(row.get(f"P{pos}_REG_Inicio")), 
-            "reg_fim": texto(row.get(f"P{pos}_REG_Fim")), "reg_err": texto(row.get(f"P{pos}_REG_Erro")), 
-            "status": status, "detalhe": detalhe, "limite": limite, "bancada": bancada, "classe_exatidao": classe
+            "reg_fim": texto(row.get(f"P{pos}_REG_Fim")), "status": status, 
+            "detalhe": detalhe, "motivo": motivo, "limite": limite, "bancada": bancada
         })
     return medidores
 
