@@ -1,5 +1,5 @@
 # =======================================================================
-# ARQUIVO: app.py (VERSÃO FINAL COM MAPA DE CALOR E VISÃO MENSAL CORRIGIDA)
+# ARQUIVO: app.py (VERSÃO FINAL E COMPLETA)
 # =======================================================================
 
 # [BLOCO 01] - IMPORTAÇÕES E CONFIGURAÇÕES INICIAIS
@@ -14,7 +14,6 @@ from pdf_generator import gerar_pdf_relatorio
 
 st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="wide")
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
-
 # [BLOCO 02] - CARREGAMENTO DE DADOS
 @st.cache_data(ttl=600)
 def carregar_dados():
@@ -34,7 +33,6 @@ def carregar_dados():
     except Exception as e:
         st.error(f"ERRO AO ACESSAR GOOGLE SHEETS: {e}")
         return pd.DataFrame()
-
 # [BLOCO 03] - FUNÇÕES AUXILIARES
 def valor_num(v):
     try:
@@ -114,7 +112,6 @@ def processar_ensaio(row, classe_banc20=None):
             "erros_pontuais": erros_pontuais
         })
     return medidores
-
 # [BLOCO 05] - COMPONENTES VISUAIS
 def renderizar_card(medidor):
     status_cor = {"APROVADO": "#dcfce7", "REPROVADO": "#fee2e2", "CONTRA O CONSUMIDOR": "#ede9fe", "NÃO ENTROU": "#e5e7eb"}
@@ -177,7 +174,6 @@ def renderizar_grafico_reprovacoes(medidores):
     fig.update_layout(yaxis_title=None, xaxis_title="Número de Medidores", showlegend=False, margin=dict(l=10, r=10, t=40, b=10), height=250)
     fig.update_traces(textposition='outside')
     st.plotly_chart(fig, use_container_width=True)
-
 # [BLOCO 06] - PÁGINA: VISÃO DIÁRIA
 def pagina_visao_diaria(df_completo):
     st.sidebar.header("🔍 Busca e Filtros")
@@ -320,8 +316,7 @@ def pagina_visao_diaria(df_completo):
                     st.write("")
         else:
             st.info("Nenhum medidor encontrado para os filtros selecionados.")
-
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL (*** RESTAURADO E COMPLETO ***)
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL
 def get_stats_por_dia(df_mes):
     daily_stats = []
     for data, group in df_mes.groupby('Data_dt'):
@@ -397,7 +392,6 @@ def pagina_visao_mensal(df_completo):
             
         with st.expander("📄 Visualizar Tabela de Performance Diária"):
             st.dataframe(df_daily.sort_values('Data', ascending=False), use_container_width=True, hide_index=True)
-
 # [BLOCO 08] - PÁGINA: ANÁLISE DE POSIÇÕES (MAPA DE CALOR)
 def pagina_analise_posicoes(df_completo):
     st.markdown("## 🔥 Análise de Reprovação por Posição (Mapa de Calor)")
@@ -440,23 +434,32 @@ def pagina_analise_posicoes(df_completo):
             st.info(f"Nenhum dado encontrado para a {bancada_selecionada.replace('_', ' ')} no período selecionado.")
             return
 
-        reprovacoes = []
+        reprovacoes_detalhadas = []
         for _, row in df_filtrado.iterrows():
             medidores = processar_ensaio(row)
             for medidor in medidores:
                 if medidor['status'] == 'REPROVADO' and 'Exatidão' in medidor['motivo']:
                     for erro_tipo in medidor['erros_pontuais']:
-                        reprovacoes.append({'pos': medidor['pos'], 'ponto': erro_tipo})
+                        reprovacoes_detalhadas.append({
+                            'Data': row['Data'],
+                            'Ensaio #': row.get('N_ENSAIO', 'N/A'),
+                            'Posição': medidor['pos'],
+                            'Série': medidor['serie'],
+                            'Ponto do Erro': erro_tipo,
+                            'Valor CN': medidor['cn'],
+                            'Valor CP': medidor['cp'],
+                            'Valor CI': medidor['ci']
+                        })
         
-        if not reprovacoes:
+        if not reprovacoes_detalhadas:
             st.success("🎉 Excelente! Nenhuma reprovação por exatidão encontrada para os filtros selecionados.")
             return
 
-        df_reprovacoes = pd.DataFrame(reprovacoes)
+        df_reprovacoes = pd.DataFrame(reprovacoes_detalhadas)
         
         heatmap_data = df_reprovacoes.pivot_table(
-            index='pos', 
-            columns='ponto', 
+            index='Posição', 
+            columns='Ponto do Erro', 
             aggfunc='size', 
             fill_value=0
         )
@@ -489,9 +492,12 @@ def pagina_analise_posicoes(df_completo):
         st.plotly_chart(fig, use_container_width=True)
         
         st.markdown("---")
-        with st.expander("Ver dados brutos da análise"):
-            st.dataframe(heatmap_data)
-
+        with st.expander(f"📄 Detalhes dos {len(df_reprovacoes)} Medidores Reprovados (Clique para expandir)"):
+            st.dataframe(
+                df_reprovacoes[['Data', 'Ensaio #', 'Posição', 'Série', 'Ponto do Erro', 'Valor CN', 'Valor CP', 'Valor CI']],
+                use_container_width=True,
+                hide_index=True
+            )
 # [BLOCO 09] - INICIALIZAÇÃO E MENU PRINCIPAL
 def main():
     st.title("📊 Dashboard de Ensaios")
