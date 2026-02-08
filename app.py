@@ -1,5 +1,5 @@
 # =======================================================================
-# ARQUIVO: app.py (VERSÃO COM ANÁLISE DE MAPA DE CALOR)
+# ARQUIVO: app.py (VERSÃO FINAL COM MAPA DE CALOR E VISÃO MENSAL CORRIGIDA)
 # =======================================================================
 
 # [BLOCO 01] - IMPORTAÇÕES E CONFIGURAÇÕES INICIAIS
@@ -321,7 +321,23 @@ def pagina_visao_diaria(df_completo):
         else:
             st.info("Nenhum medidor encontrado para os filtros selecionados.")
 
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL (*** RESTAURADO E COMPLETO ***)
+def get_stats_por_dia(df_mes):
+    daily_stats = []
+    for data, group in df_mes.groupby('Data_dt'):
+        medidores = []
+        for _, row in group.iterrows(): 
+            medidores.extend(processar_ensaio(row, 'B'))
+        
+        aprovados = sum(1 for m in medidores if m['status'] == 'APROVADO')
+        reprovados = sum(1 for m in medidores if m['status'] == 'REPROVADO')
+        consumidor = sum(1 for m in medidores if m['status'] == 'CONTRA O CONSUMIDOR')
+        total = aprovados + reprovados + consumidor
+        taxa_aprovacao = (aprovados / total * 100) if total > 0 else 0
+        
+        daily_stats.append({'Data': data, 'Aprovados': aprovados, 'Reprovados': reprovados, 'Contra Consumidor': consumidor, 'Total': total, 'Taxa de Aprovação (%)': round(taxa_aprovacao, 1)})
+    return pd.DataFrame(daily_stats)
+
 def pagina_visao_mensal(df_completo):
     st.sidebar.header("📅 Filtros Mensais")
     anos = sorted(df_completo['Data_dt'].dt.year.unique(), reverse=True)
@@ -370,12 +386,25 @@ def pagina_visao_mensal(df_completo):
             st.plotly_chart(fig_donut, use_container_width=True)
 
         with col_g2:
-            st.warning("Gráfico de evolução diária em desenvolvimento.")
+            df_daily = get_stats_por_dia(df_mes)
+            fig_bar = go.Figure()
+            fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Aprovados'], name='Aprovados', marker_color='#16a34a'))
+            fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Reprovados'], name='Reprovados', marker_color='#dc2626'))
+            fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Contra Consumidor'], name='Contra Consumidor', marker_color='#7c3aed'))
+            
+            fig_bar.update_layout(barmode='stack', title='<b>Evolução Diária de Ensaios</b>', xaxis_title="Dia do Mês", yaxis_title="Quantidade de Medidores", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), margin=dict(t=80, b=40, l=0, r=0), hovermode="x unified")
+            st.plotly_chart(fig_bar, use_container_width=True)
+            
+        with st.expander("📄 Visualizar Tabela de Performance Diária"):
+            st.dataframe(df_daily.sort_values('Data', ascending=False), use_container_width=True, hide_index=True)
 
 # [BLOCO 08] - PÁGINA: ANÁLISE DE POSIÇÕES (MAPA DE CALOR)
 def pagina_analise_posicoes(df_completo):
     st.markdown("## 🔥 Análise de Reprovação por Posição (Mapa de Calor)")
     st.info("Esta análise identifica quais posições e pontos de medição (CN, CP, CI) concentram o maior número de reprovações por exatidão.")
+    st.markdown("""
+    **Como ler o mapa:** Cada célula mostra o número total de reprovações para uma posição específica (linha) em um ponto de medição (coluna). A barra de cores à direita serve como legenda: quanto mais **vermelha e escura** a cor, **maior o número de reprovações**, indicando um ponto crítico que pode merecer investigação.
+    """)
 
     st.sidebar.header("🔬 Filtros da Análise")
     
