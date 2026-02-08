@@ -1,6 +1,5 @@
-
 # =======================================================================
-# ARQUIVO: app.py (VERSÃO FINAL CORRIGIDA)
+# ARQUIVO: app.py (VERSÃO FINAL COMPLETA E CORRIGIDA)
 # =======================================================================
 
 # [BLOCO 01] - IMPORTAÇÕES E CONFIGURAÇÕES INICIAIS
@@ -10,7 +9,7 @@ from datetime import datetime, date
 import plotly.express as px
 import plotly.graph_objects as go
 import traceback
-import re # Importa a biblioteca de expressões regulares
+import re
 from pdf_generator import gerar_pdf_relatorio
 
 st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="wide")
@@ -72,7 +71,6 @@ def processar_ensaio(row, classe_banc20=None):
         cn, cp, ci = row.get(f"P{pos}_CN"), row.get(f"P{pos}_CP"), row.get(f"P{pos}_CI")
         
         status, detalhe, motivo = "NÃO ENTROU", "", "N/A"
-        reg_err = None
         
         if serie != "-":
             v_cn, v_cp, v_ci = valor_num(cn), valor_num(cp), valor_num(ci)
@@ -105,8 +103,7 @@ def processar_ensaio(row, classe_banc20=None):
                     
         medidores.append({
             "pos": pos, "serie": serie, "cn": texto(cn), "cp": texto(cp), "ci": texto(ci), 
-            "mv": texto(row.get(f"P{pos}_MV")), "reg_ini": texto(row.get(f"P{pos}_REG_Inicio")), 
-            "reg_fim": texto(row.get(f"P{pos}_REG_Fim")), "status": status, 
+            "mv": texto(row.get(f"P{pos}_MV")), "status": status, 
             "detalhe": detalhe, "motivo": motivo, "limite": limite
         })
     return medidores
@@ -155,8 +152,24 @@ def renderizar_resumo(stats):
     with col4: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#7c3aed;">{stats["consumidor"]}</div><div class="metric-label">Contra Consumidor</div></div>', unsafe_allow_html=True)
 
 def renderizar_grafico_reprovacoes(medidores):
-    # ... (código sem alterações)
-    pass
+    motivos_contagem = {}
+    for medidor in medidores:
+        if medidor['status'] == 'REPROVADO':
+            motivos = medidor['motivo'].split(' / ')
+            for motivo in motivos:
+                if motivo != "Nenhum":
+                    motivos_contagem[motivo] = motivos_contagem.get(motivo, 0) + 1
+    
+    if not motivos_contagem:
+        return
+
+    df_motivos = pd.DataFrame(list(motivos_contagem.items()), columns=['Motivo', 'Quantidade'])
+    df_motivos = df_motivos.sort_values(by='Quantidade', ascending=False)
+
+    fig = px.bar(df_motivos, x='Quantidade', y='Motivo', orientation='h', title='<b>Principais Causas de Reprovação</b>', text='Quantidade', color_discrete_sequence=px.colors.qualitative.Pastel)
+    fig.update_layout(yaxis_title=None, xaxis_title="Número de Medidores", showlegend=False, margin=dict(l=10, r=10, t=40, b=10), height=250)
+    fig.update_traces(textposition='outside')
+    st.plotly_chart(fig, use_container_width=True)
 
 # [BLOCO 06] - PÁGINA: VISÃO DIÁRIA
 def pagina_visao_diaria(df_completo):
@@ -168,7 +181,7 @@ def pagina_visao_diaria(df_completo):
     if "filtro_irregularidade" not in st.session_state: st.session_state.filtro_irregularidade = []
     if "search_key" not in st.session_state: st.session_state.search_key = 0
 
-    serie_input = st.sidebar.text_input("Pesquisar Número de Série", key=f"busca_{st.session_state.search_key}")
+    serie_input = st.sidebar.text_input("Pesquisar Número de Série", value="", key=f"busca_{st.session_state.search_key}")
     termo_busca = serie_input.strip().lower()
 
     if st.sidebar.button("🗑️ Limpar Pesquisa", key="limpar"):
@@ -183,19 +196,24 @@ def pagina_visao_diaria(df_completo):
                 medidores_do_ensaio = processar_ensaio(ensaio_row)
                 for medidor in medidores_do_ensaio:
                     if termo_busca in medidor['serie'].lower():
-                        resultados_encontrados.append({"ensaio": ensaio_row, "medidor": medidor})
+                        resultados_encontrados.append({"ensaio": ensaio_row.to_dict(), "medidor": medidor})
 
             if resultados_encontrados:
                 st.success(f"Encontrado(s) {len(resultados_encontrados)} registro(s).")
                 for res in resultados_encontrados:
-                    n_ensaio = res['ensaio']['N_ENSAIO']
-                    bancada = res['ensaio']['Bancada']
-                    temp_str = str(res['ensaio']['Temperatura'])
+                    n_ensaio = res['ensaio'].get('N_ENSAIO', 'N/A')
+                    bancada = res['ensaio'].get('Bancada', 'N/A')
+                    temp_str = str(res['ensaio'].get('Temperatura', ''))
                     temp_match = re.search(r'(\d+\.\d+°C)', temp_str)
                     temperatura = temp_match.group(1) if temp_match else temp_str
                     
                     renderizar_cabecalho_ensaio(n_ensaio, bancada, temperatura)
-                    renderizar_card(res['medidor'])
+                    
+                    cols = st.columns(5)
+                    with cols[0]:
+                        renderizar_card(res['medidor'])
+                    st.write("")
+
             else:
                 st.warning(f"Nenhum registro encontrado para a série '{serie_input}'.")
     else:
@@ -233,7 +251,7 @@ def pagina_visao_diaria(df_completo):
             st.info(f"Não constam ensaios registrados para o dia {data_selecionada_str}.")
             return
 
-        ensaios_para_pdf = []
+        ensaios_para_exibir = []
         todos_medidores_filtrados = []
 
         for _, ensaio_row in df_filtrado_dia.iterrows():
@@ -252,9 +270,9 @@ def pagina_visao_diaria(df_completo):
                     medidores_filtrados_deste_ensaio.append(medidor)
             
             if medidores_filtrados_deste_ensaio:
-                n_ensaio = ensaio_row['N_ENSAIO']
-                bancada = ensaio_row['Bancada']
-                temp_str = str(ensaio_row['Temperatura'])
+                n_ensaio = ensaio_row.get('N_ENSAIO', 'N/A')
+                bancada = ensaio_row.get('Bancada', 'N/A')
+                temp_str = str(ensaio_row.get('Temperatura', ''))
                 temp_match = re.search(r'(\d+\.\d+°C)', temp_str)
                 temperatura = temp_match.group(1) if temp_match else temp_str
 
@@ -264,22 +282,27 @@ def pagina_visao_diaria(df_completo):
                     "temperatura": temperatura,
                     "medidores": medidores_filtrados_deste_ensaio
                 }
-                ensaios_para_pdf.append(ensaio_obj)
+                ensaios_para_exibir.append(ensaio_obj)
                 todos_medidores_filtrados.extend(medidores_filtrados_deste_ensaio)
 
         if todos_medidores_filtrados:
             stats = calcular_estatisticas(todos_medidores_filtrados)
-            renderizar_resumo(stats)
+            
+            col_resumo, col_grafico = st.columns([1.2, 0.8])
+            with col_resumo:
+                renderizar_resumo(stats)
+            with col_grafico:
+                renderizar_grafico_reprovacoes(todos_medidores_filtrados)
             
             st.sidebar.markdown("---")
             st.sidebar.subheader("📄 Exportar Relatório")
-            pdf_bytes = gerar_pdf_relatorio(ensaios=ensaios_para_pdf, data=data_selecionada_str, stats=stats)
+            pdf_bytes = gerar_pdf_relatorio(ensaios=ensaios_para_exibir, data=data_selecionada_str, stats=stats)
             st.sidebar.download_button(label="📥 Baixar Relatório PDF", data=pdf_bytes, file_name=f"Relatorio_Ensaios_{st.session_state.filtro_data.strftime('%Y-%m-%d')}.pdf", mime="application/pdf")
 
             st.markdown("---")
             st.subheader("📋 Detalhes dos Ensaios")
             
-            for ensaio in ensaios_para_pdf:
+            for ensaio in ensaios_para_exibir:
                 renderizar_cabecalho_ensaio(ensaio['n_ensaio'], ensaio['bancada'], ensaio['temperatura'])
                 num_colunas = 5
                 for idx in range(0, len(ensaio['medidores']), num_colunas):
@@ -290,7 +313,7 @@ def pagina_visao_diaria(df_completo):
                     st.write("")
         else:
             st.info("Nenhum medidor encontrado para os filtros selecionados.")
-            
+
 # [BLOCO 07] - PÁGINA: VISÃO MENSAL
 def get_stats_por_dia(df_mes):
     daily_stats = []
@@ -381,7 +404,7 @@ def main():
             else:
                 pagina_visao_mensal(df_completo)
         else:
-            st.error("Erro ao carregar dados. Verifique a conexão com o Google Sheets.")
+            st.error("Erro ao carregar dados.")
     except Exception as e:
         st.error("Ocorreu um erro inesperado na aplicação.")
         st.code(traceback.format_exc())
