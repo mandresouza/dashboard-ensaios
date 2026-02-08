@@ -70,10 +70,17 @@ def processar_ensaio(row, classe_banc20=None):
         serie = texto(row.get(f"P{pos}_Série"))
         cn, cp, ci = row.get(f"P{pos}_CN"), row.get(f"P{pos}_CP"), row.get(f"P{pos}_CI")
         
-        status, detalhe, motivo = "NÃO ENTROU", "", "N/A"
-        erros_pontuais = []
-        
-        if serie != "-":
+        # --- LÓGICA CORRIGIDA E RESTAURADA ---
+        # 1. Verifica primeiro se há algum dado de ensaio.
+        if pd.isna(cn) and pd.isna(cp) and pd.isna(ci):
+            # Se não há dados de carga, o medidor não entrou ou não ligou.
+            status, detalhe, motivo = "NÃO ENTROU", "", "N/A"
+            erros_pontuais = []
+        else:
+            # 2. Se há dados, processa a lógica completa de aprovação/reprovação.
+            status, detalhe, motivo = "APROVADO", "", "Nenhum" # Começa como APROVADO
+            erros_pontuais = []
+            
             v_cn, v_cp, v_ci = valor_num(cn), valor_num(cp), valor_num(ci)
             
             if v_cn is not None and abs(v_cn) > limite: erros_pontuais.append('CN')
@@ -104,8 +111,7 @@ def processar_ensaio(row, classe_banc20=None):
                 if mv_reprovado: m_list.append("Mostrador/MV")
                 motivo = " / ".join(m_list)
                 detalhe = "⚠️ Verifique este medidor"
-            else:
-                status, detalhe, motivo = "APROVADO", "", "Nenhum"
+            # Se nenhuma condição de reprovação for atendida, ele permanece como "APROVADO".
                     
         medidores.append({
             "pos": pos, "serie": serie, "cn": texto(cn), "cp": texto(cp), "ci": texto(ci), 
