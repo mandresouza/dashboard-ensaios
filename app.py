@@ -185,7 +185,7 @@ def renderizar_grafico_reprovacoes(medidores):
 def pagina_visao_diaria(df_completo):
     st.sidebar.header("🔍 Busca e Filtros")
     
-    if "filtro_data" not in st.session_state: st.session_state.filtro_data = (datetime.now(timezone.utc) - timedelta(hours=3)).date()
+    if "filtro_data" not in st.session_state: st.session_state.filtro_data = date.today()
     if "filtro_bancada" not in st.session_state: st.session_state.filtro_bancada = "Todas"
     if "filtro_status" not in st.session_state: st.session_state.filtro_status = []
     if "filtro_irregularidade" not in st.session_state: st.session_state.filtro_irregularidade = []
@@ -198,18 +198,49 @@ def pagina_visao_diaria(df_completo):
         st.session_state.search_key += 1
         st.rerun()
     
+    # --- SEÇÃO DA BUSCA POR SÉRIE (MODIFICADA) ---
     if termo_busca:
-        st.markdown(f"### 🔍 Busca de Série do Medidor: **{serie_input}**")
-        with st.spinner("Localizando medidor..."):
+        st.markdown(f"### 🔍 Histórico do Medidor: **{serie_input}**")
+        with st.spinner("Localizando histórico do medidor..."):
             resultados_encontrados = []
-            for _, ensaio_row in df_completo.iterrows():
+            for index, ensaio_row in df_completo.iterrows():
                 medidores_do_ensaio = processar_ensaio(ensaio_row)
                 for medidor in medidores_do_ensaio:
                     if termo_busca in medidor['serie'].lower():
+                        # Adiciona a data do ensaio ao dicionário do medidor para facilitar a ordenação
+                        medidor['data_ensaio'] = ensaio_row['Data_dt']
                         resultados_encontrados.append({"ensaio": ensaio_row.to_dict(), "medidor": medidor})
 
             if resultados_encontrados:
-                st.success(f"Encontrado(s) {len(resultados_encontrados)} registro(s).")
+                # Ordena os resultados pela data do mais recente para o mais antigo
+                resultados_encontrados.sort(key=lambda x: x['medidor']['data_ensaio'], reverse=True)
+
+                # --- CÁLCULO E EXIBIÇÃO DO "DOSSIÊ" ---
+                total_ensaios = len(resultados_encontrados)
+                aprovacoes = sum(1 for res in resultados_encontrados if res['medidor']['status'] == 'APROVADO')
+                reprovacoes = sum(1 for res in resultados_encontrados if res['medidor']['status'] == 'REPROVADO')
+                
+                taxa_aprovacao = (aprovacoes / total_ensaios * 100) if total_ensaios > 0 else 0
+                
+                primeira_data = resultados_encontrados[-1]['medidor']['data_ensaio'].strftime('%d/%m/%Y')
+                ultima_data = resultados_encontrados[0]['medidor']['data_ensaio'].strftime('%d/%m/%Y')
+
+                st.markdown(f"""
+                <div style="background-color: #eef2ff; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #4f46e5;">
+                    <h5 style="margin: 0; color: #333;">Dossiê do Medidor</h5>
+                    <ul style="margin: 10px 0 0 20px; padding: 0; font-size: 15px;">
+                        <li><strong>Total de Ensaios no Histórico:</strong> {total_ensaios}</li>
+                        <li><strong>Aprovações:</strong> <span style="color: green;">{aprovacoes}</span> | <strong>Reprovações:</strong> <span style="color: red;">{reprovacoes}</span></li>
+                        <li><strong>Taxa de Aprovação Histórica:</strong> {taxa_aprovacao:.1f}%</li>
+                        <li><strong>Visto pela primeira vez em:</strong> {primeira_data}</li>
+                        <li><strong>Visto pela última vez em:</strong> {ultima_data}</li>
+                    </ul>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                st.markdown("---")
+                st.subheader("Detalhes de Cada Ensaio (do mais recente ao mais antigo)")
+
                 for res in resultados_encontrados:
                     n_ensaio = res['ensaio'].get('N_ENSAIO', 'N/A')
                     bancada = res['ensaio'].get('Bancada', 'N/A')
@@ -217,15 +248,17 @@ def pagina_visao_diaria(df_completo):
                     temp_match = re.search(r'(\d+\.\d+°C)', temp_str)
                     temperatura = temp_match.group(1) if temp_match else temp_str
                     
-                    renderizar_cabecalho_ensaio(n_ensaio, bancada, temperatura)
-                    
-                    cols = st.columns(5)
-                    with cols[0]:
-                        renderizar_card(res['medidor'])
-                    st.write("")
-
+                    # Usamos um expander para não poluir a tela
+                    with st.expander(f"**Data: {res['medidor']['data_ensaio'].strftime('%d/%m/%Y')}** | Ensaio #{n_ensaio} | Status: **{res['medidor']['status']}**", expanded=False):
+                        renderizar_cabecalho_ensaio(n_ensaio, bancada, temperatura)
+                        cols = st.columns(5)
+                        with cols[0]:
+                            renderizar_card(res['medidor'])
+                        st.write("")
             else:
                 st.warning(f"Nenhum registro encontrado para a série '{serie_input}'.")
+    
+    # O resto da função (a parte do 'else') permanece exatamente igual
     else:
         st.sidebar.markdown("---")
         st.session_state.filtro_data = st.sidebar.date_input("Data do Ensaio", value=st.session_state.filtro_data, format="DD/MM/YYYY")
@@ -242,7 +275,6 @@ def pagina_visao_diaria(df_completo):
             bancada_idx = (['Todas'] + bancadas_disponiveis).index(st.session_state.filtro_bancada)
         st.session_state.filtro_bancada = st.sidebar.selectbox("Bancada", options=['Todas'] + bancadas_disponiveis, index=bancada_idx)
         
-        # --- LÓGICA COM NOVO TERMO TÉCNICO ---
         status_options = ["APROVADO", "REPROVADO", "CONTRA O CONSUMIDOR", "Não Ligou / Não Ensaido"]
         st.session_state.filtro_status = st.sidebar.multiselect("Filtrar Status", options=status_options, default=st.session_state.filtro_status)
         
@@ -252,14 +284,14 @@ def pagina_visao_diaria(df_completo):
         else:
             st.session_state.filtro_irregularidade = []
 
-        st.markdown(f"### 📅 Relatório de Ensaios Realizados em: **{st.session_state.filtro_data.strftime('%d/%m/%y')}**")
+        st.markdown(f"### 📅 Relatório de Ensaios Realizados em: **{st.session_state.filtro_data.strftime('%d/%m/%Y')}**")
         
         df_filtrado_dia = df_completo[df_completo['Data_dt'].dt.date == st.session_state.filtro_data].copy()
         if st.session_state.filtro_bancada != 'Todas': 
             df_filtrado_dia = df_filtrado_dia[df_filtrado_dia['Bancada'] == st.session_state.filtro_bancada]
 
         if df_filtrado_dia.empty:
-            st.info(f"Não constam ensaios registrados para o dia {data_selecionada_str}.")
+            st.info(f"Não constam ensaios registrados para o dia {st.session_state.filtro_data.strftime('%d/%m/%Y')}.")
             return
 
         ensaios_para_exibir = []
@@ -270,7 +302,6 @@ def pagina_visao_diaria(df_completo):
             medidores_filtrados_deste_ensaio = []
 
             for medidor in medidores_deste_ensaio:
-                # Lógica de filtro principal
                 status_match = not st.session_state.filtro_status or medidor['status'] in st.session_state.filtro_status
                 
                 irregularidade_match = True
@@ -307,7 +338,7 @@ def pagina_visao_diaria(df_completo):
             
             st.sidebar.markdown("---")
             st.sidebar.subheader("📄 Exportar Relatório")
-            pdf_bytes = gerar_pdf_relatorio(ensaios=ensaios_para_exibir, data=data_selecionada_str, stats=stats)
+            pdf_bytes = gerar_pdf_relatorio(ensaios=ensaios_para_exibir, data=st.session_state.filtro_data.strftime('%d/%m/%y'), stats=stats)
             st.sidebar.download_button(label="📥 Baixar Relatório PDF", data=pdf_bytes, file_name=f"Relatorio_Ensaios_{st.session_state.filtro_data.strftime('%Y-%m-%d')}.pdf", mime="application/pdf")
 
             st.markdown("---")
