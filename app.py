@@ -649,12 +649,21 @@ def main():
         if not df_completo.empty:
             st.sidebar.title("Menu de Navegação")
             
+            # --- INÍCIO DA NOVA FUNCIONALIDADE ---
+            # Encontra a data mais recente no DataFrame
+            ultima_data = df_completo['Data_dt'].max()
+            
+            # Exibe a informação na barra lateral
+            st.sidebar.markdown("---")
+            st.sidebar.info(f"**Último ensaio registrado:**\n\n📅 {ultima_data.strftime('%d de %B de %Y')}")
+            st.sidebar.markdown("---")
+            # --- FIM DA NOVA FUNCIONALIDADE ---
+
             paginas = {
                 'Visão Diária': pagina_visao_diaria,
                 'Visão Mensal': pagina_visao_mensal,
                 'Análise de Posições': pagina_analise_posicoes
             }
-            
             escolha = st.sidebar.radio("Escolha a análise:", tuple(paginas.keys()))
             
             pagina_selecionada = paginas[escolha]
@@ -665,7 +674,7 @@ def main():
     except Exception as e:
         st.error("Ocorreu um erro inesperado na aplicação.")
         st.code(traceback.format_exc())
-
+        
 # PONTO DE ENTRADA PRINCIPAL DO SCRIPT
 if __name__ == "__main__":
     main()
