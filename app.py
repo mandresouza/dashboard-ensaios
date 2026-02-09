@@ -188,8 +188,66 @@ def renderizar_grafico_reprovacoes(medidores):
     fig.update_layout(yaxis_title=None, xaxis_title="Número de Medidores", showlegend=False, margin=dict(l=10, r=10, t=40, b=10), height=250)
     fig.update_traces(textposition='outside')
     st.plotly_chart(fig, use_container_width=True)
+   
+def renderizar_botao_scroll_topo():
+    # Define o HTML e JavaScript para o botão
+    scroll_button_html = """
+        <style>
+            #scrollTopBtn {
+                display: none; /* Escondido por padrão */
+                position: fixed; /* Posição fixa na tela */
+                bottom: 20px; /* 20px do fundo */
+                right: 30px; /* 30px da direita */
+                z-index: 99; /* Fica na frente de outros elementos */
+                border: none; /* Sem borda */
+                outline: none; /* Sem contorno ao clicar */
+                background-color: #555; /* Cor de fundo */
+                color: white; /* Cor do ícone */
+                cursor: pointer; /* Cursor de mãozinha */
+                padding: 15px; /* Espaçamento interno */
+                border-radius: 10px; /* Bordas arredondadas */
+                font-size: 18px; /* Tamanho do ícone */
+                opacity: 0.7; /* Levemente transparente */
+            }
+
+            #scrollTopBtn:hover {
+                background-color: #f44336; /* Cor ao passar o mouse */
+                opacity: 1;
+            }
+        </style>
+        
+        <button onclick="topFunction()" id="scrollTopBtn" title="Voltar ao topo"><b>^</b></button>
+        
+        <script>
+            // Pega o botão
+            var mybutton = document.getElementById("scrollTopBtn");
+
+            // Quando o usuário rola 100px para baixo, mostra o botão
+            window.onscroll = function() {scrollFunction()};
+
+            function scrollFunction() {
+                if (document.body.scrollTop > 100 || document.documentElement.scrollTop > 100) {
+                    mybutton.style.display = "block";
+                } else {
+                    mybutton.style.display = "none";
+                }
+            }
+
+            // Quando o usuário clica no botão, rola para o topo
+            function topFunction() {
+                document.body.scrollTop = 0; // Para Safari
+                document.documentElement.scrollTop = 0; // Para Chrome, Firefox, IE e Opera
+            }
+        </script>
+    """
+    # "Injeta" o código na página do Streamlit
+    st.components.v1.html(scroll_button_html, height=0)
     
 # [BLOCO 06] - PÁGINA: VISÃO DIÁRIA
+def pagina_visao_diaria(df_completo):
+    renderizar_botao_scroll_topo() # <--- ADICIONE ESTA LINHA
+    st.sidebar.header("🔍 Busca e Filtros")  
+
 def pagina_visao_diaria(df_completo):
     st.sidebar.header("🔍 Busca e Filtros")
     
@@ -361,6 +419,10 @@ def pagina_visao_diaria(df_completo):
             st.info("Nenhum medidor encontrado para os filtros selecionados.")
             
 # [BLOCO 07] - PÁGINA: VISÃO MENSAL
+def pagina_visao_diaria(df_completo):
+    renderizar_botao_scroll_topo() # <--- ADICIONE ESTA LINHA
+    st.sidebar.header("🔍 Busca e Filtros")    
+
 def get_stats_por_dia(df_mes):
     daily_stats = []
     for data, group in df_mes.groupby('Data_dt'):
@@ -469,6 +531,10 @@ def pagina_visao_mensal(df_completo):
             st.dataframe(df_daily.sort_values('Data', ascending=False), use_container_width=True, hide_index=True)
             
 # [BLOCO 08] - PÁGINA: ANÁLISE DE POSIÇÕES (MAPA DE CALOR)
+def pagina_visao_diaria(df_completo):
+    renderizar_botao_scroll_topo() # <--- ADICIONE ESTA LINHA
+    st.sidebar.header("🔍 Busca e Filtros")    
+
 def pagina_analise_posicoes(df_completo):
     st.markdown("## 🔥 Análise de Reprovação por Posição (Mapa de Calor)")
     st.info("Esta análise identifica quais posições e pontos de medição (CN, CP, CI) concentram o maior número de reprovações por exatidão.")
