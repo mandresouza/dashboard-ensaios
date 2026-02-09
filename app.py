@@ -230,6 +230,10 @@ def renderizar_botao_scroll_topo():
     
 # [BLOCO 06] - PÁGINA: VISÃO DIÁRIA
 def pagina_visao_diaria(df_completo):
+    # COLE O BLOCO DE CÓDIGO INTEIRO AQUI
+    st.sidebar.header("🔍 Busca e Filtros")   
+
+def pagina_visao_diaria(df_completo):
     st.sidebar.header("🔍 Busca e Filtros")
     
     if "filtro_data" not in st.session_state: st.session_state.filtro_data = (datetime.now(timezone.utc) - timedelta(hours=3)).date()
@@ -400,6 +404,10 @@ def pagina_visao_diaria(df_completo):
             st.info("Nenhum medidor encontrado para os filtros selecionados.")
             
 # [BLOCO 07] - PÁGINA: VISÃO MENSAL
+def pagina_visao_mensal(df_completo):
+    # COLE O BLOCO DE CÓDIGO INTEIRO AQUI
+    st.sidebar.header("📅 Filtros Mensais")    
+
 def get_stats_por_dia(df_mes):
     daily_stats = []
     for data, group in df_mes.groupby('Data_dt'):
@@ -508,6 +516,10 @@ def pagina_visao_mensal(df_completo):
             st.dataframe(df_daily.sort_values('Data', ascending=False), use_container_width=True, hide_index=True)
             
 # [BLOCO 08] - PÁGINA: ANÁLISE DE POSIÇÕES (MAPA DE CALOR)
+def pagina_analise_posicoes(df_completo):
+    # COLE O BLOCO DE CÓDIGO INTEIRO AQUI
+    st.markdown("## 🔥 Análise de Reprovação por Posição (Mapa de Calor)")    
+
 def pagina_analise_posicoes(df_completo):
     st.markdown("## 🔥 Análise de Reprovação por Posição (Mapa de Calor)")
     st.info("Esta análise identifica quais posições e pontos de medição (CN, CP, CI) concentram o maior número de reprovações por exatidão.")
