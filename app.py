@@ -70,15 +70,12 @@ def processar_ensaio(row, classe_banc20=None):
         serie = texto(row.get(f"P{pos}_Série"))
         cn, cp, ci = row.get(f"P{pos}_CN"), row.get(f"P{pos}_CP"), row.get(f"P{pos}_CI")
         
-        # --- LÓGICA CORRIGIDA E RESTAURADA ---
-        # 1. Verifica primeiro se há algum dado de ensaio.
+        # --- LÓGICA COM NOVO TERMO TÉCNICO ---
         if pd.isna(cn) and pd.isna(cp) and pd.isna(ci):
-            # Se não há dados de carga, o medidor não entrou ou não ligou.
-            status, detalhe, motivo = "NÃO ENTROU", "", "N/A"
+            status, detalhe, motivo = "Não Ligou / Não Ensaido", "", "N/A"
             erros_pontuais = []
         else:
-            # 2. Se há dados, processa a lógica completa de aprovação/reprovação.
-            status, detalhe, motivo = "APROVADO", "", "Nenhum" # Começa como APROVADO
+            status, detalhe, motivo = "APROVADO", "", "Nenhum"
             erros_pontuais = []
             
             v_cn, v_cp, v_ci = valor_num(cn), valor_num(cp), valor_num(ci)
@@ -111,7 +108,6 @@ def processar_ensaio(row, classe_banc20=None):
                 if mv_reprovado: m_list.append("Mostrador/MV")
                 motivo = " / ".join(m_list)
                 detalhe = "⚠️ Verifique este medidor"
-            # Se nenhuma condição de reprovação for atendida, ele permanece como "APROVADO".
                     
         medidores.append({
             "pos": pos, "serie": serie, "cn": texto(cn), "cp": texto(cp), "ci": texto(ci), 
@@ -123,7 +119,8 @@ def processar_ensaio(row, classe_banc20=None):
     
 # [BLOCO 05] - COMPONENTES VISUAIS
 def renderizar_card(medidor):
-    status_cor = {"APROVADO": "#dcfce7", "REPROVADO": "#fee2e2", "CONTRA O CONSUMIDOR": "#ede9fe", "NÃO ENTROU": "#e5e7eb"}
+    # --- LÓGICA COM NOVO TERMO TÉCNICO ---
+    status_cor = {"APROVADO": "#dcfce7", "REPROVADO": "#fee2e2", "CONTRA O CONSUMIDOR": "#ede9fe", "Não Ligou / Não Ensaido": "#e5e7eb"}
     cor = status_cor.get(medidor['status'], "#f3f4f6")
     st.markdown(f"""
         <div style="background:{cor}; border-radius:12px; padding:16px; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left: 6px solid rgba(0,0,0,0.1); display: flex; flex-direction: column; justify-content: space-between; height: 100%;">
@@ -245,7 +242,8 @@ def pagina_visao_diaria(df_completo):
             bancada_idx = (['Todas'] + bancadas_disponiveis).index(st.session_state.filtro_bancada)
         st.session_state.filtro_bancada = st.sidebar.selectbox("Bancada", options=['Todas'] + bancadas_disponiveis, index=bancada_idx)
         
-        status_options = ["APROVADO", "REPROVADO", "CONTRA O CONSUMIDOR"]
+        # --- LÓGICA COM NOVO TERMO TÉCNICO ---
+        status_options = ["APROVADO", "REPROVADO", "CONTRA O CONSUMIDOR", "Não Ligou / Não Ensaido"]
         st.session_state.filtro_status = st.sidebar.multiselect("Filtrar Status", options=status_options, default=st.session_state.filtro_status)
         
         if "REPROVADO" in st.session_state.filtro_status:
@@ -272,9 +270,9 @@ def pagina_visao_diaria(df_completo):
             medidores_filtrados_deste_ensaio = []
 
             for medidor in medidores_deste_ensaio:
-                if medidor['status'] == "NÃO ENTROU": continue
-                
+                # Lógica de filtro principal
                 status_match = not st.session_state.filtro_status or medidor['status'] in st.session_state.filtro_status
+                
                 irregularidade_match = True
                 if st.session_state.filtro_irregularidade and medidor['status'] == 'REPROVADO':
                     irregularidade_match = any(irr in medidor['motivo'] for irr in st.session_state.filtro_irregularidade)
