@@ -431,10 +431,12 @@ def pagina_analise_posicoes(df_completo):
 
     st.sidebar.header("🔬 Filtros da Análise")
     
-    bancada_selecionada = st.sidebar.selectbox(
-        "Selecione a Bancada", 
+    # --- MUDANÇA AQUI: de selectbox para multiselect ---
+    bancadas_selecionadas = st.sidebar.multiselect(
+        "Selecione a(s) Bancada(s)", 
         options=['BANC_10_POS', 'BANC_20_POS'],
-        key='heatmap_bancada'
+        default=['BANC_10_POS', 'BANC_20_POS'], # Deixa as duas selecionadas por padrão
+        key='heatmap_bancadas'
     )
     
     min_date = df_completo['Data_dt'].min()
@@ -451,82 +453,90 @@ def pagina_analise_posicoes(df_completo):
     if not data_inicio or not data_fim or data_inicio > data_fim:
         st.warning("Por favor, selecione um período de datas válido.")
         return
-
-    with st.spinner("Processando dados para o mapa de calor..."):
-        df_filtrado = df_completo[
-            (df_completo['Bancada_Nome'] == bancada_selecionada) &
-            (df_completo['Data_dt'].dt.date >= data_inicio) &
-            (df_completo['Data_dt'].dt.date <= data_fim)
-        ]
-
-        if df_filtrado.empty:
-            st.info(f"Nenhum dado encontrado para a {bancada_selecionada.replace('_', ' ')} no período selecionado.")
-            return
-
-        reprovacoes_detalhadas = []
-        for _, row in df_filtrado.iterrows():
-            medidores = processar_ensaio(row)
-            for medidor in medidores:
-                if medidor['status'] == 'REPROVADO' and 'Exatidão' in medidor['motivo']:
-                    for erro_tipo in medidor['erros_pontuais']:
-                        reprovacoes_detalhadas.append({
-                            'Data': row['Data'],
-                            'Ensaio #': row.get('N_ENSAIO', 'N/A'),
-                            'Posição': medidor['pos'],
-                            'Série': medidor['serie'],
-                            'Ponto do Erro': erro_tipo,
-                            'Valor CN': medidor['cn'],
-                            'Valor CP': medidor['cp'],
-                            'Valor CI': medidor['ci']
-                        })
         
-        if not reprovacoes_detalhadas:
-            st.success("🎉 Excelente! Nenhuma reprovação por exatidão encontrada para os filtros selecionados.")
-            return
+    if not bancadas_selecionadas:
+        st.warning("Por favor, selecione pelo menos uma bancada para a análise.")
+        return
 
-        df_reprovacoes = pd.DataFrame(reprovacoes_detalhadas)
-        
-        heatmap_data = df_reprovacoes.pivot_table(
-            index='Posição', 
-            columns='Ponto do Erro', 
-            aggfunc='size', 
-            fill_value=0
-        )
-        
-        for ponto in ['CN', 'CP', 'CI']:
-            if ponto not in heatmap_data.columns:
-                heatmap_data[ponto] = 0
-        
-        heatmap_data = heatmap_data[['CN', 'CP', 'CI']]
+    # --- LÓGICA DE LOOP PARA CADA BANCADA SELECIONADA ---
+    for bancada in bancadas_selecionadas:
+        st.markdown(f"---")
+        st.markdown(f"### Análise para: **{bancada.replace('_', ' ')}**")
 
-        fig = go.Figure(data=go.Heatmap(
-            z=heatmap_data.values,
-            x=heatmap_data.columns,
-            y=[f"Posição {i}" for i in heatmap_data.index],
-            colorscale='Reds',
-            hoverongaps=False,
-            text=heatmap_data.values,
-            texttemplate="%{text}",
-            showscale=True
-        ))
+        with st.spinner(f"Processando dados para a {bancada.replace('_', ' ')}..."):
+            df_filtrado = df_completo[
+                (df_completo['Bancada_Nome'] == bancada) &
+                (df_completo['Data_dt'].dt.date >= data_inicio) &
+                (df_completo['Data_dt'].dt.date <= data_fim)
+            ]
 
-        fig.update_layout(
-            title=f'<b>Mapa de Calor de Reprovações por Exatidão - {bancada_selecionada.replace("_", " ")}</b>',
-            xaxis_title="Ponto de Medição",
-            yaxis_title="Posição na Bancada",
-            yaxis=dict(autorange='reversed'),
-            height=600
-        )
+            if df_filtrado.empty:
+                st.info(f"Nenhum dado encontrado para a {bancada.replace('_', ' ')} no período selecionado.")
+                continue # Pula para a próxima bancada no loop
 
-        st.plotly_chart(fig, use_container_width=True)
-        
-        st.markdown("---")
-        with st.expander(f"📄 Detalhes dos {len(df_reprovacoes)} Medidores Reprovados (Clique para expandir)"):
-            st.dataframe(
-                df_reprovacoes[['Data', 'Ensaio #', 'Posição', 'Série', 'Ponto do Erro', 'Valor CN', 'Valor CP', 'Valor CI']],
-                use_container_width=True,
-                hide_index=True
+            reprovacoes_detalhadas = []
+            for _, row in df_filtrado.iterrows():
+                medidores = processar_ensaio(row)
+                for medidor in medidores:
+                    if medidor['status'] == 'REPROVADO' and 'Exatidão' in medidor['motivo']:
+                        for erro_tipo in medidor['erros_pontuais']:
+                            reprovacoes_detalhadas.append({
+                                'Data': row['Data'],
+                                'Ensaio #': row.get('N_ENSAIO', 'N/A'),
+                                'Posição': medidor['pos'],
+                                'Série': medidor['serie'],
+                                'Ponto do Erro': erro_tipo,
+                                'Valor CN': medidor['cn'],
+                                'Valor CP': medidor['cp'],
+                                'Valor CI': medidor['ci']
+                            })
+            
+            if not reprovacoes_detalhadas:
+                st.success(f"🎉 Excelente! Nenhuma reprovação por exatidão encontrada na {bancada.replace('_', ' ')} para os filtros selecionados.")
+                continue
+
+            df_reprovacoes = pd.DataFrame(reprovacoes_detalhadas)
+            
+            heatmap_data = df_reprovacoes.pivot_table(
+                index='Posição', 
+                columns='Ponto do Erro', 
+                aggfunc='size', 
+                fill_value=0
             )
+            
+            for ponto in ['CN', 'CP', 'CI']:
+                if ponto not in heatmap_data.columns:
+                    heatmap_data[ponto] = 0
+            
+            heatmap_data = heatmap_data[['CN', 'CP', 'CI']]
+
+            fig = go.Figure(data=go.Heatmap(
+                z=heatmap_data.values,
+                x=heatmap_data.columns,
+                y=[f"Posição {i}" for i in heatmap_data.index],
+                colorscale='Reds',
+                hoverongaps=False,
+                text=heatmap_data.values,
+                texttemplate="%{text}",
+                showscale=True
+            ))
+
+            fig.update_layout(
+                title=f'<b>Mapa de Calor de Reprovações - {bancada.replace("_", " ")}</b>',
+                xaxis_title="Ponto de Medição",
+                yaxis_title="Posição na Bancada",
+                yaxis=dict(autorange='reversed'),
+                height=600
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+            
+            with st.expander(f"📄 Detalhes dos {len(df_reprovacoes)} Medidores Reprovados na {bancada.replace('_', ' ')} (Clique para expandir)"):
+                st.dataframe(
+                    df_reprovacoes[['Data', 'Ensaio #', 'Posição', 'Série', 'Ponto do Erro', 'Valor CN', 'Valor CP', 'Valor CI']],
+                    use_container_width=True,
+                    hide_index=True
+                )
             
 # [BLOCO 09] - INICIALIZAÇÃO E MENU PRINCIPAL
 def main():
