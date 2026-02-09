@@ -326,6 +326,22 @@ def pagina_visao_diaria(df_completo):
             st.info("Nenhum medidor encontrado para os filtros selecionados.")
             
 # [BLOCO 07] - PÁGINA: VISÃO MENSAL
+def get_stats_por_dia(df_mes):
+    daily_stats = []
+    for data, group in df_mes.groupby('Data_dt'):
+        medidores = []
+        for _, row in group.iterrows(): 
+            medidores.extend(processar_ensaio(row, 'B'))
+        
+        aprovados = sum(1 for m in medidores if m['status'] == 'APROVADO')
+        reprovados = sum(1 for m in medidores if m['status'] == 'REPROVADO')
+        consumidor = sum(1 for m in medidores if m['status'] == 'CONTRA O CONSUMIDOR')
+        total = aprovados + reprovados + consumidor
+        taxa_aprovacao = (aprovados / total * 100) if total > 0 else 0
+        
+        daily_stats.append({'Data': data, 'Aprovados': aprovados, 'Reprovados': reprovados, 'Contra Consumidor': consumidor, 'Total': total, 'Taxa de Aprovação (%)': round(taxa_aprovacao, 1)})
+    return pd.DataFrame(daily_stats)
+
 def pagina_visao_mensal(df_completo):
     st.sidebar.header("📅 Filtros Mensais")
     anos = sorted(df_completo['Data_dt'].dt.year.unique(), reverse=True)
@@ -346,14 +362,14 @@ def pagina_visao_mensal(df_completo):
         return
         
     with st.spinner("Processando indicadores mensais..."):
-        todos_medidores_mes = []
-        for _, row in df_mes.iterrows(): 
-            todos_medidores_mes.extend(processar_ensaio(row, 'B'))
-            
-        total_m = len(todos_medidores_mes)
-        aprov_m = sum(1 for m in todos_medidores_mes if m['status'] == 'APROVADO')
-        repro_m = sum(1 for m in todos_medidores_mes if m['status'] == 'REPROVADO')
-        cons_m = sum(1 for m in todos_medidores_mes if m['status'] == 'CONTRA O CONSUMIDOR')
+        # A função get_stats_por_dia agora é chamada dentro da seção de gráficos
+        df_daily = get_stats_por_dia(df_mes)
+
+        # Cálculos mensais totais a partir do df_daily para evitar reprocessamento
+        total_m = df_daily['Total'].sum()
+        aprov_m = df_daily['Aprovados'].sum()
+        repro_m = df_daily['Reprovados'].sum()
+        cons_m = df_daily['Contra Consumidor'].sum()
         taxa_m = (aprov_m / total_m * 100) if total_m > 0 else 0
 
         col_m1, col_m2, col_m3, col_m4 = st.columns(4)
@@ -374,7 +390,6 @@ def pagina_visao_mensal(df_completo):
             st.plotly_chart(fig_donut, use_container_width=True)
 
         with col_g2:
-            df_daily = get_stats_por_dia(df_mes)
             fig_bar = go.Figure()
             fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Aprovados'], name='Aprovados', marker_color='#16a34a'))
             fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Reprovados'], name='Reprovados', marker_color='#dc2626'))
@@ -383,7 +398,6 @@ def pagina_visao_mensal(df_completo):
             fig_bar.update_layout(barmode='stack', title='<b>Volume Diário de Ensaios</b>', xaxis_title=None, yaxis_title="Quantidade de Medidores", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), margin=dict(t=80, b=0, l=0, r=0), hovermode="x unified")
             st.plotly_chart(fig_bar, use_container_width=True)
         
-        # --- NOVO GRÁFICO ADICIONADO AQUI ---
         st.markdown("---")
         st.subheader("📉 Tendência da Taxa de Aprovação Diária")
         
@@ -400,10 +414,9 @@ def pagina_visao_mensal(df_completo):
             fig_line.update_layout(
                 yaxis_title="Taxa de Aprovação (%)",
                 xaxis_title="Dia do Mês",
-                yaxis_range=[0, 110] # Garante que o gráfico vá de 0 a 100%
+                yaxis_range=[0, 110]
             )
             st.plotly_chart(fig_line, use_container_width=True)
-        # --- FIM DO NOVO GRÁFICO ---
             
         with st.expander("📄 Visualizar Tabela de Performance Diária"):
             st.dataframe(df_daily.sort_values('Data', ascending=False), use_container_width=True, hide_index=True)
