@@ -643,22 +643,31 @@ def pagina_analise_posicoes(df_completo):
             
 # [BLOCO 09] - INICIALIZAÇÃO E MENU PRINCIPAL
 def main():
-    st.title("📊 Dashboard de Ensaios")
     try:
         df_completo = carregar_dados()
         if not df_completo.empty:
-            st.sidebar.title("Menu de Navegação")
-            
             # --- INÍCIO DA NOVA FUNCIONALIDADE ---
-            # Encontra a data mais recente no DataFrame
-            ultima_data = df_completo['Data_dt'].max()
-            
-            # Exibe a informação na barra lateral
-            st.sidebar.markdown("---")
-            st.sidebar.info(f"**Último ensaio registrado:**\n\n📅 {ultima_data.strftime('%d de %B de %Y')}")
-            st.sidebar.markdown("---")
+            # Cria duas colunas: uma para o título, outra para a data
+            col_titulo, col_data = st.columns([3, 1])
+
+            with col_titulo:
+                st.title("📊 Dashboard de Ensaios")
+
+            with col_data:
+                # Encontra a data mais recente no DataFrame
+                ultima_data = df_completo['Data_dt'].max()
+                # Usa HTML para alinhar o texto à direita e estilizar
+                st.markdown(
+                    f"""
+                    <div style="text-align: right; padding-top: 15px;">
+                        <span style="font-size: 0.9em; color: #64748b;">Último ensaio: <strong>{ultima_data.strftime('%d/%m/%Y')}</strong></span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
             # --- FIM DA NOVA FUNCIONALIDADE ---
 
+            st.sidebar.title("Menu de Navegação")
             paginas = {
                 'Visão Diária': pagina_visao_diaria,
                 'Visão Mensal': pagina_visao_mensal,
