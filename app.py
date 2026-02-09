@@ -5,7 +5,7 @@
 # [BLOCO 01] - IMPORTAÇÕES E CONFIGURAÇÕES INICIAIS
 import streamlit as st
 import pandas as pd
-from datetime import datetime, date
+from datetime import datetime, date, timezone, timedelta
 import plotly.express as px
 import plotly.graph_objects as go
 import traceback
@@ -185,7 +185,7 @@ def renderizar_grafico_reprovacoes(medidores):
 def pagina_visao_diaria(df_completo):
     st.sidebar.header("🔍 Busca e Filtros")
     
-    if "filtro_data" not in st.session_state: st.session_state.filtro_data = date.today()
+    if "filtro_data" not in st.session_state: st.session_state.filtro_data = (datetime.now(timezone.utc) - timedelta(hours=3)).date()
     if "filtro_bancada" not in st.session_state: st.session_state.filtro_bancada = "Todas"
     if "filtro_status" not in st.session_state: st.session_state.filtro_status = []
     if "filtro_irregularidade" not in st.session_state: st.session_state.filtro_irregularidade = []
