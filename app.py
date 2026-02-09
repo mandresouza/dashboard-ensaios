@@ -326,22 +326,6 @@ def pagina_visao_diaria(df_completo):
             st.info("Nenhum medidor encontrado para os filtros selecionados.")
             
 # [BLOCO 07] - PÁGINA: VISÃO MENSAL
-def get_stats_por_dia(df_mes):
-    daily_stats = []
-    for data, group in df_mes.groupby('Data_dt'):
-        medidores = []
-        for _, row in group.iterrows(): 
-            medidores.extend(processar_ensaio(row, 'B'))
-        
-        aprovados = sum(1 for m in medidores if m['status'] == 'APROVADO')
-        reprovados = sum(1 for m in medidores if m['status'] == 'REPROVADO')
-        consumidor = sum(1 for m in medidores if m['status'] == 'CONTRA O CONSUMIDOR')
-        total = len(medidores)
-        taxa_aprovacao = (aprovados / total * 100) if total > 0 else 0
-        
-        daily_stats.append({'Data': data, 'Aprovados': aprovados, 'Reprovados': reprovados, 'Contra Consumidor': consumidor, 'Total': total, 'Taxa de Aprovação (%)': round(taxa_aprovacao, 1)})
-    return pd.DataFrame(daily_stats)
-
 def pagina_visao_mensal(df_completo):
     st.sidebar.header("📅 Filtros Mensais")
     anos = sorted(df_completo['Data_dt'].dt.year.unique(), reverse=True)
@@ -362,21 +346,22 @@ def pagina_visao_mensal(df_completo):
         return
         
     with st.spinner("Processando indicadores mensais..."):
-        # A função get_stats_por_dia agora é chamada dentro da seção de gráficos
         df_daily = get_stats_por_dia(df_mes)
 
-        # Cálculos mensais totais a partir do df_daily para evitar reprocessamento
         total_m = df_daily['Total'].sum()
         aprov_m = df_daily['Aprovados'].sum()
         repro_m = df_daily['Reprovados'].sum()
         cons_m = df_daily['Contra Consumidor'].sum()
+        nao_ensaidos_m = df_daily['Não Ensaidos'].sum() # Novo total
         taxa_m = (aprov_m / total_m * 100) if total_m > 0 else 0
 
-        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+        # --- LÓGICA CORRIGIDA: 5 colunas para as métricas ---
+        col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
         col_m1.metric("Total Ensaiados", f"{total_m:,}".replace(',', '.'))
         col_m2.metric("Taxa de Aprovação", f"{taxa_m:.1f}%", delta=f"{taxa_m-95:.1f}% vs Meta (95%)" if taxa_m > 0 else None)
         col_m3.metric("Total Reprovados", f"{repro_m:,}".replace(',', '.'), delta=f"{repro_m:,}".replace(',', '.'), delta_color="inverse")
         col_m4.metric("Contra Consumidor", f"{cons_m:,}".replace(',', '.'), delta=f"{cons_m:,}".replace(',', '.'), delta_color="inverse")
+        col_m5.metric("Não Ensaidos", f"{nao_ensaidos_m:,}".replace(',', '.'), help="Medidores que não ligaram ou não foram colocados na bancada.")
 
         st.markdown("---")
 
@@ -384,7 +369,7 @@ def pagina_visao_mensal(df_completo):
         
         with col_g1:
             df_pie = pd.DataFrame({'Status': ['Aprovados', 'Reprovados', 'Contra Consumidor'], 'Qtd': [aprov_m, repro_m, cons_m]})
-            fig_donut = px.pie(df_pie, values='Qtd', names='Status', hole=.5, title='<b>Distribuição de Qualidade</b>', color_discrete_map={'Aprovados':'#16a34a', 'Reprovados':'#dc2626', 'Contra Consumidor':'#7c3aed'})
+            fig_donut = px.pie(df_pie, values='Qtd', names='Status', hole=.5, title='<b>Distribuição de Qualidade (Ensaiados)</b>', color_discrete_map={'Aprovados':'#16a34a', 'Reprovados':'#dc2626', 'Contra Consumidor':'#7c3aed'})
             fig_donut.update_traces(textposition='inside', textinfo='percent+label')
             fig_donut.update_layout(showlegend=False, margin=dict(t=40, b=0, l=0, r=0))
             st.plotly_chart(fig_donut, use_container_width=True)
