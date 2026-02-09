@@ -336,7 +336,7 @@ def get_stats_por_dia(df_mes):
         aprovados = sum(1 for m in medidores if m['status'] == 'APROVADO')
         reprovados = sum(1 for m in medidores if m['status'] == 'REPROVADO')
         consumidor = sum(1 for m in medidores if m['status'] == 'CONTRA O CONSUMIDOR')
-        total = aprovados + reprovados + consumidor
+        total = len(medidores)
         taxa_aprovacao = (aprovados / total * 100) if total > 0 else 0
         
         daily_stats.append({'Data': data, 'Aprovados': aprovados, 'Reprovados': reprovados, 'Contra Consumidor': consumidor, 'Total': total, 'Taxa de Aprovação (%)': round(taxa_aprovacao, 1)})
