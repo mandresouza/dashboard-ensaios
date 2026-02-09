@@ -4,4 +4,3 @@ plotly
 openpyxl
 requests
 fpdf2
-streamlit-scroll-to-top
