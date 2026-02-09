@@ -373,10 +373,10 @@ def pagina_visao_mensal(df_completo):
         taxa_m = (aprov_m / total_m * 100) if total_m > 0 else 0
 
         col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-        col_m1.metric("Total Ensaiados", f"{total_m:,}")
+        col_m1.metric("Total Ensaiados", f"{total_m:,}".replace(',', '.'))
         col_m2.metric("Taxa de Aprovação", f"{taxa_m:.1f}%", delta=f"{taxa_m-95:.1f}% vs Meta (95%)" if taxa_m > 0 else None)
-        col_m3.metric("Total Reprovados", f"{repro_m:,}", delta=f"{repro_m:,}", delta_color="inverse")
-        col_m4.metric("Contra Consumidor", f"{cons_m:,}", delta=f"{cons_m:,}", delta_color="inverse")
+        col_m3.metric("Total Reprovados", f"{repro_m:,}".replace(',', '.'), delta=f"{repro_m:,}".replace(',', '.'), delta_color="inverse")
+        col_m4.metric("Contra Consumidor", f"{cons_m:,}".replace(',', '.'), delta=f"{cons_m:,}".replace(',', '.'), delta_color="inverse")
 
         st.markdown("---")
 
