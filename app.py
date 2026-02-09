@@ -326,22 +326,6 @@ def pagina_visao_diaria(df_completo):
             st.info("Nenhum medidor encontrado para os filtros selecionados.")
             
 # [BLOCO 07] - PÁGINA: VISÃO MENSAL
-def get_stats_por_dia(df_mes):
-    daily_stats = []
-    for data, group in df_mes.groupby('Data_dt'):
-        medidores = []
-        for _, row in group.iterrows(): 
-            medidores.extend(processar_ensaio(row, 'B'))
-        
-        aprovados = sum(1 for m in medidores if m['status'] == 'APROVADO')
-        reprovados = sum(1 for m in medidores if m['status'] == 'REPROVADO')
-        consumidor = sum(1 for m in medidores if m['status'] == 'CONTRA O CONSUMIDOR')
-        total = aprovados + reprovados + consumidor
-        taxa_aprovacao = (aprovados / total * 100) if total > 0 else 0
-        
-        daily_stats.append({'Data': data, 'Aprovados': aprovados, 'Reprovados': reprovados, 'Contra Consumidor': consumidor, 'Total': total, 'Taxa de Aprovação (%)': round(taxa_aprovacao, 1)})
-    return pd.DataFrame(daily_stats)
-
 def pagina_visao_mensal(df_completo):
     st.sidebar.header("📅 Filtros Mensais")
     anos = sorted(df_completo['Data_dt'].dt.year.unique(), reverse=True)
@@ -396,8 +380,30 @@ def pagina_visao_mensal(df_completo):
             fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Reprovados'], name='Reprovados', marker_color='#dc2626'))
             fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Contra Consumidor'], name='Contra Consumidor', marker_color='#7c3aed'))
             
-            fig_bar.update_layout(barmode='stack', title='<b>Evolução Diária de Ensaios</b>', xaxis_title="Dia do Mês", yaxis_title="Quantidade de Medidores", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), margin=dict(t=80, b=40, l=0, r=0), hovermode="x unified")
+            fig_bar.update_layout(barmode='stack', title='<b>Volume Diário de Ensaios</b>', xaxis_title=None, yaxis_title="Quantidade de Medidores", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), margin=dict(t=80, b=0, l=0, r=0), hovermode="x unified")
             st.plotly_chart(fig_bar, use_container_width=True)
+        
+        # --- NOVO GRÁFICO ADICIONADO AQUI ---
+        st.markdown("---")
+        st.subheader("📉 Tendência da Taxa de Aprovação Diária")
+        
+        if not df_daily.empty:
+            fig_line = px.line(
+                df_daily, 
+                x='Data', 
+                y='Taxa de Aprovação (%)',
+                title='<b>Evolução da Taxa de Aprovação (%) ao Longo do Mês</b>',
+                markers=True,
+                text='Taxa de Aprovação (%)'
+            )
+            fig_line.update_traces(textposition="top center", texttemplate='%{text:.1f}%')
+            fig_line.update_layout(
+                yaxis_title="Taxa de Aprovação (%)",
+                xaxis_title="Dia do Mês",
+                yaxis_range=[0, 110] # Garante que o gráfico vá de 0 a 100%
+            )
+            st.plotly_chart(fig_line, use_container_width=True)
+        # --- FIM DO NOVO GRÁFICO ---
             
         with st.expander("📄 Visualizar Tabela de Performance Diária"):
             st.dataframe(df_daily.sort_values('Data', ascending=False), use_container_width=True, hide_index=True)
