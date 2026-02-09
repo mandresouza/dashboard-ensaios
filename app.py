@@ -11,6 +11,7 @@ import plotly.graph_objects as go
 import traceback
 import re
 from pdf_generator import gerar_pdf_relatorio
+from streamlit_scroll_to_top import scroll_to_top
 
 st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="wide")
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
@@ -230,7 +231,7 @@ def renderizar_botao_scroll_topo():
     
 # [BLOCO 06] - PÁGINA: VISÃO DIÁRIA
 def pagina_visao_diaria(df_completo):
-    # COLE O BLOCO DE CÓDIGO INTEIRO AQUI
+    scroll_to_top()
     st.sidebar.header("🔍 Busca e Filtros")   
 
 def pagina_visao_diaria(df_completo):
@@ -405,7 +406,7 @@ def pagina_visao_diaria(df_completo):
             
 # [BLOCO 07] - PÁGINA: VISÃO MENSAL
 def pagina_visao_mensal(df_completo):
-    # COLE O BLOCO DE CÓDIGO INTEIRO AQUI
+    scroll_to_top()
     st.sidebar.header("📅 Filtros Mensais")    
 
 def get_stats_por_dia(df_mes):
@@ -517,7 +518,7 @@ def pagina_visao_mensal(df_completo):
             
 # [BLOCO 08] - PÁGINA: ANÁLISE DE POSIÇÕES (MAPA DE CALOR)
 def pagina_analise_posicoes(df_completo):
-    # COLE O BLOCO DE CÓDIGO INTEIRO AQUI
+    scroll_to_top()
     st.markdown("## 🔥 Análise de Reprovação por Posição (Mapa de Calor)")    
 
 def pagina_analise_posicoes(df_completo):
