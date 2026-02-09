@@ -127,7 +127,6 @@ def processar_ensaio(row, classe_banc20=None):
     
 # [BLOCO 05] - COMPONENTES VISUAIS
 def renderizar_card(medidor):
-    # --- LÓGICA COM NOVO TERMO TÉCNICO ---
     status_cor = {"APROVADO": "#dcfce7", "REPROVADO": "#fee2e2", "CONTRA O CONSUMIDOR": "#ede9fe", "Não Ligou / Não Ensaido": "#e5e7eb"}
     cor = status_cor.get(medidor['status'], "#f3f4f6")
     st.markdown(f"""
@@ -144,74 +143,67 @@ def renderizar_card(medidor):
                 </div>
             </div>
             <div>
-                <div style="padding:10px; margin-top: 16px; border-radius:8px; font-weight:800; font-size: 15px; text-align:center; background: rgba(0,0,0,0.08);">{medidor['status'].replace('_', ' ')}</div>
+                <div style="padding:10px; margin-top: 16px; border-radius:8px; font-weight:800; font-size: 15px; text-align:center; background: rgba(0,0,0,0.08);">{medidor['status']}</div>
                 <div style="margin-top:8px; font-size:12px; text-align:center;">{medidor['detalhe']}</div>
             </div>
         </div>
     """, unsafe_allow_html=True)
 
-def renderizar_cabecalho_ensaio(n_ensaio, bancada, temperatura):
-    st.markdown(f"""
-    <div style="background-color: #f0f2f6; padding: 10px 15px; border-radius: 10px; margin-bottom: 15px; border-left: 5px solid #007bff;">
-        <h4 style="margin: 0; color: #333;">Ensaio #{n_ensaio}</h4>
-        <div style="display: flex; justify-content: space-between; font-size: 14px; color: #555; margin-top: 5px;">
-            <span><strong>Bancada:</strong> {bancada}</span>
-            <span><strong>Temperatura:</strong> 🌡️ {temperatura}</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
 def renderizar_resumo(stats):
     st.markdown("""<style>.metric-card{background-color:#FFFFFF;padding:20px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.05);text-align:center;}.metric-value{font-size:32px;font-weight:700;}.metric-label{font-size:16px;color:#64748b;}</style>""", unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns(4)
-    with col1: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#1e293b;">{stats["total"]}</div><div class="metric-label">Total Filtrado</div></div>', unsafe_allow_html=True)
+    with col1: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#1e293b;">{stats["total"]}</div><div class="metric-label">Total Ensaiados</div></div>', unsafe_allow_html=True)
     with col2: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#16a34a;">{stats["aprovados"]}</div><div class="metric-label">Aprovados</div></div>', unsafe_allow_html=True)
     with col3: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#dc2626;">{stats["reprovados"]}</div><div class="metric-label">Reprovados</div></div>', unsafe_allow_html=True)
     with col4: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#7c3aed;">{stats["consumidor"]}</div><div class="metric-label">Contra Consumidor</div></div>', unsafe_allow_html=True)
 
+def renderizar_cabecalho_ensaio(n_ensaio, bancada, temperatura):
+    st.markdown(f"""
+    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 15px; border-radius: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-weight: bold; font-size: 1.1em;">📋 Ensaio #{n_ensaio}</span>
+        <span style="color: #475569;"><strong>Bancada:</strong> {bancada.replace('_', ' ')}</span>
+        <span style="color: #475569;">🌡️ {temperatura}</span>
+    </div>
+    """, unsafe_allow_html=True)
+
 def renderizar_grafico_reprovacoes(medidores):
-    motivos_contagem = {}
-    for medidor in medidores:
-        if medidor['status'] == 'REPROVADO':
-            motivos = medidor['motivo'].split(' / ')
-            for motivo in motivos:
-                if motivo != "Nenhum":
-                    motivos_contagem[motivo] = motivos_contagem.get(motivo, 0) + 1
+    motivos = [m['motivo'] for m in medidores if m['status'] == 'REPROVADO']
+    if not motivos: return
     
-    if not motivos_contagem:
-        return
-
-    df_motivos = pd.DataFrame(list(motivos_contagem.items()), columns=['Motivo', 'Quantidade'])
-    df_motivos = df_motivos.sort_values(by='Quantidade', ascending=False)
-
-    fig = px.bar(df_motivos, x='Quantidade', y='Motivo', orientation='h', title='<b>Principais Causas de Reprovação</b>', text='Quantidade', color_discrete_sequence=px.colors.qualitative.Pastel)
+    contagem = {}
+    for m in motivos:
+        partes = [p.strip() for p in m.split('/')]
+        for parte in partes:
+            contagem[parte] = contagem.get(parte, 0) + 1
+            
+    df_motivos = pd.DataFrame(list(contagem.items()), columns=['Motivo', 'Quantidade']).sort_values('Quantidade', ascending=True)
+    
+    fig = px.bar(df_motivos, x='Quantidade', y='Motivo', orientation='h', title='<b>Principais Motivos de Reprovação</b>', text='Quantidade', color_discrete_sequence=px.colors.qualitative.Pastel)
     fig.update_layout(yaxis_title=None, xaxis_title="Número de Medidores", showlegend=False, margin=dict(l=10, r=10, t=40, b=10), height=250)
     fig.update_traces(textposition='outside')
     st.plotly_chart(fig, use_container_width=True)
-   
+
 def renderizar_botao_scroll_topo():
-    # Define o HTML e JavaScript para o botão
     scroll_button_html = """
         <style>
             #scrollTopBtn {
-                display: none; /* Escondido por padrão */
-                position: fixed; /* Posição fixa na tela */
-                bottom: 20px; /* 20px do fundo */
-                right: 30px; /* 30px da direita */
-                z-index: 99; /* Fica na frente de outros elementos */
-                border: none; /* Sem borda */
-                outline: none; /* Sem contorno ao clicar */
-                background-color: #555; /* Cor de fundo */
-                color: white; /* Cor do ícone */
-                cursor: pointer; /* Cursor de mãozinha */
-                padding: 15px; /* Espaçamento interno */
-                border-radius: 10px; /* Bordas arredondadas */
-                font-size: 18px; /* Tamanho do ícone */
-                opacity: 0.7; /* Levemente transparente */
+                display: none;
+                position: fixed;
+                bottom: 20px;
+                right: 30px;
+                z-index: 99;
+                border: none;
+                outline: none;
+                background-color: #555;
+                color: white;
+                cursor: pointer;
+                padding: 15px;
+                border-radius: 10px;
+                font-size: 18px;
+                opacity: 0.7;
             }
-
             #scrollTopBtn:hover {
-                background-color: #f44336; /* Cor ao passar o mouse */
+                background-color: #f44336;
                 opacity: 1;
             }
         </style>
@@ -219,12 +211,8 @@ def renderizar_botao_scroll_topo():
         <button onclick="topFunction()" id="scrollTopBtn" title="Voltar ao topo"><b>^</b></button>
         
         <script>
-            // Pega o botão
             var mybutton = document.getElementById("scrollTopBtn");
-
-            // Quando o usuário rola 100px para baixo, mostra o botão
             window.onscroll = function() {scrollFunction()};
-
             function scrollFunction() {
                 if (document.body.scrollTop > 100 || document.documentElement.scrollTop > 100) {
                     mybutton.style.display = "block";
@@ -232,15 +220,12 @@ def renderizar_botao_scroll_topo():
                     mybutton.style.display = "none";
                 }
             }
-
-            // Quando o usuário clica no botão, rola para o topo
             function topFunction() {
-                document.body.scrollTop = 0; // Para Safari
-                document.documentElement.scrollTop = 0; // Para Chrome, Firefox, IE e Opera
+                document.body.scrollTop = 0;
+                document.documentElement.scrollTop = 0;
             }
         </script>
     """
-    # "Injeta" o código na página do Streamlit
     st.components.v1.html(scroll_button_html, height=0)
     
 # [BLOCO 06] - PÁGINA: VISÃO DIÁRIA
