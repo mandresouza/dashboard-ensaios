@@ -254,7 +254,7 @@ def pagina_visao_diaria(df_completo):
 
         st.markdown(f"### 📅 Relatório de Ensaios Realizados em: **{st.session_state.filtro_data.strftime('%d/%m/%y')}**")
         
-        df_filtrado_dia = df_completo[df_completo['Data'] == data_selecionada_str].copy()
+        df_filtrado_dia = df_completo[df_completo['Data_dt'].dt.date == st.session_state.filtro_data].copy()
         if st.session_state.filtro_bancada != 'Todas': 
             df_filtrado_dia = df_filtrado_dia[df_filtrado_dia['Bancada'] == st.session_state.filtro_bancada]
 
