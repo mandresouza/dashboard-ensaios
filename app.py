@@ -367,7 +367,7 @@ def pagina_visao_diaria(df_completo):
             with col_down:
                 st.write("")
                 st.write("")
-                pdf_bytes = gerar_pdf_relatorio(ensaios=ensaios_do_dia, data=st.session_state.filtro_data.strftime('%d/%m/%Y'), bancada=st.session_state.filtro_bancada)
+                pdf_bytes = gerar_pdf_relatorio(ensaios=ensaios_do_dia, data=st.session_state.filtro_data.strftime('%d/%m/%Y'))
                 st.download_button(label="📥 Baixar Relatório PDF", data=pdf_bytes, file_name=f"Relatorio_{st.session_state.filtro_data.strftime('%Y%m%d')}.pdf", mime="application/pdf")
                 
                 df_export = pd.DataFrame(todos_medidores_visiveis)
