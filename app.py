@@ -326,6 +326,34 @@ def pagina_visao_diaria(df_completo):
             st.info("Nenhum medidor encontrado para os filtros selecionados.")
             
 # [BLOCO 07] - PÁGINA: VISÃO MENSAL
+def get_stats_por_dia(df_mes):
+    daily_stats = []
+    for data, group in df_mes.groupby('Data_dt'):
+        medidores = []
+        for _, row in group.iterrows(): 
+            medidores.extend(processar_ensaio(row, 'B'))
+        
+        aprovados = sum(1 for m in medidores if m['status'] == 'APROVADO')
+        reprovados = sum(1 for m in medidores if m['status'] == 'REPROVADO')
+        consumidor = sum(1 for m in medidores if m['status'] == 'CONTRA O CONSUMIDOR')
+        nao_ensaidos = sum(1 for m in medidores if m['status'] == 'Não Ligou / Não Ensaido')
+
+        # O total para cálculo da taxa de aprovação agora exclui os "não ensaidos"
+        total_efetivo = aprovados + reprovados + consumidor
+        
+        taxa_aprovacao = (aprovados / total_efetivo * 100) if total_efetivo > 0 else 0
+        
+        daily_stats.append({
+            'Data': data, 
+            'Aprovados': aprovados, 
+            'Reprovados': reprovados, 
+            'Contra Consumidor': consumidor,
+            'Não Ensaidos': nao_ensaidos, # Nova coluna de dados
+            'Total': total_efetivo, # Total agora é o total efetivo
+            'Taxa de Aprovação (%)': round(taxa_aprovacao, 1)
+        })
+    return pd.DataFrame(daily_stats)
+
 def pagina_visao_mensal(df_completo):
     st.sidebar.header("📅 Filtros Mensais")
     anos = sorted(df_completo['Data_dt'].dt.year.unique(), reverse=True)
@@ -352,10 +380,9 @@ def pagina_visao_mensal(df_completo):
         aprov_m = df_daily['Aprovados'].sum()
         repro_m = df_daily['Reprovados'].sum()
         cons_m = df_daily['Contra Consumidor'].sum()
-        nao_ensaidos_m = df_daily['Não Ensaidos'].sum() # Novo total
+        nao_ensaidos_m = df_daily['Não Ensaidos'].sum()
         taxa_m = (aprov_m / total_m * 100) if total_m > 0 else 0
 
-        # --- LÓGICA CORRIGIDA: 5 colunas para as métricas ---
         col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
         col_m1.metric("Total Ensaiados", f"{total_m:,}".replace(',', '.'))
         col_m2.metric("Taxa de Aprovação", f"{taxa_m:.1f}%", delta=f"{taxa_m-95:.1f}% vs Meta (95%)" if taxa_m > 0 else None)
