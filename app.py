@@ -252,7 +252,7 @@ def pagina_visao_diaria(df_completo):
         else:
             st.session_state.filtro_irregularidade = []
 
-        st.markdown(f"### 📅 Relatório de Ensaios Realizados em: **{st.session_state.filtro_data.strftime('%d/%m/%Y')}**")
+        st.markdown(f"### 📅 Relatório de Ensaios Realizados em: **{st.session_state.filtro_data.strftime('%d/%m/%y')}**")
         
         df_filtrado_dia = df_completo[df_completo['Data'] == data_selecionada_str].copy()
         if st.session_state.filtro_bancada != 'Todas': 
