@@ -158,11 +158,22 @@ def renderizar_resumo(stats):
     with col4: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#7c3aed;">{stats["consumidor"]}</div><div class="metric-label">Contra Consumidor</div></div>', unsafe_allow_html=True)
 
 def renderizar_cabecalho_ensaio(n_ensaio, bancada, temperatura):
+    # Cálculo discreto da média da temperatura
+    media_texto = ""
+    try:
+        # Tenta extrair números da string (ex: "25.5°C / 26.5°C")
+        nums = [float(n) for n in re.findall(r"[-+]?\d*\.\d+|\d+", temperatura.replace(",", "."))]
+        if nums:
+            media = sum(nums) / len(nums)
+            media_texto = f'<span style="color: #94a3b8; font-size: 0.85em; margin-left: 10px;">(Média: {media:.1f}°C)</span>'
+    except:
+        pass
+
     st.markdown(f"""
     <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 15px; border-radius: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
         <span style="font-weight: bold; font-size: 1.1em;">📋 Ensaio #{n_ensaio}</span>
         <span style="color: #475569;"><strong>Bancada:</strong> {bancada.replace('_', ' ')}</span>
-        <span style="color: #475569;">🌡️ {temperatura}</span>
+        <span style="color: #475569; display: flex; align-items: center;">🌡️ {temperatura} {media_texto}</span>
     </div>
     """, unsafe_allow_html=True)
 
