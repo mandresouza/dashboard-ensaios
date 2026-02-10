@@ -508,7 +508,7 @@ def pagina_visao_mensal(df_completo):
     
     st.markdown(f"## 📈 Análise Consolidada: {meses_dict[mes_selecionado_num]} / {ano_selecionado}")
     # ================== MÉDIA DE TEMPERATURA MENSAL ==================
-temps = df_mensal['Temperatura'].apply(extrair_media_temperatura)
+temps = df_mes['Temperatura'].apply(extrair_media_temperatura)
 media_temp_mes = temps.mean()
 
 if not pd.isna(media_temp_mes):
