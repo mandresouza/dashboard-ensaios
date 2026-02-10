@@ -36,8 +36,6 @@ def carregar_dados():
         return pd.DataFrame()
         
 # [BLOCO 03] - FUNÇÕES AUXILIARES
-# [BLOCO 03] - FUNÇÕES AUXILIARES
-
 def valor_num(v):
     try:
         if pd.isna(v):
@@ -51,8 +49,7 @@ def texto(v):
     if pd.isna(v) or v is None:
         return "-"
     return str(v)
-
-
+    
 def calcular_estatisticas(todos_medidores):
     total = len(todos_medidores)
     aprovados = sum(1 for m in todos_medidores if m['status'] == 'APROVADO')
@@ -65,7 +62,6 @@ def calcular_estatisticas(todos_medidores):
         "consumidor": consumidor
     }
 
-
 def to_excel(df):
     from io import BytesIO
     output = BytesIO()
@@ -73,8 +69,7 @@ def to_excel(df):
         df.to_excel(writer, index=False, sheet_name='Relatorio')
     processed_data = output.getvalue()
     return processed_data
-
-
+    
 # 🔹 FUNÇÃO NOVA – MÉDIA DE TEMPERATURA DO MÊS
 def media_temperatura_mes(df, coluna_temperatura):
     """
