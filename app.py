@@ -459,6 +459,30 @@ def pagina_visao_mensal(df_completo):
     df_mes = df_completo[(df_completo['Data_dt'].dt.year == ano_selecionado) & (df_completo['Data_dt'].dt.month == mes_selecionado_num)]
     
     st.markdown(f"## 📈 Análise Consolidada: {meses_dict[mes_selecionado_num]} / {ano_selecionado}")
+    # ===== MÉDIA DE TEMPERATURA DO MÊS =====
+    temps = df_mes['Temperatura'].dropna().astype(str)
+    
+    valores_temp = []
+    for t in temps:
+        nums = re.findall(r"[-+]?\d*\.\d+|\d+", t)
+        nums = [float(n) for n in nums]
+        if nums:
+            valores_temp.append(sum(nums) / len(nums))
+    
+    media_temp_mes = round(sum(valores_temp) / len(valores_temp), 1) if valores_temp else None
+    
+    if media_temp_mes is not None:
+        st.markdown(
+            f"""
+            <div style="position:absolute; top:120px; right:40px;
+                        background:#f1f5f9; padding:8px 12px;
+                        border-radius:8px; font-size:14px;
+                        color:#334155; border:1px solid #e2e8f0;">
+                🌡️ <b>Média do mês:</b> {media_temp_mes} °C
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
     
     if df_mes.empty:
         st.info(f"Nenhum dado encontrado para {meses_dict[mes_selecionado_num]} de {ano_selecionado}.")
