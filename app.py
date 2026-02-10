@@ -536,8 +536,8 @@ if not pd.isna(media_temp_mes):
     )
     
     if df_mes.empty:
-        st.info(f"Nenhum dado encontrado para {meses_dict[mes_selecionado_num]} de {ano_selecionado}.")
-        return
+    st.info(f"Nenhum dado encontrado para {meses_dict[mes_selecionado_num]} de {ano_selecionado}.")
+    st.stop()
         
     with st.spinner("Processando indicadores mensais..."):
         todos_medidores_mes = []
