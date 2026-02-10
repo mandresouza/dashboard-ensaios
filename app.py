@@ -36,35 +36,35 @@ def carregar_dados():
         return pd.DataFrame()
         
 # [BLOCO 03] - FUNÇÕES AUXILIARES
-def extrair_media_temperatura(valor):
-    """
-    Extrai números de campos como:
-    '23°C / 25°C'
-    '23 / 25'
-    e retorna a média
-    """
-    if pd.isna(valor):
-        return None
-    nums = re.findall(r"[-+]?\d*\.\d+|\d+", str(valor))
-    nums = [float(n) for n in nums]
-    return sum(nums) / len(nums) if nums else None
+# [BLOCO 03] - FUNÇÕES AUXILIARES
 
 def valor_num(v):
     try:
-        if pd.isna(v): return None
+        if pd.isna(v):
+            return None
         return float(str(v).replace("%", "").replace(",", "."))
-    except (ValueError, TypeError): return None
+    except (ValueError, TypeError):
+        return None
+
 
 def texto(v):
-    if pd.isna(v) or v is None: return "-"
+    if pd.isna(v) or v is None:
+        return "-"
     return str(v)
+
 
 def calcular_estatisticas(todos_medidores):
     total = len(todos_medidores)
     aprovados = sum(1 for m in todos_medidores if m['status'] == 'APROVADO')
     reprovados = sum(1 for m in todos_medidores if m['status'] == 'REPROVADO')
     consumidor = sum(1 for m in todos_medidores if m['status'] == 'CONTRA O CONSUMIDOR')
-    return {"total": total, "aprovados": aprovados, "reprovados": reprovados, "consumidor": consumidor}
+    return {
+        "total": total,
+        "aprovados": aprovados,
+        "reprovados": reprovados,
+        "consumidor": consumidor
+    }
+
 
 def to_excel(df):
     from io import BytesIO
@@ -73,6 +73,35 @@ def to_excel(df):
         df.to_excel(writer, index=False, sheet_name='Relatorio')
     processed_data = output.getvalue()
     return processed_data
+
+
+# 🔹 FUNÇÃO NOVA – MÉDIA DE TEMPERATURA DO MÊS
+def media_temperatura_mes(df, coluna_temperatura):
+    """
+    Calcula a média da temperatura mensal.
+    Aceita valores como:
+    23
+    23.5
+    '23 / 25'
+    '23-25'
+    '23°C'
+    """
+    valores = []
+
+    for v in df[coluna_temperatura]:
+        if pd.isna(v):
+            continue
+
+        numeros = re.findall(r"[-+]?\d*\.\d+|\d+", str(v))
+        numeros = [float(n) for n in numeros]
+
+        if numeros:
+            valores.append(sum(numeros) / len(numeros))
+
+    if not valores:
+        return None
+
+    return sum(valores) / len(valores)
 
 # [BLOCO 04] - PROCESSAMENTO TÉCNICO
 def processar_ensaio(row, classe_banc20=None):
