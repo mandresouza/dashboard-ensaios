@@ -36,6 +36,19 @@ def carregar_dados():
         return pd.DataFrame()
         
 # [BLOCO 03] - FUNÇÕES AUXILIARES
+def extrair_media_temperatura(valor):
+    """
+    Extrai números de campos como:
+    '23°C / 25°C'
+    '23 / 25'
+    e retorna a média
+    """
+    if pd.isna(valor):
+        return None
+    nums = re.findall(r"[-+]?\d*\.\d+|\d+", str(valor))
+    nums = [float(n) for n in nums]
+    return sum(nums) / len(nums) if nums else None
+
 def valor_num(v):
     try:
         if pd.isna(v): return None
@@ -470,6 +483,28 @@ def pagina_visao_mensal(df_completo):
     df_mes = df_completo[(df_completo['Data_dt'].dt.year == ano_selecionado) & (df_completo['Data_dt'].dt.month == mes_selecionado_num)]
     
     st.markdown(f"## 📈 Análise Consolidada: {meses_dict[mes_selecionado_num]} / {ano_selecionado}")
+    # ================== MÉDIA DE TEMPERATURA MENSAL ==================
+temps = df_mes['Temperatura'].apply(extrair_media_temperatura)
+media_temp_mes = temps.mean()
+
+if not pd.isna(media_temp_mes):
+    st.markdown(
+        f"""
+        <div style="
+            position: relative;
+            float: right;
+            margin-top: -45px;
+            padding: 6px 12px;
+            background-color: #e5e7eb;
+            color: #1f2937;
+            border-radius: 8px;
+            font-size: 0.85em;
+        ">
+            🌡️ Média mensal: <b>{media_temp_mes:.1f} °C</b>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
     
     if df_mes.empty:
         st.info(f"Nenhum dado encontrado para {meses_dict[mes_selecionado_num]} de {ano_selecionado}.")
