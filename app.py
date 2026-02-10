@@ -38,29 +38,20 @@ def carregar_dados():
 # [BLOCO 03] - FUNÇÕES AUXILIARES
 def valor_num(v):
     try:
-        if pd.isna(v):
-            return None
+        if pd.isna(v): return None
         return float(str(v).replace("%", "").replace(",", "."))
-    except (ValueError, TypeError):
-        return None
-
+    except (ValueError, TypeError): return None
 
 def texto(v):
-    if pd.isna(v) or v is None:
-        return "-"
+    if pd.isna(v) or v is None: return "-"
     return str(v)
-    
+
 def calcular_estatisticas(todos_medidores):
     total = len(todos_medidores)
     aprovados = sum(1 for m in todos_medidores if m['status'] == 'APROVADO')
     reprovados = sum(1 for m in todos_medidores if m['status'] == 'REPROVADO')
     consumidor = sum(1 for m in todos_medidores if m['status'] == 'CONTRA O CONSUMIDOR')
-    return {
-        "total": total,
-        "aprovados": aprovados,
-        "reprovados": reprovados,
-        "consumidor": consumidor
-    }
+    return {"total": total, "aprovados": aprovados, "reprovados": reprovados, "consumidor": consumidor}
 
 def to_excel(df):
     from io import BytesIO
@@ -69,34 +60,6 @@ def to_excel(df):
         df.to_excel(writer, index=False, sheet_name='Relatorio')
     processed_data = output.getvalue()
     return processed_data
-    
-# 🔹 FUNÇÃO NOVA – MÉDIA DE TEMPERATURA DO MÊS
-def media_temperatura_mes(df, coluna_temperatura):
-    """
-    Calcula a média da temperatura mensal.
-    Aceita valores como:
-    23
-    23.5
-    '23 / 25'
-    '23-25'
-    '23°C'
-    """
-    valores = []
-
-    for v in df[coluna_temperatura]:
-        if pd.isna(v):
-            continue
-
-        numeros = re.findall(r"[-+]?\d*\.\d+|\d+", str(v))
-        numeros = [float(n) for n in numeros]
-
-        if numeros:
-            valores.append(sum(numeros) / len(numeros))
-
-    if not valores:
-        return None
-
-    return sum(valores) / len(valores)
 
 # [BLOCO 04] - PROCESSAMENTO TÉCNICO
 def processar_ensaio(row, classe_banc20=None):
@@ -195,22 +158,11 @@ def renderizar_resumo(stats):
     with col4: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#7c3aed;">{stats["consumidor"]}</div><div class="metric-label">Contra Consumidor</div></div>', unsafe_allow_html=True)
 
 def renderizar_cabecalho_ensaio(n_ensaio, bancada, temperatura):
-    # Cálculo discreto da média da temperatura
-    media_texto = ""
-    try:
-        # Tenta extrair números da string (ex: "25.5°C / 26.5°C")
-        nums = [float(n) for n in re.findall(r"[-+]?\d*\.\d+|\d+", temperatura.replace(",", "."))]
-        if nums:
-            media = sum(nums) / len(nums)
-            media_texto = f'<span style="color: #94a3b8; font-size: 0.85em; margin-left: 10px;">(Média: {media:.1f}°C)</span>'
-    except:
-        pass
-
     st.markdown(f"""
     <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 15px; border-radius: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
         <span style="font-weight: bold; font-size: 1.1em;">📋 Ensaio #{n_ensaio}</span>
         <span style="color: #475569;"><strong>Bancada:</strong> {bancada.replace('_', ' ')}</span>
-        <span style="color: #475569; display: flex; align-items: center;">🌡️ {temperatura} {media_texto}</span>
+        <span style="color: #475569;">🌡️ {temperatura}</span>
     </div>
     """, unsafe_allow_html=True)
 
@@ -507,35 +459,10 @@ def pagina_visao_mensal(df_completo):
     df_mes = df_completo[(df_completo['Data_dt'].dt.year == ano_selecionado) & (df_completo['Data_dt'].dt.month == mes_selecionado_num)]
     
     st.markdown(f"## 📈 Análise Consolidada: {meses_dict[mes_selecionado_num]} / {ano_selecionado}")
-    # ================== MÉDIA DE TEMPERATURA MENSAL ==================
-temps = df_mes['Temperatura'].apply(extrair_media_temperatura)
-media_temp_mes = temps.mean()
-
-if not pd.isna(media_temp_mes):
-    st.markdown(
-        f"""
-        <div style="
-            position: relative;
-            float: right;
-            margin-top: -45px;
-            padding: 6px 12px;
-            background-color: #e5e7eb;
-            color: #1f2937;
-            border-radius: 8px;
-            font-size: 0.85em;
-        ">
-            🌡️ Média mensal: <b>{media_temp_mes:.1f} °C</b>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
     
     if df_mes.empty:
-        st.info(
-            f"Nenhum dado encontrado para "
-            f"{meses_dict[mes_selecionado_num]} de {ano_selecionado}."
-        )
-        st.stop()
+        st.info(f"Nenhum dado encontrado para {meses_dict[mes_selecionado_num]} de {ano_selecionado}.")
+        return
         
     with st.spinner("Processando indicadores mensais..."):
         todos_medidores_mes = []
