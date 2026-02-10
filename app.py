@@ -478,7 +478,7 @@ def pagina_visao_mensal(df_completo):
                         background:#f1f5f9; padding:8px 12px;
                         border-radius:8px; font-size:14px;
                         color:#334155; border:1px solid #e2e8f0;">
-                🌡️ <b>Média do mês:</b> {media_temp_mes} °C
+                🌡️ <b>Temperatura média mensal:</b> {media_temp_mes} °C
             </div>
             """,
             unsafe_allow_html=True
