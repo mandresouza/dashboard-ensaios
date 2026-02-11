@@ -726,13 +726,12 @@ st.dataframe(
     Aba dedicada ao monitoramento metrológico das bancadas de ensaio.
     Este bloco é exclusivamente para análises de estabilidade, deriva
     e controle estatístico de processo (CEP).
-    """
-
+   
     st.markdown("## 🧪 Controle Metrológico das Bancadas")
     st.write("Prévia dos dados carregados:")
     st.dataframe(df_completo.head(5))
     st.markdown(
-        """
+        
         ### 📊 Objetivo da Análise
 
         Esta área tem como finalidade o **monitoramento preventivo da saúde metrológica**
@@ -744,11 +743,11 @@ st.dataframe(
         - Detectar **tendências positivas ou negativas** antes de reprovações
         - Subsidiar **calibração preventiva**
         - Aumentar a **segurança jurídica e técnica** dos resultados
-        """
+       
     )
 
     st.markdown(
-        """
+        
         ### 🔍 Escopo Técnico
 
         As análises serão baseadas em:
@@ -756,7 +755,7 @@ st.dataframe(
         - Erros de medição (CN, CP, CI)
         - Análise estatística ao longo do tempo
         - Cartas de Controle (Shewhart)
-        """
+       
     )
 
     st.info(
