@@ -683,7 +683,8 @@ def pagina_controle_metrologico_bancadas():
     """
 
     st.markdown("## 🧪 Controle Metrológico das Bancadas")
-
+    st.write("Prévia dos dados carregados:")
+    st.dataframe(df_completo.head(5))
     st.markdown(
         """
         ### 📊 Objetivo da Análise
