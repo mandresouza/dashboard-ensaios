@@ -619,18 +619,20 @@ def pagina_visao_mensal(df_completo):
         todos_mes = []
         total_m = aprov_m = repro_m = cons_m = nao_ensaiados_m = 0
         taxa_m = 0
+        total_ensaiados_m = 0
         
         if not df_mes.empty:
             for _, row in df_mes.iterrows():
                 todos_mes.extend(processar_ensaio(row))
             
-            total_m = len(todos_mes) - nao_ensaiados_m
+            total_m = len(todos_mes)
             aprov_m = sum(1 for m in todos_mes if m['status'] == 'APROVADO')
             repro_m = sum(1 for m in todos_mes if m['status'] == 'REPROVADO')
             cons_m = sum(1 for m in todos_mes if m['status'] == 'CONTRA O CONSUMIDOR')
             nao_ensaiados_m = sum(1 for m in todos_mes if m['status'] == 'Não Ligou / Não Ensaido')
             
-            taxa_m = (aprov_m / (total_m - nao_ensaiados_m) * 100) if (total_m - nao_ensaiados_m) > 0 else 0
+            total_ensaiados_m = total_m - nao_ensaiados_m
+            taxa_m = (aprov_m / total_ensaiados_m * 100) if total_ensaiados_m > 0 else 0
         else:
             st.warning("Nenhum dado encontrado para o período selecionado.")
 
