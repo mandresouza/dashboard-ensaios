@@ -617,12 +617,13 @@ def pagina_visao_mensal(df_completo):
         taxa_m = (aprov_m / total_m * 100) if total_m > 0 else 0
         
         # ----- Métricas Mensais -----
-        col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
+        col_m1, col_m2, col_m3, col_m4, col_m5, col_m6 = st.columns(6)
         col_m1.metric("Total Ensaiados", f"{total_m:,.0f}".replace(",", "."))
         col_m2.metric("Taxa de Aprovação", f"{taxa_m:.1f}%", delta=f"{taxa_m-95:.1f}% vs Meta (95%)" if taxa_m > 0 else None)
-        col_m3.metric("Total Reprovados", f"{repro_m:,.0f}".replace(",", "."), delta=repro_m, delta_color="inverse")
-        col_m4.metric("Contra Consumidor", f"{cons_m:,.0f}".replace(",", "."), delta=cons_m, delta_color="inverse")
-        col_m5.metric("Não Ensaidos", f"{nao_ensaiados_m:,.0f}".replace(",", "."))
+        col_m3.metric("Média Mensal de Aprovação", f"{media_taxa_mensal:.1f}%")
+        col_m4.metric("Total Reprovados", f"{repro_m:,.0f}".replace(",", "."), delta=repro_m, delta_color="inverse")
+        col_m5.metric("Contra Consumidor", f"{cons_m:,.0f}".replace(",", "."), delta=cons_m, delta_color="inverse")
+        col_m6.metric("Não Ensaidos", f"{nao_ensaiados_m:,.0f}".replace(",", "."))
         
         st.markdown("---")
         
@@ -638,6 +639,7 @@ def pagina_visao_mensal(df_completo):
         
         with col_g2:
             df_daily = get_stats_por_dia(df_mes)
+            media_taxa_mensal = df_daily['Taxa de Aprovação (%)'].mean() if not df_daily.empty else 0
             fig_bar = go.Figure()
             fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Aprovados'], name='Aprovados', marker_color='#16a34a'))
             fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Reprovados'], name='Reprovados', marker_color='#dc2626'))
