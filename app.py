@@ -675,8 +675,9 @@ def pagina_controle_metrologico_bancadas(df_completo):
     st.markdown("---")
 
     # Identificar as bancadas existentes
+    df_completo.columns = df_completo.columns.str.strip().str.upper()
     bancadas = df_completo['BANCADA'].unique()
-    
+        
     for bancada in bancadas:
         st.subheader(f"Bancada: {bancada}")
 
