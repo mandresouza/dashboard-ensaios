@@ -666,134 +666,112 @@ def pagina_analise_posicoes(df_completo):
                 )
 
 # =========================================================
-# [BLOCO 09] - INICIALIZAÇÃO, MENU E CONTROLE METROLÓGICO
+# [BLOCO 09] - CONTROLE METROLÓGICO DAS BANCADAS
 # =========================================================
+
 import streamlit as st
 import pandas as pd
-import traceback
+from datetime import datetime
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-# Função para carregar dados da planilha mestre do IPEM
 @st.cache_data(ttl=600)
 def carregar_dados():
+    """
+    Função para carregar a planilha mestra de calibração do GitHub/Driver.
+    Retorna um DataFrame pandas.
+    """
     try:
-        # Caminho da planilha no seu driver
+        # Substitua pelo caminho correto do arquivo no seu driver
         df = pd.read_excel("Tabela_Mestra_Calibracao_IPEM.xlsx")
-        # Padronizar nomes de colunas para evitar KeyErrors
-        df.columns = df.columns.str.strip().str.upper()
-        # Converter coluna de datas para datetime
-        if 'DATA' in df.columns:
-            df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce')
+        # Converte coluna de datas para datetime
+        if 'Data_dt' in df.columns:
+            df['Data_dt'] = pd.to_datetime(df['Data_dt'], errors='coerce')
         return df
     except Exception as e:
-        st.error("Erro ao carregar dados da planilha.")
-        st.code(traceback.format_exc())
-        return pd.DataFrame()
+        st.error("Erro ao carregar a planilha Tabela_Mestra_Calibracao_IPEM.xlsx")
+        st.code(str(e))
+        return pd.DataFrame()  # Retorna vazio em caso de erro
 
-# =========================================================
-# Função da aba Controle Metrológico das Bancadas
-# =========================================================
 def pagina_controle_metrologico_bancadas(df_completo):
-    st.subheader("Controle Metrológico das Bancadas 🧪")
-    
-    # Texto explicativo
+    """
+    Página de Controle Metrológico das Bancadas.
+    Mostra gráficos de deriva, estabilidade e identificação automática das bancadas.
+    """
+
+    st.title("🧪 Controle Metrológico das Bancadas")
     st.markdown("""
-    Esta aba tem como objetivo **monitorar a estabilidade e desempenho das bancadas** do laboratório.
-    - Permite identificar desvios antes que medidores bons sejam reprovados.
-    - Ajuda na manutenção preventiva e calibração correta.
-    - Fornece inteligência sobre a performance por bancada.
+    Esta aba permite monitorar a estabilidade e deriva das bancadas de ensaio do laboratório.
+    É possível identificar tendências de erro antes que causem reprovações indevidas.
     """)
 
-    # Verifica se existem as colunas necessárias
-    if 'BANCADA' not in df_completo.columns or 'DATA' not in df_completo.columns:
-        st.error("Colunas 'BANCADA' ou 'DATA' não encontradas na planilha.")
-        st.write("Colunas disponíveis:", df_completo.columns)
+    if df_completo.empty:
+        st.warning("Não há dados disponíveis para exibição.")
         return
 
-    # Identificação automática das bancadas
-    bancadas = df_completo['BANCADA'].unique()
-    st.write("Bancadas encontradas:", bancadas)
-
-    for bancada in bancadas:
-        st.markdown(f"### Bancada: {bancada}")
-
-        # Filtra somente os ensaios da bancada
-        df_bancada = df_completo[df_completo['BANCADA'] == bancada].copy()
-        df_bancada.sort_values(by='DATA', inplace=True)
-
-        # Exibição de tabela resumida
-        st.dataframe(df_bancada[['N_ENSAIO', 'DATA', 'RESULTADO']])
-
-        # Texto explicativo sobre gráficos
-        st.markdown("""
-        **Visualização do Desempenho:**  
-        O gráfico abaixo mostra a **deriva dos erros** (CN, CP, CI) ao longo do tempo para esta bancada.
-        Isso é equivalente a uma **Carta de Controle de Shewhart**, permitindo identificar tendências de desvios.
-        """)
-
-        # Se existir coluna de erro, exibe gráfico de linha
-        if 'ERRO' in df_bancada.columns:
-            st.line_chart(df_bancada[['DATA', 'ERRO']].set_index('DATA'))
-
-        # Alertas de "quase reprovado"
-        if 'ERRO' in df_bancada.columns and 'LIMITE' in df_bancada.columns:
-            df_alerta = df_bancada[(df_bancada['ERRO'] >= 0.8*df_bancada['LIMITE']) & (df_bancada['ERRO'] < df_bancada['LIMITE'])]
-            if not df_alerta.empty:
-                st.warning(f"⚠️ Medidores próximos do limite encontrados na bancada {bancada}:")
-                st.dataframe(df_alerta[['N_ENSAIO', 'DATA', 'ERRO', 'LIMITE']])
-            else:
-                st.success("✅ Nenhum medidor próximo do limite.")
-
-    # Observações finais com ícones
-    st.markdown("""
-    ---
-    **Notas:**
-    - 🧪 Monitoramento contínuo das bancadas evita falhas de calibração.
-    - 📈 Cartas de Controle permitem detectar tendências antes de ocorrências críticas.
-    - ⚠️ Alertas de zona crítica (quase reprovados) ajudam na **qualidade e segurança jurídica**.
-    """)
-
-# =========================================================
-# Função main com menu
-# =========================================================
-def main():
+    # --- Identificação automática das bancadas ---
+    st.subheader("Identificação das Bancadas")
     try:
-        df_completo = carregar_dados()
-        if not df_completo.empty:
-            # --- Cabeçalho ---
-            col_titulo, col_data = st.columns([3, 1])
-            with col_titulo:
-                st.title("📊 Dashboard de Ensaios")
-            with col_data:
-                ultima_data = df_completo['DATA'].max() if 'DATA' in df_completo.columns else None
-                if ultima_data is not None:
-                    st.markdown(
-                        f"""
-                        <div style="text-align: right; padding-top: 15px;">
-                            <span style="font-size: 0.9em; color: #64748b;">
-                                Último ensaio: <strong>{ultima_data.strftime('%d/%m/%Y')}</strong>
-                            </span>
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
+        bancadas = df_completo['BANCADA'].unique()
+        st.write(f"Bancadas encontradas: {', '.join(bancadas)}")
+    except KeyError:
+        st.error("Coluna 'BANCADA' não encontrada na planilha.")
+        return
 
-            # --- Menu lateral ---
-            st.sidebar.title("Menu de Navegação")
-            paginas = {
-                'Visão Diária': pagina_visao_diaria,
-                'Visão Mensal': pagina_visao_mensal,
-                'Análise de Posições': pagina_analise_posicoes,
-                'Controle Metrológico das Bancadas': pagina_controle_metrologico_bancadas
-            }
-            escolha = st.sidebar.radio("Escolha a análise:", tuple(paginas.keys()))
-            pagina_selecionada = paginas[escolha]
-            pagina_selecionada(df_completo)
+    # --- Seleção de bancada ---
+    bancada_selecionada = st.selectbox("Selecione a bancada:", bancadas)
 
-        else:
-            st.error("Erro ao carregar dados. Verifique a planilha.")
-    except Exception as e:
-        st.error("Ocorreu um erro inesperado na aplicação.")
-        st.code(traceback.format_exc())
+    # Filtra apenas os dados da bancada selecionada
+    df_bancada = df_completo[df_completo['BANCADA'] == bancada_selecionada]
+
+    if df_bancada.empty:
+        st.info("Nenhum dado disponível para esta bancada.")
+        return
+
+    # --- Ordena pelo número de ensaio ou data ---
+    if 'Data_dt' in df_bancada.columns:
+        df_bancada.sort_values(by='Data_dt', inplace=True)
+    elif 'N_ENSAIO' in df_bancada.columns:
+        df_bancada.sort_values(by='N_ENSAIO', inplace=True)
+
+    # --- Gráfico de Controle Shewhart (Exemplo CN, CP, CI) ---
+    st.subheader("Gráfico de Controle (Média de Erros)")
+
+    # Colunas de erro que você deseja monitorar
+    col_erro = [c for c in ['CN', 'CP', 'CI'] if c in df_bancada.columns]
+
+    if not col_erro:
+        st.warning("Não foram encontradas colunas de erro (CN, CP, CI) para plotar o gráfico.")
+    else:
+        plt.figure(figsize=(12, 5))
+        for c in col_erro:
+            sns.lineplot(data=df_bancada, x='N_ENSAIO', y=c, marker='o', label=c)
+
+        plt.axhline(0, color='black', linestyle='--', label='Erro Zero')
+        plt.xlabel("Número do Ensaio")
+        plt.ylabel("Erro (%)")
+        plt.title(f"Deriva e Estabilidade da Bancada {bancada_selecionada}")
+        plt.legend()
+        plt.grid(True)
+        st.pyplot(plt.gcf())
+
+    # --- Estatísticas resumidas ---
+    st.subheader("Resumo Estatístico dos Erros")
+    st.dataframe(df_bancada[col_erro].describe())
+
+    # --- Alertas de Quase Reprovado (Guardbands) ---
+    st.subheader("Alertas de Zona de Dúvida")
+    limite = st.number_input("Defina o limite de tolerância (%)", value=1.3, step=0.1)
+    margem = st.number_input("Margem de alerta (%)", value=0.2, step=0.05)
+
+    if col_erro:
+        for c in col_erro:
+            df_alerta = df_bancada[(df_bancada[c].abs() >= (limite - margem)) & (df_bancada[c].abs() < limite)]
+            if not df_alerta.empty:
+                st.warning(f"Bancada {bancada_selecionada} - {c}: {len(df_alerta)} ensaios próximos do limite ({limite}%)")
+                st.dataframe(df_alerta[['N_ENSAIO', c, 'Data_dt'] if 'Data_dt' in df_alerta.columns else ['N_ENSAIO', c]])
+
+    st.info("📌 Esta aba é voltada para análise metrológica. Use os gráficos para identificar deriva antes da reprovação de medidores bons.")
 
 # [BLOCO 10] - INICIALIZAÇÃO E MENU PRINCIPAL
 def main():
