@@ -15,8 +15,7 @@ from pdf_generator import gerar_pdf_relatorio
 st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="wide")
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
-# [BLOCO 02] - CARREGAMENTO DE DADOS
-@st.cache_Data(ttl=600)
+@st.cache_data(ttl=600)
 def carregar_dados():
     try:
         sheet_id = "1QxZ7bCSBClsmXLG1JOrFKNkMWZMK3P5Sp4LP81HV3Rs"
@@ -27,13 +26,13 @@ def carregar_dados():
         df_banc20 = pd.read_csv(url_banc20)
         df_banc20['Bancada_Nome'] = 'BANC_20_POS'
         df_completo = pd.concat([df_banc10, df_banc20], ignore_index=True)
-        df_completo['DATA_dt'] = pd.to_datetime(df_completo['DATA'], errors='coerce', dayfirst=True)
-        df_completo = df_completo.dropna(subset=['DATA_dt'])
-        df_completo['DATA'] = df_completo['DATA_dt'].dt.strftime('%d/%m/%y')
+        df_completo['Data_dt'] = pd.to_datetime(df_completo['Data'], errors='coerce', dayfirst=True)
+        df_completo = df_completo.dropna(subset=['Data_dt'])
+        df_completo['Data'] = df_completo['Data_dt'].dt.strftime('%d/%m/%y')
         return df_completo
     except Exception as e:
         st.error(f"ERRO AO ACESSAR GOOGLE SHEETS: {e}")
-        return pd.DATAFrame()
+        return pd.DataFrame()
         
 # [BLOCO 03] - FUNÇÕES AUXILIARES
 def valor_num(v):
