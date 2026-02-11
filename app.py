@@ -674,24 +674,24 @@ def pagina_visao_mensal(df_completo):
     col_m5.metric("Não Ensaidos", f"{nao_ensaiados_m:,.0f}".replace(",", "."))
 
     # ==============================
-# TEMPERATURA MÉDIA DO MÊS
-# ==============================
-
-temp_media = 0
-
-if 'Temperatura' in df_mes.columns:
-
-    # converte para string, remove °C e troca vírgula por ponto
-    temp_series = (
-        df_mes['Temperatura']
-        .astype(str)
-        .str.replace("°C", "", regex=False)
-        .str.replace(",", ".", regex=False)
-        .str.strip()
-    )
-
-    # converte para número
-    temp_series = pd.to_numeric(temp_series, errors="coerce")
+    # TEMPERATURA MÉDIA DO MÊS
+    # ==============================
+    
+    temp_media = 0
+    
+    if 'Temperatura' in df_mes.columns:
+    
+        # converte para string, remove °C e troca vírgula por ponto
+        temp_series = (
+            df_mes['Temperatura']
+            .astype(str)
+            .str.replace("°C", "", regex=False)
+            .str.replace(",", ".", regex=False)
+            .str.strip()
+        )
+    
+        # converte para número
+        temp_series = pd.to_numeric(temp_series, errors="coerce")
 
     # calcula média ignorando valores inválidos
     temp_media = temp_series.mean()
