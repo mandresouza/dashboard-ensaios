@@ -617,16 +617,22 @@ def pagina_visao_mensal(df_completo):
         st.warning("Nenhum dado encontrado para o período selecionado.")
     else:
         todos_mes = []
-        for _, row in df_mes.iterrows():
-            todos_mes.extend(processar_ensaio(row))
+        total_m = aprov_m = repro_m = cons_m = nao_ensaiados_m = 0
+        taxa_m = 0
         
-        total_m = len(todos_mes) - nao_ensaiados_m
-        aprov_m = sum(1 for m in todos_mes if m['status'] == 'APROVADO')
-        repro_m = sum(1 for m in todos_mes if m['status'] == 'REPROVADO')
-        cons_m = sum(1 for m in todos_mes if m['status'] == 'CONTRA O CONSUMIDOR')
-        nao_ensaiados_m = sum(1 for m in todos_mes if m['status'] == 'Não Ligou / Não Ensaido')
-        
-        taxa_m = (aprov_m / (total_m - nao_ensaiados_m) * 100) if (total_m - nao_ensaiados_m) > 0 else 0
+        if not df_mes.empty:
+            for _, row in df_mes.iterrows():
+                todos_mes.extend(processar_ensaio(row))
+            
+            total_m = len(todos_mes)
+            aprov_m = sum(1 for m in todos_mes if m['status'] == 'APROVADO')
+            repro_m = sum(1 for m in todos_mes if m['status'] == 'REPROVADO')
+            cons_m = sum(1 for m in todos_mes if m['status'] == 'CONTRA O CONSUMIDOR')
+            nao_ensaiados_m = sum(1 for m in todos_mes if m['status'] == 'Não Ligou / Não Ensaido')
+            
+            taxa_m = (aprov_m / (total_m - nao_ensaiados_m) * 100) if (total_m - nao_ensaiados_m) > 0 else 0
+        else:
+            st.warning("Nenhum dado encontrado para o período selecionado.")
 
         col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
         col_m1.metric("Total Ensaiados", f"{total_m:,.0f}".replace(",", "."))
