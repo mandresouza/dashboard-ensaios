@@ -16,7 +16,7 @@ st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
 # [BLOCO 02] - CARREGAMENTO DE DADOS
-@st.cache_data(ttl=600)
+@st.cache_DATA(ttl=600)
 def carregar_dados():
     try:
         sheet_id = "1QxZ7bCSBClsmXLG1JOrFKNkMWZMK3P5Sp4LP81HV3Rs"
