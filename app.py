@@ -664,8 +664,64 @@ def pagina_analise_posicoes(df_completo):
                     file_name=f"Detalhes_Reprovacoes_{bancada}_{data_inicio.strftime('%Y%m%d')}-{data_fim.strftime('%Y%m%d')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
-            
-# [BLOCO 09] - INICIALIZAÇÃO E MENU PRINCIPAL
+
+# =========================================================
+# [BLOCO 09] - CONTROLE METROLÓGICO DAS BANCADAS
+# =========================================================
+# ⚠️ BLOCO ISOLADO
+# - NÃO altera Visão Diária
+# - NÃO altera Visão Mensal
+# - NÃO altera Análise das Posições
+# - Apenas adiciona uma nova aba conceitual
+# =========================================================
+
+def pagina_controle_metrologico_bancadas():
+    """
+    Aba dedicada ao monitoramento metrológico das bancadas de ensaio.
+    Este bloco é exclusivamente para análises de estabilidade, deriva
+    e controle estatístico de processo (CEP).
+    """
+
+    st.markdown("## 🧪 Controle Metrológico das Bancadas")
+
+    st.markdown(
+        """
+        ### 📊 Objetivo da Análise
+
+        Esta área tem como finalidade o **monitoramento preventivo da saúde metrológica**
+        das bancadas de ensaio do laboratório, indo além do simples critério
+        de aprovação ou reprovação de medidores.
+
+        As análises aqui apresentadas permitem:
+        - Identificar **deriva metrológica** das bancadas
+        - Detectar **tendências positivas ou negativas** antes de reprovações
+        - Subsidiar **calibração preventiva**
+        - Aumentar a **segurança jurídica e técnica** dos resultados
+        """
+    )
+
+    st.markdown(
+        """
+        ### 🔍 Escopo Técnico
+
+        As análises serão baseadas em:
+        - Número de série da bancada (rastreabilidade metrológica)
+        - Erros de medição (CN, CP, CI)
+        - Análise estatística ao longo do tempo
+        - Cartas de Controle (Shewhart)
+        """
+    )
+
+    st.info(
+        "📈 Em implementação: Cartas de Controle por bancada (MQN) para análise de estabilidade e deriva."
+    )
+
+    st.warning(
+        "⚠️ Esta aba é independente das análises operacionais e não interfere "
+        "nos resultados de Visão Diária, Visão Mensal ou Análise das Posições."
+    )
+
+# [BLOCO 10] - INICIALIZAÇÃO E MENU PRINCIPAL
 def main():
     try:
         df_completo = carregar_dados()
