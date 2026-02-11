@@ -723,7 +723,6 @@ st.write("Distribuição de ensaios por bancada:")
 st.dataframe(
     df_completo["Bancada_MQN"].value_counts().rename_axis("Bancada").reset_index(name="Quantidade")
 )
-    """
     Aba dedicada ao monitoramento metrológico das bancadas de ensaio.
     Este bloco é exclusivamente para análises de estabilidade, deriva
     e controle estatístico de processo (CEP).
