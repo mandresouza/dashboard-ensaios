@@ -555,9 +555,10 @@ def get_stats_por_dia(df_mes):
         aprovados = sum(1 for m in medidores if m['status'] == 'APROVADO')
         reprovados = sum(1 for m in medidores if m['status'] == 'REPROVADO')
         consumidor = sum(1 for m in medidores if m['status'] == 'CONTRA O CONSUMIDOR')
-        total_ensaiados = aprovados + reprovados + consumidor
+        nao_ensaiados = sum(1 for m in medidores if m['status'] == 'Não Ligou / Não Ensaido')
+        total_ensaiados_corrigido = total_ensaiados - nao_ensaiados
         
-        taxa_aprovacao = (aprovados / total_ensaiados * 100) if total_ensaiados > 0 else 0
+        taxa_aprovacao = (aprovados / total_ensaiados_corrigido * 100) if total_ensaiados_corrigido > 0 else 0        
         
         daily_stats.append({
             'Data': data, 
