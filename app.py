@@ -675,7 +675,7 @@ def pagina_analise_posicoes(df_completo):
 # - Apenas adiciona uma nova aba conceitual
 # =========================================================
 
-def pagina_controle_metrologico_bancadas():
+def pagina_controle_metrologico_bancadas(df_completo):
     """
     Aba dedicada ao monitoramento metrológico das bancadas de ensaio.
     Este bloco é exclusivamente para análises de estabilidade, deriva
