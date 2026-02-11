@@ -626,8 +626,8 @@ def pagina_visao_mensal(df_completo):
         cons_m = sum(1 for m in todos_mes if m['status'] == 'CONTRA O CONSUMIDOR')
         nao_ensaiados_m = sum(1 for m in todos_mes if m['status'] == 'Não Ligou / Não Ensaido')
         
-        total_ensaiados_m = total_m - nao_ensaiados_m  # SUBTRAINDO os não ensaiados
-
+        taxa_m = (aprov_m / (total_m - nao_ensaiados_m) * 100) if (total_m - nao_ensaiados_m) > 0 else 0
+        
         col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
         col_m1.metric("Total Ensaiados", f"{total_m:,.0f}".replace(",", "."))
         col_m2.metric("Taxa de Aprovação", f"{taxa_m:.1f}%", delta=f"{taxa_m-95:.1f}% vs Meta (95%)" if taxa_m > 0 else None)
