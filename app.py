@@ -1,150 +1,21 @@
 # =======================================================================
-# ARQUIVO: app.py (VERSÃO FINAL E COMPLETA COM BLOCO DE METROLOGIA)
+# ARQUIVO: app.py (VERSÃO FINAL E COMPLETA)
 # =======================================================================
 
 # [BLOCO 01] - IMPORTAÇÕES E CONFIGURAÇÕES INICIAIS
 import streamlit as st
 import pandas as pd
-import numpy as np
 from datetime import datetime, date, timezone, timedelta
 import plotly.express as px
 import plotly.graph_objects as go
 import traceback
 import re
-import os
-from io import BytesIO
-
-# Tenta importar o gerador de PDF original
-try:
-    from pdf_generator import gerar_pdf_relatorio
-except ImportError:
-    def gerar_pdf_relatorio(*args, **kwargs): return None
+from pdf_generator import gerar_pdf_relatorio
 
 st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="wide")
-
-# --- CONFIGURAÇÕES E CONSTANTES ORIGINAIS ---
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
-# =======================================================================
-# [BLOCO ISOLADO] - METROLOGIA AVANÇADA
-# =======================================================================
-
-# --- CONSTANTES EXCLUSIVAS DO BLOCO DE METROLOGIA ---
-MAPA_BANCADA_SERIE = {
-    'BANC_10_POS': 'B1172110310148', # Bancada 1
-    'BANC_20_POS': '85159',           # Bancada 2
-    'BANC_3': '93959',                # Bancada 3
-    'BANC_4': '96850'                 # Bancada 4
-}
-
-def carregar_tabela_mestra():
-    """Carrega a tabela de calibração do IPEM para o bloco de metrologia."""
-    caminho_excel = 'Tabela_Mestra_Calibracao_IPEM.xlsx'
-    if not os.path.exists(caminho_excel):
-        return None
-    try:
-        df = pd.read_excel(caminho_excel)
-        df_resumo = df.groupby(['Serie_Bancada', 'Posicao']).agg({
-            'Erro_Sistematico_Pct': 'mean',
-            'Incerteza_U_Pct': 'mean'
-        }).reset_index()
-        return df_resumo
-    except:
-        return None
-
-def processar_metrologia_isolada(row, df_mestra=None, classe_banc20=None):
-    """Lógica isolada de metrologia para análise avançada."""
-    medidores = []
-    bancada = row.get('Bancada_Nome')
-    serie_bancada = MAPA_BANCADA_SERIE.get(bancada)
-    tamanho_bancada = 20 if bancada == 'BANC_20_POS' else 10
-    classe = str(row.get("Classe", "")).upper()
-    if not classe and bancada == 'BANC_20_POS' and classe_banc20: classe = classe_banc20
-    if not classe: classe = 'B'
-    
-    limite = 4.0 if "ELETROMEC" in classe else LIMITES_CLASSE.get(classe.replace("ELETROMEC", "").strip(), 1.3)
-    limite_alerta = limite * 0.9
-
-    for pos in range(1, tamanho_bancada + 1):
-        serie = texto(row.get(f"P{pos}_Série"))
-        cn, cp, ci = row.get(f"P{pos}_CN"), row.get(f"P{pos}_CP"), row.get(f"P{pos}_CI")
-        v_cn, v_cp, v_ci = valor_num(cn), valor_num(cp), valor_num(ci)
-        
-        erro_ref = 0.0
-        if df_mestra is not None and serie_bancada:
-            ref_row = df_mestra[(df_mestra['Serie_Bancada'].astype(str) == str(serie_bancada)) & (df_mestra['Posicao'] == pos)]
-            if not ref_row.empty: erro_ref = ref_row['Erro_Sistematico_Pct'].values[0]
-
-        if pd.isna(cn) and pd.isna(cp) and pd.isna(ci):
-            status, detalhe, motivo = "Não Ligou / Não Ensaido", "", "N/A"
-            erros_pontuais = []
-        else:
-            status, detalhe, motivo = "APROVADO", "", "Nenhum"
-            erros_pontuais, alertas_gb = [], []
-            for n, v in [('CN', v_cn), ('CP', v_cp), ('CI', v_ci)]:
-                if v is not None:
-                    if abs(v) > limite: erros_pontuais.append(n)
-                    elif abs(v) > limite_alerta: alertas_gb.append(n)
-            
-            erro_exatidao = len(erros_pontuais) > 0
-            reg_ini, reg_fim = valor_num(row.get(f"P{pos}_REG_Inicio")), valor_num(row.get(f"P{pos}_REG_Fim"))
-            mv_nok = str(texto(row.get(f"P{pos}_MV"))).upper() in ["REPROVADO", "NOK", "FAIL", "-"]
-            
-            incremento_maior = (reg_fim - reg_ini > 1) if reg_ini is not None and reg_fim is not None else False
-            
-            if (sum([sum(1 for v in [v_cn, v_cp, v_ci] if v is not None and v > 0 and abs(v) > limite) >= 1, mv_nok, incremento_maior]) >= 2):
-                status, detalhe, motivo = "CONTRA O CONSUMIDOR", "⚠️ Medição a mais", "Contra Consumidor"
-            elif erro_exatidao or (reg_fim - reg_ini != 1 if reg_ini is not None and reg_fim is not None else False) or mv_nok:
-                status, motivo = "REPROVADO", " / ".join([x for x, y in zip(["Exatidão", "Registrador", "Mostrador"], [erro_exatidao, (reg_fim - reg_ini != 1 if reg_ini is not None and reg_fim is not None else False), mv_nok]) if y])
-                detalhe = "⚠️ Verifique este medidor"
-            elif alertas_gb:
-                status, detalhe = "ZONA CRÍTICA", f"⚠️ Guardband: {', '.join(alertas_gb)}"
-                    
-        medidores.append({
-            "pos": pos, "serie": serie, "cn": texto(cn), "cp": texto(cp), "ci": texto(ci), 
-            "mv": texto(row.get(f"P{pos}_MV")), "status": status, "detalhe": detalhe, 
-            "motivo": motivo, "limite": limite, "erro_ref": erro_ref, "erros_pontuais": erros_pontuais
-        })
-    return medidores
-
-def pagina_metrologia_avancada(df_completo):
-    """Interface da aba de Metrologia Avançada."""
-    st.markdown("## 🔬 Metrologia Avançada e Monitoramento")
-    df_mestra = carregar_tabela_mestra()
-    
-    if df_mestra is None:
-        st.error("Anexe 'Tabela_Mestra_Calibracao_IPEM.xlsx' para habilitar esta visão.")
-        return
-    
-    tabs = st.tabs(["📈 Cartas de Controle", "⚠️ Guardband", "🏭 Inteligência Fabricante"])
-    with tabs[0]:
-        col1, col2 = st.columns(2)
-        with col1: b_sel = st.selectbox("Bancada", list(MAPA_BANCADA_SERIE.keys()), key="met_banc")
-        with col2: p_sel = st.slider("Posição", 1, 20, 1, key="met_pos")
-        df_h = df_completo[df_completo['Bancada_Nome'] == b_sel].sort_values('Data_dt')
-        pts = []
-        for _, r in df_h.iterrows():
-            meds = processar_metrologia_isolada(r, df_mestra)
-            if p_sel <= len(meds):
-                m = meds[p_sel-1]
-                v = [valor_num(m['cn']), valor_num(m['cp']), valor_num(m['ci'])]
-                v = [x for x in v if x is not None]
-                if v: pts.append({'Data': r['Data_dt'], 'Erro (%)': sum(v)/len(v), 'Ref': m['erro_ref']})
-        if pts:
-            df_p = pd.DataFrame(pts)
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=df_p['Data'], y=df_p['Erro (%)'], mode='lines+markers', name='Medido'))
-            fig.add_trace(go.Scatter(x=df_p['Data'], y=df_p['Ref'], mode='lines', name='Referência', line=dict(dash='dash', color='red')))
-            fig.update_layout(title=f"Histórico de Erros - {b_sel} - Posição {p_sel}", xaxis_title="Data", yaxis_title="Erro (%)")
-            st.plotly_chart(fig, use_container_width=True)
-    with tabs[1]: st.info("Módulo Guardband ativo.")
-    with tabs[2]: st.info("Módulo Inteligência Fabricante ativo.")
-
-# =======================================================================
-# [FIM DO BLOCO ISOLADO]
-# =======================================================================
-
-# [BLOCO 02] - CARREGAMENTO DE DADOS (ORIGINAL)
+# [BLOCO 02] - CARREGAMENTO DE DADOS
 @st.cache_data(ttl=600)
 def carregar_dados():
     try:
@@ -164,7 +35,7 @@ def carregar_dados():
         st.error(f"ERRO AO ACESSAR GOOGLE SHEETS: {e}")
         return pd.DataFrame()
         
-# [BLOCO 03] - FUNÇÕES AUXILIARES (ORIGINAL)
+# [BLOCO 03] - FUNÇÕES AUXILIARES
 def valor_num(v):
     try:
         if pd.isna(v): return None
@@ -190,7 +61,7 @@ def to_excel(df):
     processed_data = output.getvalue()
     return processed_data
 
-# [BLOCO 04] - PROCESSAMENTO TÉCNICO (ORIGINAL)
+# [BLOCO 04] - PROCESSAMENTO TÉCNICO
 def processar_ensaio(row, classe_banc20=None):
     medidores = []
     bancada = row.get('Bancada_Nome')
@@ -254,7 +125,7 @@ def processar_ensaio(row, classe_banc20=None):
         })
     return medidores
     
-# [BLOCO 05] - COMPONENTES VISUAIS (ORIGINAL)
+# [BLOCO 05] - COMPONENTES VISUAIS
 def renderizar_card(medidor):
     status_cor = {"APROVADO": "#dcfce7", "REPROVADO": "#fee2e2", "CONTRA O CONSUMIDOR": "#ede9fe", "Não Ligou / Não Ensaido": "#e5e7eb"}
     cor = status_cor.get(medidor['status'], "#f3f4f6")
@@ -336,12 +207,14 @@ def renderizar_botao_scroll_topo():
                 opacity: 1;
             }
         </style>
-        <button onclick="topFunction()" id="scrollTopBtn" title="Voltar ao topo">Top</button>
+        
+        <button onclick="topFunction()" id="scrollTopBtn" title="Voltar ao topo"><b>^</b></button>
+        
         <script>
             var mybutton = document.getElementById("scrollTopBtn");
             window.onscroll = function() {scrollFunction()};
             function scrollFunction() {
-                if (document.body.scrollTop > 20 || document.documentElement.scrollTop > 20) {
+                if (document.body.scrollTop > 100 || document.documentElement.scrollTop > 100) {
                     mybutton.style.display = "block";
                 } else {
                     mybutton.style.display = "none";
@@ -353,97 +226,279 @@ def renderizar_botao_scroll_topo():
             }
         </script>
     """
-    st.markdown(scroll_button_html, unsafe_allow_html=True)
-
-# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (ORIGINAL)
+    st.components.v1.html(scroll_button_html, height=0)
+    
+# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA
 def pagina_visao_diaria(df_completo):
-    renderizar_botao_scroll_topo()
-    st.markdown("## 📅 Visão Diária de Ensaios")
-    
-    # Filtros laterais
-    st.sidebar.header("🔍 Filtros de Data")
-    datas_disponiveis = sorted(df_completo['Data_dt'].dt.date.unique(), reverse=True)
-    data_selecionada = st.sidebar.selectbox("Selecione a Data", datas_disponiveis)
-    
-    df_dia = df_completo[df_completo['Data_dt'].dt.date == data_selecionada]
-    
-    # Estatísticas do dia
-    todos_medidores_dia = []
-    for _, row in df_dia.iterrows():
-        todos_medidores_dia.extend(processar_ensaio(row))
-    
-    stats_dia = calcular_estatisticas(todos_medidores_dia)
-    renderizar_resumo(stats_dia)
-    
-    # Gráfico de motivos de reprovação
-    if stats_dia['reprovados'] > 0:
-        st.markdown("---")
-        renderizar_grafico_reprovacoes(todos_medidores_dia)
-    
-    # Listagem de ensaios
-    st.markdown("---")
-    for _, row in df_dia.iterrows():
-        n_ensaio = row.get('N_ENSAIO', 'N/A')
-        bancada = row['Bancada_Nome']
-        temperatura = row.get('TEMPERATURA', '-')
-        
-        renderizar_cabecalho_ensaio(n_ensaio, bancada, temperatura)
-        
-        medidores = processar_ensaio(row)
-        cols = st.columns(5)
-        for i, medidor in enumerate(medidores):
-            with cols[i % 5]:
-                renderizar_card(medidor)
-        st.markdown("<br>", unsafe_allow_html=True)
+    # --- INÍCIO DO CÓDIGO DO BOTÃO "VOLTAR AO TOPO" ---
+    st.markdown('''
+        <style>
+            .stApp {
+                scroll-behavior: smooth;
+            }
+            #scroll-to-top {
+                position: fixed;
+                bottom: 20px;
+                right: 30px;
+                z-index: 99;
+                border: none;
+                outline: none;
+                background-color: #555;
+                color: white;
+                cursor: pointer;
+                padding: 15px;
+                border-radius: 10px;
+                font-size: 18px;
+                opacity: 0.7;
+            }
+            #scroll-to-top:hover {
+                background-color: #f44336;
+                opacity: 1;
+            }
+        </style>
+        <a id="top"></a>
+        <a href="#top" id="scroll-to-top" title="Voltar ao topo"><b>^</b></a>
+    ''', unsafe_allow_html=True)
+    # --- FIM DO CÓDIGO DO BOTÃO "VOLTAR AO TOPO" ---
 
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL (ORIGINAL)
-def get_stats_por_dia(df):
-    stats_por_dia = []
-    for data, group in df.groupby('Data_dt'):
-        todos = []
-        for _, row in group.iterrows():
-            todos.extend(processar_ensaio(row))
-        s = calcular_estatisticas(todos)
-        taxa = (s['aprovados'] / s['total'] * 100) if s['total'] > 0 else 0
-        stats_por_dia.append({
-            'Data': data.strftime('%d/%m'),
-            'Total': s['total'],
-            'Aprovados': s['aprovados'],
-            'Reprovados': s['reprovados'],
-            'Contra Consumidor': s['consumidor'],
-            'Taxa de Aprovação (%)': round(taxa, 1)
+    st.sidebar.header("🔍 Busca e Filtros")
+    
+    # Lógica de busca por série
+    if "search_key" not in st.session_state:
+        st.session_state.search_key = 0
+    serie_input = st.sidebar.text_input("Pesquisar Número de Série", value="", key=f"busca_{st.session_state.search_key}", help="Digite o número e pressione Enter")
+    termo_busca = serie_input.strip().lower()
+
+    if termo_busca:
+        if st.sidebar.button("🗑️ Limpar Pesquisa"):
+            st.session_state.search_key += 1
+            st.rerun()
+
+    if termo_busca:
+        st.markdown(f"### 🔍 Histórico de Ensaios para a Série: **{serie_input}**")
+        with st.spinner("Localizando medidor..."):
+            resultados_encontrados = []
+            for _, ensaio_row in df_completo.iterrows():
+                colunas_serie = [c for c in ensaio_row.index if "_Série" in str(c)]
+                if any(termo_busca in str(ensaio_row[col]).lower() for col in colunas_serie if pd.notna(ensaio_row[col])):
+                    medidores_do_ensaio = processar_ensaio(ensaio_row)
+                    for medidor in medidores_do_ensaio:
+                        if termo_busca in medidor['serie'].lower():
+                            resultados_encontrados.append({"data": ensaio_row['Data'], "bancada": ensaio_row['Bancada_Nome'], "dados": medidor})
+            
+            if resultados_encontrados:
+                st.success(f"Encontrado(s) {len(resultados_encontrados)} registro(s) para este medidor.")
+                st.markdown(f"""
+                - **Primeiro Ensaio:** {resultados_encontrados[0]['data']}
+                - **Último Ensaio:** {resultados_encontrados[-1]['data']}
+                """)
+                for res in sorted(resultados_encontrados, key=lambda x: datetime.strptime(x['data'], '%d/%m/%y'), reverse=True):
+                    with st.expander(f"📍 **{res['data']}** | {res['bancada']} | Status: **{res['dados']['status']}**", expanded=False):
+                        renderizar_card(res['dados'])
+            else:
+                st.warning(f"Nenhum registro encontrado para a série '{serie_input}'.")
+
+    else:
+        # Lógica de relatório por data
+        if "filtro_data" not in st.session_state:
+            data_hoje = datetime.now() - pd.Timedelta(hours=3)
+            st.session_state.filtro_data = data_hoje.date()
+        if "filtro_bancada" not in st.session_state:
+            st.session_state.filtro_bancada = 'Todas'
+        if "filtro_status" not in st.session_state:
+            st.session_state.filtro_status = []
+        if "filtro_irregularidade" not in st.session_state:
+            st.session_state.filtro_irregularidade = []
+
+        st.session_state.filtro_data = st.sidebar.date_input("Data do Ensaio", value=st.session_state.filtro_data, format="DD/MM/YYYY")
+        bancadas_disponiveis = df_completo['Bancada_Nome'].unique().tolist()
+        st.session_state.filtro_bancada = st.sidebar.selectbox("Bancada", options=['Todas'] + bancadas_disponiveis, index=0 if st.session_state.filtro_bancada == 'Todas' else bancadas_disponiveis.index(st.session_state.filtro_bancada) + 1)
+        
+        status_options = ["APROVADO", "REPROVADO", "CONTRA O CONSUMIDOR", "Não Ligou / Não Ensaido"]
+        st.session_state.filtro_status = st.sidebar.multiselect("Filtrar Status", options=status_options, default=st.session_state.filtro_status)
+        
+        if "REPROVADO" in st.session_state.filtro_status:
+            irregularidade_options = ["Exatidão", "Registrador", "Mostrador/MV"]
+            st.session_state.filtro_irregularidade = st.sidebar.multiselect("Filtrar por Tipo de Irregularidade", options=irregularidade_options, default=st.session_state.filtro_irregularidade)
+        else:
+            st.session_state.filtro_irregularidade = []
+
+        if not st.session_state.filtro_data:
+            st.warning("Por favor, selecione uma data.")
+            return
+            
+        st.markdown(f"### 📅 Relatório de Ensaios Realizados em: **{st.session_state.filtro_data.strftime('%d/%m/%Y')}**")
+        
+        df_filtrado_dia = df_completo[df_completo['Data_dt'].dt.date == st.session_state.filtro_data].copy()
+        if st.session_state.filtro_bancada != 'Todas': 
+            df_filtrado_dia = df_filtrado_dia[df_filtrado_dia['Bancada_Nome'] == st.session_state.filtro_bancada]
+
+        if df_filtrado_dia.empty:
+            st.info(f"Não constam ensaios registrados para o dia {st.session_state.filtro_data.strftime('%d/%m/%Y')}.")
+            return
+
+        ensaios_do_dia = []
+        for _, ensaio_row in df_filtrado_dia.iterrows():
+            medidores_processados = processar_ensaio(ensaio_row)
+            
+            medidores_filtrados = []
+            for m in medidores_processados:
+                status_ok = not st.session_state.filtro_status or m['status'] in st.session_state.filtro_status
+                irregularidade_ok = not st.session_state.filtro_irregularidade or any(irr in m['motivo'] for irr in st.session_state.filtro_irregularidade)
+                if status_ok and irregularidade_ok:
+                    medidores_filtrados.append(m)
+            
+            if medidores_filtrados:
+                ensaios_do_dia.append({
+                    'n_ensaio': ensaio_row.get('N_ENSAIO', 'N/A'),
+                    'bancada': ensaio_row['Bancada_Nome'],
+                    'temperatura': ensaio_row.get('Temperatura', '--°C / --°C'),
+                    'medidores': medidores_filtrados
+                })
+
+        if ensaios_do_dia:
+            todos_medidores_visiveis = [medidor for ensaio in ensaios_do_dia for medidor in ensaio['medidores']]
+            stats = calcular_estatisticas(todos_medidores_visiveis)
+            renderizar_resumo(stats)
+            
+            col_exp, col_down = st.columns([3, 1])
+            with col_exp:
+                renderizar_grafico_reprovacoes(todos_medidores_visiveis)
+            with col_down:
+                st.write("")
+                st.write("")
+                pdf_bytes = gerar_pdf_relatorio(ensaios=ensaios_do_dia, data=st.session_state.filtro_data.strftime('%d/%m/%Y'), stats=stats)
+                st.download_button(label="📥 Baixar Relatório PDF", data=pdf_bytes, file_name=f"Relatorio_{st.session_state.filtro_data.strftime('%Y%m%d')}.pdf", mime="application/pdf")
+                
+                df_export = pd.DataFrame(todos_medidores_visiveis)
+                excel_bytes = to_excel(df_export)
+                st.download_button(label="📥 Baixar Dados em Excel", data=excel_bytes, file_name=f"Dados_{st.session_state.filtro_data.strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+            st.markdown("---")
+            st.subheader("📋 Detalhes dos Ensaios")
+            
+            for ensaio in ensaios_do_dia:
+                renderizar_cabecalho_ensaio(ensaio['n_ensaio'], ensaio['bancada'], ensaio['temperatura'])
+                num_colunas = 5
+                for idx in range(0, len(ensaio['medidores']), num_colunas):
+                    cols = st.columns(num_colunas)
+                    for j, medidor in enumerate(ensaio['medidores'][idx:idx + num_colunas]):
+                        with cols[j]:
+                            renderizar_card(medidor)
+                    st.write("")
+        else:
+            st.info("Nenhum medidor encontrado para os filtros selecionados.")
+            
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL
+def get_stats_por_dia(df_mes):
+    daily_stats = []
+    for data, group in df_mes.groupby('Data_dt'):
+        medidores = []
+        for _, row in group.iterrows(): 
+            medidores.extend(processar_ensaio(row, 'B'))
+        
+        aprovados = sum(1 for m in medidores if m['status'] == 'APROVADO')
+        reprovados = sum(1 for m in medidores if m['status'] == 'REPROVADO')
+        consumidor = sum(1 for m in medidores if m['status'] == 'CONTRA O CONSUMIDOR')
+        total_ensaiados = aprovados + reprovados + consumidor
+        
+        taxa_aprovacao = (aprovados / total_ensaiados * 100) if total_ensaiados > 0 else 0
+        
+        daily_stats.append({
+            'Data': data, 
+            'Aprovados': aprovados, 
+            'Reprovados': reprovados, 
+            'Contra Consumidor': consumidor,
+            'Total': total_ensaiados,
+            'Taxa de Aprovação (%)': round(taxa_aprovacao, 1)
         })
-    return pd.DataFrame(stats_por_dia)
+    return pd.DataFrame(daily_stats)
 
 def pagina_visao_mensal(df_completo):
-    st.markdown("## 📊 Visão Mensal e Performance")
+    # --- INÍCIO DO CÓDIGO DO BOTÃO "VOLTAR AO TOPO" ---
+    st.markdown('''
+        <style>
+            .stApp {
+                scroll-behavior: smooth;
+            }
+            #scroll-to-top {
+                position: fixed;
+                bottom: 20px;
+                right: 30px;
+                z-index: 99;
+                border: none;
+                outline: none;
+                background-color: #555;
+                color: white;
+                cursor: pointer;
+                padding: 15px;
+                border-radius: 10px;
+                font-size: 18px;
+                opacity: 0.7;
+            }
+            #scroll-to-top:hover {
+                background-color: #f44336;
+                opacity: 1;
+            }
+        </style>
+        <a id="top"></a>
+        <a href="#top" id="scroll-to-top" title="Voltar ao topo"><b>^</b></a>
+    ''', unsafe_allow_html=True)
+    # --- FIM DO CÓDIGO DO BOTÃO "VOLTAR AO TOPO" ---
+
+    st.sidebar.header("📅 Filtros Mensais")
+    anos = sorted(df_completo['Data_dt'].dt.year.unique(), reverse=True)
+    meses_dict = {1: 'Janeiro', 2: 'Fevereiro', 3: 'Março', 4: 'Abril', 5: 'Maio', 6: 'Junho', 7: 'Julho', 8: 'Agosto', 9: 'Setembro', 10: 'Outubro', 11: 'Novembro', 12: 'Dezembro'}
     
-    # Filtros de Mês/Ano
-    df_completo['Ano'] = df_completo['Data_dt'].dt.year
-    df_completo['Mes'] = df_completo['Data_dt'].dt.month
+    col_filt1, col_filt2 = st.sidebar.columns(2)
+    with col_filt1:
+        ano_selecionado = st.selectbox("Ano", anos)
+    with col_filt2:
+        mes_selecionado_num = st.selectbox("Mês", options=list(meses_dict.keys()), format_func=lambda x: meses_dict[x])
     
-    col_f1, col_f2 = st.sidebar.columns(2)
-    ano_sel = col_f1.selectbox("Ano", sorted(df_completo['Ano'].unique(), reverse=True))
-    meses_disponiveis = sorted(df_completo[df_completo['Ano'] == ano_sel]['Mes'].unique())
-    mes_sel = col_f2.selectbox("Mês", meses_disponiveis, format_func=lambda x: ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"][x-1])
+    df_mes = df_completo[(df_completo['Data_dt'].dt.year == ano_selecionado) & (df_completo['Data_dt'].dt.month == mes_selecionado_num)]
     
-    df_mes = df_completo[(df_completo['Ano'] == ano_sel) & (df_completo['Mes'] == mes_sel)]
+    st.markdown(f"## 📈 Análise Consolidada: {meses_dict[mes_selecionado_num]} / {ano_selecionado}")
+    # ===== MÉDIA DE TEMPERATURA DO MÊS =====
+    temps = df_mes['Temperatura'].dropna().astype(str)
+    
+    valores_temp = []
+    for t in temps:
+        nums = re.findall(r"[-+]?\d*\.\d+|\d+", t)
+        nums = [float(n) for n in nums]
+        if nums:
+            valores_temp.append(sum(nums) / len(nums))
+    
+    media_temp_mes = round(sum(valores_temp) / len(valores_temp), 1) if valores_temp else None
+    
+    if media_temp_mes is not None:
+        st.markdown(
+            f"""
+            <div style="position:absolute; top:120px; right:40px;
+                        background:#f1f5f9; padding:8px 12px;
+                        border-radius:8px; font-size:14px;
+                        color:#334155; border:1px solid #e2e8f0;">
+                🌡️ <b>Temperatura média mensal:</b> {media_temp_mes} °C
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
     
     if df_mes.empty:
-        st.warning("Nenhum dado encontrado para o período selecionado.")
-    else:
-        # Cálculos globais do mês
-        todos_mes = []
-        for _, row in df_mes.iterrows():
-            todos_mes.extend(processar_ensaio(row))
+        st.info(f"Nenhum dado encontrado para {meses_dict[mes_selecionado_num]} de {ano_selecionado}.")
+        return
         
-        total_m = len(todos_mes)
-        aprov_m = sum(1 for m in todos_mes if m['status'] == 'APROVADO')
-        repro_m = sum(1 for m in todos_mes if m['status'] == 'REPROVADO')
-        cons_m = sum(1 for m in todos_mes if m['status'] == 'CONTRA O CONSUMIDOR')
-        nao_ensaiados_m = sum(1 for m in todos_mes if m['status'] == 'Não Ligou / Não Ensaido')
-        
-        taxa_m = (aprov_m / (total_m - nao_ensaiados_m) * 100) if (total_m - nao_ensaiados_m) > 0 else 0
+    with st.spinner("Processando indicadores mensais..."):
+        todos_medidores_mes = []
+        for _, row in df_mes.iterrows(): 
+            todos_medidores_mes.extend(processar_ensaio(row, 'B'))
+            
+        aprov_m = sum(1 for m in todos_medidores_mes if m['status'] == 'APROVADO')
+        repro_m = sum(1 for m in todos_medidores_mes if m['status'] == 'REPROVADO')
+        cons_m = sum(1 for m in todos_medidores_mes if m['status'] == 'CONTRA O CONSUMIDOR')
+        nao_ensaiados_m = sum(1 for m in todos_medidores_mes if m['status'] == 'Não Ligou / Não Ensaido')
+        total_m = aprov_m + repro_m + cons_m
+        taxa_m = (aprov_m / total_m * 100) if total_m > 0 else 0
 
         col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
         col_m1.metric("Total Ensaiados", f"{total_m:,.0f}".replace(",", "."))
@@ -484,7 +539,7 @@ def pagina_visao_mensal(df_completo):
         with st.expander("📄 Visualizar Tabela de Performance Diária"):
             st.dataframe(df_daily.sort_values('Data', ascending=False), use_container_width=True, hide_index=True)
             
-# [BLOCO 08] - PÁGINA: ANÁLISE DE POSIÇÕES (ORIGINAL)
+# [BLOCO 08] - PÁGINA: ANÁLISE DE POSIÇÕES (MAPA DE CALOR)
 def pagina_analise_posicoes(df_completo):
     # --- INÍCIO DO CÓDIGO DO BOTÃO "VOLTAR AO TOPO" ---
     st.markdown('''
@@ -615,12 +670,17 @@ def main():
     try:
         df_completo = carregar_dados()
         if not df_completo.empty:
-            # --- TÍTULO E DATA ---
+            # --- INÍCIO DA NOVA FUNCIONALIDADE ---
+            # Cria duas colunas: uma para o título, outra para a data
             col_titulo, col_data = st.columns([3, 1])
+
             with col_titulo:
                 st.title("📊 Dashboard de Ensaios")
+
             with col_data:
+                # Encontra a data mais recente no DataFrame
                 ultima_data = df_completo['Data_dt'].max()
+                # Usa HTML para alinhar o texto à direita e estilizar
                 st.markdown(
                     f"""
                     <div style="text-align: right; padding-top: 15px;">
@@ -629,13 +689,13 @@ def main():
                     """,
                     unsafe_allow_html=True
                 )
+            # --- FIM DA NOVA FUNCIONALIDADE ---
 
             st.sidebar.title("Menu de Navegação")
             paginas = {
                 'Visão Diária': pagina_visao_diaria,
                 'Visão Mensal': pagina_visao_mensal,
-                'Análise de Posições': pagina_analise_posicoes,
-                'Metrologia Avançada': pagina_metrologia_avancada  # NOVA ABA INTEGRADA
+                'Análise de Posições': pagina_analise_posicoes
             }
             escolha = st.sidebar.radio("Escolha a análise:", tuple(paginas.keys()))
             
