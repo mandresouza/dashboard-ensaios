@@ -665,105 +665,118 @@ def pagina_analise_posicoes(df_completo):
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
 
-# [BLOCO 09] - CONTROLE METROLÓGICO DAS BANCADAS
+# [BLOCO 09] - INICIALIZAÇÃO E MENU PRINCIPAL
 def pagina_controle_metrologico_bancadas(df_completo):
     """
-    Página do dashboard para monitoramento metrológico das bancadas.
-    Mostra deriva, estabilidade e histórico de ensaios.
+    Página de Controle Metrológico das Bancadas
+    Esta página permite monitorar a estabilidade e desempenho das bancadas de medição (MQN-1 a MQN-4)
+    com base na planilha de calibração.
     """
 
     st.title("🧪 Controle Metrológico das Bancadas")
 
-    st.markdown("""
-    Este módulo tem como objetivo monitorar a estabilidade e a deriva das bancadas do laboratório,
-    identificando tendências que possam indicar necessidade de calibração preventiva.
-    - 📈 Gráficos de controle das bancadas
-    - ⚠ Alertas de deriva
-    - 📝 Relatórios de acompanhamento
-    """)
-
-    # --- Identificação automática das bancadas ---
-    st.subheader("Identificação das Bancadas")
-
-    try:
-        bancadas = df_completo['BANCADA'].unique()
-    except KeyError:
-        st.error("A coluna 'BANCADA' não foi encontrada na planilha. Verifique o arquivo.")
-        return
-
-    selecionada = st.selectbox("Selecione a bancada:", bancadas)
-
-    df_bancada = df_completo[df_completo['BANCADA'] == selecionada]
-
-    # Verifica se existe coluna de data
-    if 'Data_dt' not in df_bancada.columns:
-        st.error("A coluna 'Data_dt' não foi encontrada. Verifique a planilha.")
-        return
-
-    # Ordena pelo tempo
-    df_bancada.sort_values(by='Data_dt', inplace=True)
-
-    st.markdown(f"Mostrando histórico da **bancada {selecionada}** com {len(df_bancada)} ensaios.")
-
-    # --- Gráficos de controle de erros CN, CP, CI ---
-    st.subheader("📊 Carta de Controle de Erros")
-
-    colunas_erros = ['Erro_CN', 'Erro_CP', 'Erro_CI']
-    cores = ['#636EFA', '#EF553B', '#00CC96']
-
-    fig = go.Figure()
-    for i, col in enumerate(colunas_erros):
-        if col in df_bancada.columns:
-            fig.add_trace(go.Scatter(
-                x=df_bancada['Data_dt'],
-                y=df_bancada[col],
-                mode='lines+markers',
-                name=col,
-                line=dict(color=cores[i])
-            ))
-
-    fig.update_layout(
-        title="Erros ao longo do tempo",
-        xaxis_title="Data",
-        yaxis_title="Erro (%)",
-        legend_title="Tipo de Erro",
-        template="plotly_white",
-        height=500
+    st.markdown(
+        """
+        Esta página apresenta análises metrológicas avançadas:
+        - Monitoramento da estabilidade das bancadas (deriva de erros ao longo do tempo)
+        - Identificação de tendências de viciação positiva ou negativa
+        - Alertas para medidores próximos do limite (guardbands)
+        - Resumo das calibrações recentes e desempenho por bancada
+        """
     )
 
-    st.plotly_chart(fig, use_container_width=True)
-
-    st.markdown("""
-    **Observações:**
-    - Este gráfico permite identificar se a bancada está "viciando" para o positivo ou negativo.
-    - Tendências constantes próximas aos limites de classe indicam necessidade de calibração preventiva.
-    """)
-
-    # --- Alertas de "Quase Reprovado" ---
-    st.subheader("⚠ Alertas de Zona Crítica (Guardbands)")
-
-    limite_alerta = 0.8  # exemplo de percentual do limite
-    df_alerta = df_bancada[
-        (df_bancada['Erro_CN'].abs() > limite_alerta) |
-        (df_bancada['Erro_CP'].abs() > limite_alerta) |
-        (df_bancada['Erro_CI'].abs() > limite_alerta)
-    ]
-
-    if not df_alerta.empty:
-        st.warning(f"{len(df_alerta)} ensaios próximos do limite detectados.")
-        st.dataframe(df_alerta[['N_ENSAIO', 'Data_dt', 'Erro_CN', 'Erro_CP', 'Erro_CI']])
+    # Identificação automática das bancadas presentes nos dados
+    st.subheader("Bancadas disponíveis nos ensaios")
+    if 'Bancada' in df_completo.columns:
+        bancadas = df_completo['Bancada'].unique()
+        st.write(", ".join(bancadas))
     else:
-        st.success("Nenhum ensaio próximo do limite detectado.")
+        st.error("A coluna 'Bancada' não foi encontrada na planilha.")
 
-    st.markdown("""
-    **Legenda das Colunas:**
-    - N_ENSAIO: Número do ensaio
-    - Data_dt: Data do ensaio
-    - Erro_CN, Erro_CP, Erro_CI: Erros medidos nas diferentes etapas
-    """)
+    # Seleção de bancada para análise detalhada
+    bancada_selecionada = st.selectbox("Escolha a bancada para análise detalhada:", bancadas)
 
-    st.markdown("---")
-    st.info("💡 Use esta página para acompanhar a saúde metrológica das bancadas e agir preventivamente.")
+    # Filtrar dados da bancada selecionada
+    df_bancada = df_completo[df_completo['Bancada'] == bancada_selecionada].copy()
+    if df_bancada.empty:
+        st.warning("Nenhum dado encontrado para essa bancada.")
+        return
+
+    # Converter coluna Data para datetime
+    df_bancada['Data_dt'] = pd.to_datetime(df_bancada['Data'], errors='coerce', dayfirst=True)
+    df_bancada.sort_values(by='Data_dt', inplace=True)
+
+    # Exibição da tabela resumida
+    st.subheader(f"Resumo da bancada {bancada_selecionada}")
+    st.dataframe(df_bancada[['Data', 'N_ENSAIO', 'Temperatura', 'Classe']])
+
+    # Placeholder para gráficos de controle (Shewhart, etc.)
+    st.subheader("📈 Gráficos de Controle")
+    st.markdown("Os gráficos de controle irão mostrar a média e a deriva dos erros ao longo do tempo.")
+    st.markdown("**[A ser implementado: Gráficos de Shewhart por tipo de erro: CN, CP, CI]**")
+
+    # Alertas de guardband
+    st.subheader("⚠️ Alertas de Zona Crítica")
+    st.markdown(
+        """
+        Aqui serão exibidos os medidores que estão próximos do limite de aprovação,
+        permitindo ações preventivas antes de reprovar medidores bons.
+        """
+    )
+    st.markdown("**[A ser implementado: Identificação de medidores próximos do limite ±0,1%]**")
+
+    # Instruções e figura explicativa
+    st.subheader("Como interpretar esta página")
+    st.markdown(
+        """
+        1. Escolha a bancada desejada no menu suspenso.
+        2. Verifique a tabela de ensaios e os alertas.
+        3. Observe os gráficos de controle para identificar tendências de viciação.
+        4. Use estas informações para calibrar preventivamente as bancadas.
+        """
+    )
+    st.image("imagens/controle_metrologico_exemplo.png", caption="Exemplo de gráfico de controle", use_column_width=True)
+
+
+# Função principal do app
+def main():
+    try:
+        df_completo = carregar_dados()
+        if not df_completo.empty:
+            # --- CABEÇALHO ---
+            col_titulo, col_data = st.columns([3, 1])
+
+            with col_titulo:
+                st.title("📊 Dashboard de Ensaios")
+
+            with col_data:
+                ultima_data = df_completo['Data'].max()
+                st.markdown(
+                    f"""
+                    <div style="text-align: right; padding-top: 15px;">
+                        <span style="font-size: 0.9em; color: #64748b;">Último ensaio: <strong>{ultima_data}</strong></span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+            # --- MENU LATERAL ---
+            st.sidebar.title("Menu de Navegação")
+            paginas = {
+                'Visão Diária': pagina_visao_diaria,
+                'Visão Mensal': pagina_visao_mensal,
+                'Análise de Posições': pagina_analise_posicoes,
+                'Controle Metrológico das Bancadas 🧪': pagina_controle_metrologico_bancadas
+            }
+            escolha = st.sidebar.radio("Escolha a análise:", tuple(paginas.keys()))
+            pagina_selecionada = paginas[escolha]
+            pagina_selecionada(df_completo)
+
+        else:
+            st.error("Erro ao carregar dados. Verifique a conexão com o driver/planilha.")
+    except Exception as e:
+        st.error("Ocorreu um erro inesperado na aplicação.")
+        st.code(traceback.format_exc())
 
 # [BLOCO 10] - INICIALIZAÇÃO E MENU PRINCIPAL
 def main():
