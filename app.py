@@ -26,11 +26,10 @@ st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
 # =======================================================================
-# [BLOCO ISOLADO] - METROLOGIA AVANÇADA (VERSÃO FINAL REVISADA)
+# [BLOCO ISOLADO] - METROLOGIA AVANÇADA (VERSÃO FINAL REVISADA E BLINDADA)
 # =======================================================================
 
 # --- CONSTANTES EXCLUSIVAS DO BLOCO DE METROLOGIA ---
-# Atualizado com os nomes exatos das suas bancadas
 MAPA_BANCADA_SERIE = {
     'BANC_10_POS_MQN-1': 'B1172110310148',
     'BANC_20_POS_MQN-2': '85159',
@@ -45,7 +44,7 @@ def carregar_tabela_mestra_sheets():
     try:
         df = pd.read_csv(url )
         def limpar_numero(v):
-            if pd.isna(v) or v == "": return 0.0
+            if pd.isna(v) or str(v).strip() == "": return 0.0
             try: return float(str(v).replace("%", "").replace(",", ".").strip())
             except: return 0.0
         df['Erro_Sistematico_Pct'] = df['Erro_Sistematico_Pct'].apply(limpar_numero)
@@ -59,21 +58,24 @@ def carregar_tabela_mestra_sheets():
 
 def processar_metrologia_isolada(row, df_mestra=None, classe_banc20=None):
     medidores = []
-    bancada = row.get('Bancada_Nome')
-    # Ajuste para bater com o prefixo se o nome vier ligeiramente diferente
-    serie_bancada = None
-    for k, v in MAPA_BANCADA_SERIE.items():
-        if k in str(bancada): serie_bancada = v; break
+    bancada_row = str(row.get('Bancada_Nome', ''))
     
-    tamanho_bancada = 20 if '20_POS' in str(bancada) else 10
+    serie_bancada = None
+    for nome_banc, s_banc in MAPA_BANCADA_SERIE.items():
+        if nome_banc in bancada_row:
+            serie_bancada = s_banc
+            break
+    
+    tamanho_bancada = 20 if '20_POS' in bancada_row else 10
     classe = str(row.get("Classe", "")).upper()
-    if not classe and '20_POS' in str(bancada) and classe_banc20: classe = classe_banc20
+    if not classe and '20_POS' in bancada_row and classe_banc20: classe = classe_banc20
     limite = 4.0 if "ELETROMEC" in (classe or 'B') else LIMITES_CLASSE.get(str(classe or 'B').replace("ELETROMEC", "").strip(), 1.3)
     
     for pos in range(1, tamanho_bancada + 1):
         serie = texto(row.get(f"P{pos}_Série"))
         cn, cp, ci = row.get(f"P{pos}_CN"), row.get(f"P{pos}_CP"), row.get(f"P{pos}_CI")
         v_cn, v_cp, v_ci = valor_num(cn), valor_num(cp), valor_num(ci)
+        
         erro_ref, inc_banc = 0.0, 0.05
         if df_mestra is not None and serie_bancada:
             ref_row = df_mestra[(df_mestra['Serie_Bancada'].astype(str) == str(serie_bancada)) & (df_mestra['Posicao'] == pos)]
@@ -85,58 +87,68 @@ def processar_metrologia_isolada(row, df_mestra=None, classe_banc20=None):
             status, detalhe, motivo = "Não Ligou / Não Ensaido", "", "N/A"
         else:
             status, detalhe, motivo = "APROVADO", "", "Nenhum"
-            alertas_gb = []
-            erros_pontuais = []
+            erros_pontuais, alertas_gb = [], []
             for n, v in [('CN', v_cn), ('CP', v_cp), ('CI', v_ci)]:
                 if v is not None:
                     if abs(v) > limite: erros_pontuais.append(n)
                     elif (abs(v) + inc_banc) > limite: alertas_gb.append(n)
             
             if erros_pontuais:
-                status, motivo, detalhe = "REPROVADO", "Erro de Exatidão", "⚠️ Verifique o medidor"
+                status, motivo, detalhe = "REPROVADO", "Exatidão", "⚠️ Erro acima do limite"
             elif alertas_gb:
                 status, detalhe = "ZONA CRÍTICA", f"⚠️ Guardband: {', '.join(alertas_gb)}"
                     
-        medidores.append({"pos": pos, "serie": serie, "cn": cn, "cp": cp, "ci": ci, "status": status, "detalhe": detalhe, "erro_ref": erro_ref, "incerteza": inc_banc})
+        medidores.append({
+            "pos": pos, "serie": serie, "cn": cn, "cp": cp, "ci": ci, 
+            "status": status, "detalhe": detalhe, "erro_ref": erro_ref, "incerteza": inc_banc
+        })
     return medidores
 
 def pagina_metrologia_avancada(df_completo):
-    st.markdown("## 🔬 Metrologia Avançada")
+    st.markdown("## 🔬 Metrologia Avançada e Monitoramento")
     df_mestra = carregar_tabela_mestra_sheets()
     if df_mestra is None: return 
     
-    # Processamento dos dados
+    # Processamento Global com filtros
+    st.sidebar.subheader("📅 Filtro de Análise")
+    meses_nomes = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"]
+    mes_sel = st.sidebar.selectbox("Mês", range(1, 13), index=datetime.now().month-1, format_func=lambda x: meses_nomes[x-1])
+    ano_sel = st.sidebar.selectbox("Ano", sorted(df_completo['Data_dt'].dt.year.unique(), reverse=True))
+
     todos_meds = []
-    for _, r in df_completo.sort_values('Data_dt').iterrows():
-        for m in processar_metrologia_isolada(r, df_mestra):
-            m['Data'] = r['Data_dt']; m['Bancada'] = r['Bancada_Nome']
-            m['Mes'] = r['Data_dt'].month; m['Ano'] = r['Data_dt'].year
-            todos_meds.append(m)
-    df_met = pd.DataFrame(todos_meds)
-
-    # Filtros Globais da Aba
-    st.sidebar.subheader("📅 Filtro de Período")
-    mes_sel = st.sidebar.selectbox("Mês de Análise", range(1, 13), index=datetime.now().month-1, format_func=lambda x: ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][x-1])
-    ano_sel = st.sidebar.selectbox("Ano de Análise", sorted(df_met['Ano'].unique(), reverse=True))
+    df_periodo = df_completo[(df_completo['Data_dt'].dt.month == mes_sel) & (df_completo['Data_dt'].dt.year == ano_sel)]
     
-    df_filtrado = df_met[(df_met['Mes'] == mes_sel) & (df_met['Ano'] == ano_sel)]
+    for _, r in df_periodo.sort_values('Data_dt').iterrows():
+        for m in processar_metrologia_isolada(r, df_mestra):
+            m['Data'] = r['Data_dt']
+            m['Bancada'] = r['Bancada_Nome']
+            todos_meds.append(m)
+    
+    if not todos_meds:
+        st.info(f"Nenhum dado encontrado para {meses_nomes[mes_sel-1]}/{ano_sel}.")
+        return
 
-    tabs = st.tabs(["📈 Cartas de Controle", "⚠️ Alertas Guardband", "📊 Histórico de Precisão"])
+    df_met = pd.DataFrame(todos_meds)
+    tabs = st.tabs(["📈 Cartas de Controle", "⚠️ Alertas Guardband", "📊 Dispersão Mensal"])
 
     with tabs[0]:
-        if df_filtrado.empty: st.info("Sem dados para este mês."); return
         c1, c2 = st.columns(2)
-        b_list = sorted(df_filtrado['Bancada'].unique())
-        b_escolha = c1.selectbox("Selecione a Bancada", b_list)
-        p_escolha = c2.slider("Posição", 1, 20, 1)
+        b_list = sorted(df_met['Bancada'].unique())
+        b_sel = c1.selectbox("Bancada", b_list)
+        p_sel = c2.slider("Posição", 1, 20, 1)
         
-        df_p = df_filtrado[(df_filtrado['Bancada'] == b_escolha) & (df_filtrado['pos'] == p_escolha)].copy()
-        df_p['Erro_Medio'] = df_p.apply(lambda r: np.mean([valor_num(r[c]) for c in ['cn', 'cp', 'ci'] if valor_num(r[c]) is not None]), axis=1)
+        df_p = df_met[(df_met['Bancada'] == b_sel) & (df_met['pos'] == p_sel)].copy()
+        
+        def calc_media_limpa(r):
+            vals = [valor_num(r[c]) for c in ['cn', 'cp', 'ci'] if valor_num(r[c]) is not None]
+            return np.mean(vals) if vals else None
+
+        df_p['Erro_Medio'] = df_p.apply(calc_media_limpa, axis=1)
         df_p = df_p.dropna(subset=['Erro_Medio'])
 
         if not df_p.empty:
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=df_p['Data'], y=df_p['Erro_Medio'], mode='lines+markers', name='Erro Médio do Medidor', line=dict(color='#2ecc71', width=3)))
+            fig.add_trace(go.Scatter(x=df_p['Data'], y=df_p['Erro_Medio'], mode='lines+markers', name='Erro Médio Medidor', line=dict(color='#2ecc71', width=3)))
             fig.add_trace(go.Scatter(x=df_p['Data'], y=df_p['erro_ref'], mode='lines', name='Referência Bancada', line=dict(dash='dash', color='#e74c3c')))
             
             avg, std = df_p['Erro_Medio'].mean(), df_p['Erro_Medio'].std()
@@ -144,23 +156,21 @@ def pagina_metrologia_avancada(df_completo):
                 fig.add_hline(y=avg + 2*std, line_dash="dot", line_color="#f1c40f", annotation_text="LSC")
                 fig.add_hline(y=avg - 2*std, line_dash="dot", line_color="#f1c40f", annotation_text="LIC")
             
-            fig.update_layout(title=f"Carta de Controle - {b_escolha} (Pos {p_escolha}) - {mes_sel}/{ano_sel}", hovermode="x unified", plot_bgcolor='rgba(0,0,0,0)')
+            fig.update_layout(title=f"Estabilidade: {b_sel} (Pos {p_sel}) - {meses_nomes[mes_sel-1]}/{ano_sel}", hovermode="x unified")
             st.plotly_chart(fig, use_container_width=True)
-        else: st.info("Sem ensaios nesta posição para o mês selecionado.")
+        else: st.info("Sem dados para esta posição no mês selecionado.")
 
     with tabs[1]:
-        df_gb = df_filtrado[df_filtrado['status'] == 'ZONA CRÍTICA']
+        df_gb = df_met[df_met['status'] == 'ZONA CRÍTICA']
         if not df_gb.empty:
-            st.warning(f"Foram encontrados {len(df_gb)} medidores com risco de incerteza em {mes_sel}/{ano_sel}.")
+            st.warning(f"Existem {len(df_gb)} medidores na Zona de Risco (Guardband).")
             st.dataframe(df_gb[['Data', 'Bancada', 'pos', 'serie', 'detalhe']], use_container_width=True, hide_index=True)
-        else: st.success(f"Nenhum medidor em zona crítica em {mes_sel}/{ano_sel}.")
+        else: st.success("Nenhum medidor em zona crítica no período.")
 
     with tabs[2]:
-        if not df_filtrado.empty:
-            df_filtrado['Erro_Max'] = df_filtrado.apply(lambda r: max([abs(valor_num(r[c])) for c in ['cn', 'cp', 'ci'] if valor_num(r[c]) is not None] or [0]), axis=1)
-            fig_h = px.box(df_filtrado, x='Bancada', y='Erro_Max', color='Bancada', title=f"Dispersão de Erros Máximos - {mes_sel}/{ano_sel}")
-            st.plotly_chart(fig_h, use_container_width=True)
-        else: st.info("Sem dados para o período selecionado.")
+        df_met['Erro_Max'] = df_met.apply(lambda r: max([abs(valor_num(r[c])) for c in ['cn', 'cp', 'ci'] if valor_num(r[c]) is not None] or [0]), axis=1)
+        fig_h = px.box(df_met, x='Bancada', y='Erro_Max', color='Bancada', title=f"Dispersão de Erros - {meses_nomes[mes_sel-1]}/{ano_sel}")
+        st.plotly_chart(fig_h, use_container_width=True)
 
 # =======================================================================
 # [FIM DO BLOCO ISOLADO]
