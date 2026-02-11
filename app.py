@@ -666,82 +666,59 @@ def pagina_analise_posicoes(df_completo):
                 )
 
 # [BLOCO 09] - CONTROLE METROLÓGICO DAS BANCADAS
-
-import streamlit as st
 import pandas as pd
-from datetime import datetime
-
-def carregar_planilha_drive():
-    """
-    Função para carregar a planilha 'Tabela_Mestra_Calibracao_IPEM.xlsx' do seu Google Drive
-    """
-    try:
-        # Caminho local ou caminho montado do Drive
-        caminho_drive = "/mnt/data/Tabela_Mestra_Calibracao_IPEM.xlsx"
-        df = pd.read_excel(caminho_drive)
-        # Converte a coluna de data para datetime
-        if 'Data' in df.columns:
-            df['Data_dt'] = pd.to_datetime(df['Data'], dayfirst=True, errors='coerce')
-        return df
-    except Exception as e:
-        st.error("Erro ao carregar planilha do Drive!")
-        st.code(str(e))
-        return pd.DataFrame()  # Retorna DataFrame vazio em caso de erro
-
-def identificar_bancadas(df):
-    """
-    Função para criar uma coluna com a identificação automática da bancada
-    """
-    def mapear_bancada(n_ensaio):
-        # Mapear baseado no número de ensaio ou outra lógica
-        if isinstance(n_ensaio, str):
-            if "MQN-1" in n_ensaio:
-                return "MQN-1"
-            elif "MQN-2" in n_ensaio:
-                return "MQN-2"
-            elif "MQN-3" in n_ensaio:
-                return "MQN-3"
-            elif "MQN-4" in n_ensaio:
-                return "MQN-4"
-        return "Desconhecida"
-    
-    df['Bancada'] = df['N_ENSAIO'].apply(mapear_bancada)
-    return df
+import streamlit as st
+import plotly.graph_objects as go
 
 def pagina_controle_metrologico_bancadas(df_completo):
-    """
-    Página principal do Controle Metrológico das Bancadas
-    """
     st.title("Controle Metrológico das Bancadas 🧪")
+    st.markdown("---")
 
-    # Carregar e identificar bancadas
-    df_bancadas = identificar_bancadas(df_completo)
+    # Identificar as bancadas existentes
+    bancadas = df_completo['BANCADA'].unique()
+    
+    for bancada in bancadas:
+        st.subheader(f"Bancada: {bancada}")
 
-    # Mostrar resumo geral
-    st.subheader("Resumo Geral das Bancadas")
-    resumo = df_bancadas.groupby('Bancada').agg(
-        Total_Ensaios=('N_ENSAIO', 'count'),
-        Primeira_Data=('Data_dt', 'min'),
-        Ultima_Data=('Data_dt', 'max')
-    ).reset_index()
-    st.dataframe(resumo)
+        # Filtrar dados da bancada
+        df_bancada = df_completo[df_completo['BANCADA'] == bancada].copy()
+        df_bancada.sort_values(by='Data_dt', inplace=True)
 
-    # Mostrar os últimos 10 ensaios
-    st.subheader("Últimos 10 Ensaios Registrados")
-    st.dataframe(df_bancadas.sort_values('Data_dt', ascending=False).head(10))
+        # Colunas de erro para análise
+        col_erros = ['CN', 'CP', 'CI']  # ajuste se tiver outros nomes
+        for erro in col_erros:
+            if erro not in df_bancada.columns:
+                continue  # pula se a coluna não existir
+            
+            # Calcular média e desvio padrão
+            media = df_bancada[erro].mean()
+            desvio = df_bancada[erro].std()
+            LSC = media + 3 * desvio
+            LIC = media - 3 * desvio
 
-    # Estatísticas por Bancada
-    st.subheader("Estatísticas por Bancada")
-    for bancada in df_bancadas['Bancada'].unique():
-        st.markdown(f"### Bancada: {bancada}")
-        df_temp = df_bancadas[df_bancadas['Bancada'] == bancada]
-        st.write(f"Total de Ensaios: {len(df_temp)}")
-        st.write(f"Data do Primeiro Ensaio: {df_temp['Data_dt'].min().strftime('%d/%m/%Y') if not df_temp.empty else 'N/A'}")
-        st.write(f"Data do Último Ensaio: {df_temp['Data_dt'].max().strftime('%d/%m/%Y') if not df_temp.empty else 'N/A'}")
-        # Exibir tabela dos últimos 5 ensaios da bancada
-        st.dataframe(df_temp.sort_values('Data_dt', ascending=False).head(5))
+            # Criar gráfico de controle com Plotly
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=df_bancada['Data_dt'],
+                y=df_bancada[erro],
+                mode='lines+markers',
+                name=f'Erro {erro}',
+                line=dict(color='blue')
+            ))
+            fig.add_hline(y=media, line_dash="dash", line_color="green", annotation_text="Média", annotation_position="top left")
+            fig.add_hline(y=LSC, line_dash="dot", line_color="red", annotation_text="LSC", annotation_position="top left")
+            fig.add_hline(y=LIC, line_dash="dot", line_color="red", annotation_text="LIC", annotation_position="bottom left")
 
-    st.info("✅ Página pronta para análises e evolução futura de gráficos de deriva e controle de incerteza.")
+            fig.update_layout(
+                title=f"Gráfico de Controle - {erro}",
+                xaxis_title="Data do Ensaio",
+                yaxis_title=f"Erro {erro} (%)",
+                height=400
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+    st.success("✅ Monitoramento metrológico atualizado.")
 
 # [BLOCO 10] - INICIALIZAÇÃO E MENU PRINCIPAL
 def main():
