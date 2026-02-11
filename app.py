@@ -665,25 +665,22 @@ def pagina_analise_posicoes(df_completo):
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
 
-# =========================================================
 # [BLOCO 09] - CONTROLE METROLÓGICO DAS BANCADAS
-# =========================================================
-# ⚠️ BLOCO ISOLADO
-# - NÃO altera Visão Diária
-# - NÃO altera Visão Mensal
-# - NÃO altera Análise das Posições
-# - Apenas adiciona uma nova aba conceitual
-# =========================================================
+
 def pagina_controle_metrologico_bancadas(df_completo):
 
     st.title("Controle Metrológico das Bancadas")
+
+    # ==============================
+    # IDENTIFICAÇÃO AUTOMÁTICA MQN
+    # ==============================
 
     st.subheader("Identificação automática das bancadas")
 
     def identificar_mqn(valor):
         if pd.isna(valor):
             return "Não identificado"
-        
+
         texto = str(valor).upper()
 
         if "MQN-2" in texto:
@@ -693,14 +690,20 @@ def pagina_controle_metrologico_bancadas(df_completo):
         elif "MQN-4" in texto:
             return "MQN-4"
         else:
-            # Se não tem MQN escrito → é MQN-1
+            # se não tem texto MQN → é MQN-1
             return "MQN-1"
 
+    # cria coluna de identificação
     df_completo["Bancada_MQN"] = df_completo["N_ENSAIO"].apply(identificar_mqn)
 
-    st.success("Bancadas identificadas automaticamente ✅")
+    st.success("Bancadas identificadas automaticamente")
 
-    st.write("Distribuição de ensaios por bancada:")
+    # ==============================
+    # DISTRIBUIÇÃO DE ENSAIOS
+    # ==============================
+
+    st.subheader("Quantidade de ensaios por bancada")
+
     distribuicao = (
         df_completo["Bancada_MQN"]
         .value_counts()
@@ -708,64 +711,19 @@ def pagina_controle_metrologico_bancadas(df_completo):
         .reset_index(name="Quantidade")
     )
 
-    st.dataframe(distribuicao)
+    st.dataframe(distribuicao, use_container_width=True)
 
-    st.success("Bancadas identificadas automaticamente ✅")
+    # ==============================
+    # VISUALIZAÇÃO DOS DADOS
+    # ==============================
 
-    st.write("Distribuição de ensaios por bancada:")
-    st.dataframe(
-        df_completo["Bancada_MQN"].value_counts().rename_axis("Bancada").reset_index(name="Quantidade")
-    )
+    st.subheader("Prévia dos dados com identificação")
 
-st.success("Bancadas identificadas automaticamente ✅")
+    colunas_exibir = ["N_ENSAIO", "Bancada_MQN"]
 
-st.write("Distribuição de ensaios por bancada:")
-st.dataframe(
-    df_completo["Bancada_MQN"].value_counts().rename_axis("Bancada").reset_index(name="Quantidade")
-)
-    Aba dedicada ao monitoramento metrológico das bancadas de ensaio.
-    Este bloco é exclusivamente para análises de estabilidade, deriva
-    e controle estatístico de processo (CEP).
-   
-    st.markdown("## 🧪 Controle Metrológico das Bancadas")
-    st.write("Prévia dos dados carregados:")
-    st.dataframe(df_completo.head(5))
-    st.markdown(
-        
-        ### 📊 Objetivo da Análise
+    colunas_existentes = [c for c in colunas_exibir if c in df_completo.columns]
 
-        Esta área tem como finalidade o **monitoramento preventivo da saúde metrológica**
-        das bancadas de ensaio do laboratório, indo além do simples critério
-        de aprovação ou reprovação de medidores.
-
-        As análises aqui apresentadas permitem:
-        - Identificar **deriva metrológica** das bancadas
-        - Detectar **tendências positivas ou negativas** antes de reprovações
-        - Subsidiar **calibração preventiva**
-        - Aumentar a **segurança jurídica e técnica** dos resultados
-       
-    )
-
-    st.markdown(
-        
-        ### 🔍 Escopo Técnico
-
-        As análises serão baseadas em:
-        - Número de série da bancada (rastreabilidade metrológica)
-        - Erros de medição (CN, CP, CI)
-        - Análise estatística ao longo do tempo
-        - Cartas de Controle (Shewhart)
-       
-    )
-
-    st.info(
-        "📈 Em implementação: Cartas de Controle por bancada (MQN) para análise de estabilidade e deriva."
-    )
-
-    st.warning(
-        "⚠️ Esta aba é independente das análises operacionais e não interfere "
-        "nos resultados de Visão Diária, Visão Mensal ou Análise das Posições."
-    )
+    st.dataframe(df_completo[colunas_existentes].head(20), use_container_width=True)
 
 # [BLOCO 10] - INICIALIZAÇÃO E MENU PRINCIPAL
 def main():
