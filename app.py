@@ -53,7 +53,21 @@ def carregar_tabela_mestra_sheets():
             st.error(f"A planilha do Sheets precisa ter as colunas: {', '.join(cols_needed)}")
             return None
 
-        # Agrupa para obter o resumo necessário
+        # --- CORREÇÃO DE TIPOS (dtype->object fix) ---
+        def limpar_numero(v):
+            if pd.isna(v) or v == "": return 0.0
+            try:
+                # Remove %, substitui vírgula por ponto e converte para float
+                return float(str(v).replace("%", "").replace(",", ".").strip())
+            except:
+                return 0.0
+
+        # Aplica a limpeza nas colunas numéricas antes da agregação
+        df['Erro_Sistematico_Pct'] = df['Erro_Sistematico_Pct'].apply(limpar_numero)
+        if 'Incerteza_U_Pct' in df.columns:
+            df['Incerteza_U_Pct'] = df['Incerteza_U_Pct'].apply(limpar_numero)
+
+        # Agrupa para obter o resumo necessário (Agora com tipos numéricos garantidos)
         df_resumo = df.groupby(['Serie_Bancada', 'Posicao']).agg({
             'Erro_Sistematico_Pct': 'mean',
             'Incerteza_U_Pct': 'mean' if 'Incerteza_U_Pct' in df.columns else 'first'
@@ -62,13 +76,6 @@ def carregar_tabela_mestra_sheets():
     except Exception as e:
         if "401" in str(e) or "Unauthorized" in str(e):
             st.error("🔒 **Erro de Acesso (401):** A planilha da Tabela Mestra não está pública.")
-            st.info("""
-            **Como resolver:**
-            1. Abra a planilha no Google Drive.
-            2. Clique no botão **Compartilhar** (canto superior direito).
-            3. Em 'Acesso Geral', mude de 'Restrito' para **'Qualquer pessoa com o link'**.
-            4. Certifique-se de que a permissão é de **'Leitor'**.
-            """)
         else:
             st.error(f"Erro ao carregar Tabela Mestra: {e}")
         return None
