@@ -667,63 +667,81 @@ def pagina_analise_posicoes(df_completo):
 
 # [BLOCO 09] - CONTROLE METROLÓGICO DAS BANCADAS
 
+import streamlit as st
+import pandas as pd
+from datetime import datetime
+
+def carregar_planilha_drive():
+    """
+    Função para carregar a planilha 'Tabela_Mestra_Calibracao_IPEM.xlsx' do seu Google Drive
+    """
+    try:
+        # Caminho local ou caminho montado do Drive
+        caminho_drive = "/mnt/data/Tabela_Mestra_Calibracao_IPEM.xlsx"
+        df = pd.read_excel(caminho_drive)
+        # Converte a coluna de data para datetime
+        if 'Data' in df.columns:
+            df['Data_dt'] = pd.to_datetime(df['Data'], dayfirst=True, errors='coerce')
+        return df
+    except Exception as e:
+        st.error("Erro ao carregar planilha do Drive!")
+        st.code(str(e))
+        return pd.DataFrame()  # Retorna DataFrame vazio em caso de erro
+
+def identificar_bancadas(df):
+    """
+    Função para criar uma coluna com a identificação automática da bancada
+    """
+    def mapear_bancada(n_ensaio):
+        # Mapear baseado no número de ensaio ou outra lógica
+        if isinstance(n_ensaio, str):
+            if "MQN-1" in n_ensaio:
+                return "MQN-1"
+            elif "MQN-2" in n_ensaio:
+                return "MQN-2"
+            elif "MQN-3" in n_ensaio:
+                return "MQN-3"
+            elif "MQN-4" in n_ensaio:
+                return "MQN-4"
+        return "Desconhecida"
+    
+    df['Bancada'] = df['N_ENSAIO'].apply(mapear_bancada)
+    return df
+
 def pagina_controle_metrologico_bancadas(df_completo):
+    """
+    Página principal do Controle Metrológico das Bancadas
+    """
+    st.title("Controle Metrológico das Bancadas 🧪")
 
-    st.title("Controle Metrológico das Bancadas")
+    # Carregar e identificar bancadas
+    df_bancadas = identificar_bancadas(df_completo)
 
-    # ==============================
-    # IDENTIFICAÇÃO AUTOMÁTICA MQN
-    # ==============================
+    # Mostrar resumo geral
+    st.subheader("Resumo Geral das Bancadas")
+    resumo = df_bancadas.groupby('Bancada').agg(
+        Total_Ensaios=('N_ENSAIO', 'count'),
+        Primeira_Data=('Data_dt', 'min'),
+        Ultima_Data=('Data_dt', 'max')
+    ).reset_index()
+    st.dataframe(resumo)
 
-    st.subheader("Identificação automática das bancadas")
+    # Mostrar os últimos 10 ensaios
+    st.subheader("Últimos 10 Ensaios Registrados")
+    st.dataframe(df_bancadas.sort_values('Data_dt', ascending=False).head(10))
 
-    def identificar_mqn(valor):
-        if pd.isna(valor):
-            return "Não identificado"
+    # Estatísticas por Bancada
+    st.subheader("Estatísticas por Bancada")
+    for bancada in df_bancadas['Bancada'].unique():
+        st.markdown(f"### Bancada: {bancada}")
+        df_temp = df_bancadas[df_bancadas['Bancada'] == bancada]
+        st.write(f"Total de Ensaios: {len(df_temp)}")
+        st.write(f"Data do Primeiro Ensaio: {df_temp['Data_dt'].min().strftime('%d/%m/%Y') if not df_temp.empty else 'N/A'}")
+        st.write(f"Data do Último Ensaio: {df_temp['Data_dt'].max().strftime('%d/%m/%Y') if not df_temp.empty else 'N/A'}")
+        # Exibir tabela dos últimos 5 ensaios da bancada
+        st.dataframe(df_temp.sort_values('Data_dt', ascending=False).head(5))
 
-        texto = str(valor).upper()
-
-        if "MQN-2" in texto:
-            return "MQN-2"
-        elif "MQN-3" in texto:
-            return "MQN-3"
-        elif "MQN-4" in texto:
-            return "MQN-4"
-        else:
-            # se não tem texto MQN → é MQN-1
-            return "MQN-1"
-
-    # cria coluna de identificação
-    df_completo["Bancada_MQN"] = df_completo["N_ENSAIO"].apply(identificar_mqn)
-
-    st.success("Bancadas identificadas automaticamente")
-
-    # ==============================
-    # DISTRIBUIÇÃO DE ENSAIOS
-    # ==============================
-
-    st.subheader("Quantidade de ensaios por bancada")
-
-    distribuicao = (
-        df_completo["Bancada_MQN"]
-        .value_counts()
-        .rename_axis("Bancada")
-        .reset_index(name="Quantidade")
-    )
-
-    st.dataframe(distribuicao, use_container_width=True)
-
-    # ==============================
-    # VISUALIZAÇÃO DOS DADOS
-    # ==============================
-
-    st.subheader("Prévia dos dados com identificação")
-
-    colunas_exibir = ["N_ENSAIO", "Bancada_MQN"]
-
-    colunas_existentes = [c for c in colunas_exibir if c in df_completo.columns]
-
-    st.dataframe(df_completo[colunas_existentes].head(20), use_container_width=True)
+    st.info("✅ Página pronta para análises e evolução futura de gráficos de deriva e controle de incerteza.")
 
 # [BLOCO 10] - INICIALIZAÇÃO E MENU PRINCIPAL
 def main():
