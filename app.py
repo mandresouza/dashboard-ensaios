@@ -676,6 +676,33 @@ def pagina_analise_posicoes(df_completo):
 # =========================================================
 
 def pagina_controle_metrologico_bancadas(df_completo):
+st.subheader("Identificação automática das bancadas")
+
+def identificar_mqn(valor):
+    if pd.isna(valor):
+        return "Não identificado"
+    
+    texto = str(valor).upper()
+
+    if "MQN-2" in texto:
+        return "MQN-2"
+    elif "MQN-3" in texto:
+        return "MQN-3"
+    elif "MQN-4" in texto:
+        return "MQN-4"
+    else:
+        # Se não tem MQN escrito → é MQN-1
+        return "MQN-1"
+
+df_completo["Bancada_MQN"] = df_completo["N_ENSAIO"].apply(identificar_mqn)
+
+st.success("Bancadas identificadas automaticamente ✅")
+
+st.write("Distribuição de ensaios por bancada:")
+st.dataframe(
+    df_completo["Bancada_MQN"].value_counts().rename_axis("Bancada").reset_index(name="Quantidade")
+)
+
     """
     Aba dedicada ao monitoramento metrológico das bancadas de ensaio.
     Este bloco é exclusivamente para análises de estabilidade, deriva
