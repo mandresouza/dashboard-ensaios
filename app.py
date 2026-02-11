@@ -58,8 +58,8 @@ def to_excel(df):
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Relatorio')
-    processed_Data = output.getvalue()
-    return processed_Data
+    processed_data = output.getvalue()
+    return processed_data
 
 # [BLOCO 04] - PROCESSAMENTO TÉCNICO
 def processar_ensaio(row, classe_banc20=None):
@@ -284,25 +284,25 @@ def pagina_visao_diaria(df_completo):
                     medidores_do_ensaio = processar_ensaio(ensaio_row)
                     for medidor in medidores_do_ensaio:
                         if termo_busca in medidor['serie'].lower():
-                            resultados_encontrados.append({"Data": ensaio_row['Data'], "bancada": ensaio_row['Bancada_Nome'], "dados": medidor})
+                            resultados_encontrados.append({"data": ensaio_row['Data'], "bancada": ensaio_row['Bancada_Nome'], "dados": medidor})
             
             if resultados_encontrados:
                 st.success(f"Encontrado(s) {len(resultados_encontrados)} registro(s) para este medidor.")
                 st.markdown(f"""
-                - **Primeiro Ensaio:** {resultados_encontrados[0]['Data']}
-                - **Último Ensaio:** {resultados_encontrados[-1]['Data']}
+                - **Primeiro Ensaio:** {resultados_encontrados[0]['data']}
+                - **Último Ensaio:** {resultados_encontrados[-1]['data']}
                 """)
-                for res in sorted(resultados_encontrados, key=lambda x: datetime.strptime(x['Data'], '%d/%m/%y'), reverse=True):
-                    with st.expander(f"📍 **{res['Data']}** | {res['bancada']} | Status: **{res['dados']['status']}**", expanded=False):
+                for res in sorted(resultados_encontrados, key=lambda x: datetime.strptime(x['data'], '%d/%m/%y'), reverse=True):
+                    with st.expander(f"📍 **{res['data']}** | {res['bancada']} | Status: **{res['dados']['status']}**", expanded=False):
                         renderizar_card(res['dados'])
             else:
                 st.warning(f"Nenhum registro encontrado para a série '{serie_input}'.")
 
     else:
-        # Lógica de relatório por Data
-        if "filtro_Data" not in st.session_state:
-            Data_hoje = datetime.now() - pd.Timedelta(hours=3)
-            st.session_state.filtro_Data = Data_hoje.date()
+        # Lógica de relatório por data
+        if "filtro_data" not in st.session_state:
+            data_hoje = datetime.now() - pd.Timedelta(hours=3)
+            st.session_state.filtro_data = data_hoje.date()
         if "filtro_bancada" not in st.session_state:
             st.session_state.filtro_bancada = 'Todas'
         if "filtro_status" not in st.session_state:
@@ -310,7 +310,7 @@ def pagina_visao_diaria(df_completo):
         if "filtro_irregularidade" not in st.session_state:
             st.session_state.filtro_irregularidade = []
 
-        st.session_state.filtro_Data = st.sidebar.date_input("Data do Ensaio", value=st.session_state.filtro_Data, format="DD/MM/YYYY")
+        st.session_state.filtro_data = st.sidebar.date_input("Data do Ensaio", value=st.session_state.filtro_data, format="DD/MM/YYYY")
         bancadas_disponiveis = df_completo['Bancada_Nome'].unique().tolist()
         st.session_state.filtro_bancada = st.sidebar.selectbox("Bancada", options=['Todas'] + bancadas_disponiveis, index=0 if st.session_state.filtro_bancada == 'Todas' else bancadas_disponiveis.index(st.session_state.filtro_bancada) + 1)
         
@@ -323,18 +323,18 @@ def pagina_visao_diaria(df_completo):
         else:
             st.session_state.filtro_irregularidade = []
 
-        if not st.session_state.filtro_Data:
-            st.warning("Por favor, selecione uma Data.")
+        if not st.session_state.filtro_data:
+            st.warning("Por favor, selecione uma data.")
             return
             
-        st.markdown(f"### 📅 Relatório de Ensaios Realizados em: **{st.session_state.filtro_Data.strftime('%d/%m/%Y')}**")
+        st.markdown(f"### 📅 Relatório de Ensaios Realizados em: **{st.session_state.filtro_data.strftime('%d/%m/%Y')}**")
         
-        df_filtrado_dia = df_completo[df_completo['Data_dt'].dt.date == st.session_state.filtro_Data].copy()
+        df_filtrado_dia = df_completo[df_completo['Data_dt'].dt.date == st.session_state.filtro_data].copy()
         if st.session_state.filtro_bancada != 'Todas': 
             df_filtrado_dia = df_filtrado_dia[df_filtrado_dia['Bancada_Nome'] == st.session_state.filtro_bancada]
 
         if df_filtrado_dia.empty:
-            st.info(f"Não constam ensaios registrados para o dia {st.session_state.filtro_Data.strftime('%d/%m/%Y')}.")
+            st.info(f"Não constam ensaios registrados para o dia {st.session_state.filtro_data.strftime('%d/%m/%Y')}.")
             return
 
         ensaios_do_dia = []
@@ -367,12 +367,12 @@ def pagina_visao_diaria(df_completo):
             with col_down:
                 st.write("")
                 st.write("")
-                pdf_bytes = gerar_pdf_relatorio(ensaios=ensaios_do_dia, Data=st.session_state.filtro_Data.strftime('%d/%m/%Y'), stats=stats)
-                st.download_button(label="📥 Baixar Relatório PDF", Data=pdf_bytes, file_name=f"Relatorio_{st.session_state.filtro_Data.strftime('%Y%m%d')}.pdf", mime="application/pdf")
+                pdf_bytes = gerar_pdf_relatorio(ensaios=ensaios_do_dia, data=st.session_state.filtro_data.strftime('%d/%m/%Y'), stats=stats)
+                st.download_button(label="📥 Baixar Relatório PDF", data=pdf_bytes, file_name=f"Relatorio_{st.session_state.filtro_data.strftime('%Y%m%d')}.pdf", mime="application/pdf")
                 
                 df_export = pd.DataFrame(todos_medidores_visiveis)
                 excel_bytes = to_excel(df_export)
-                st.download_button(label="📥 Baixar Dados em Excel", Data=excel_bytes, file_name=f"Dados_{st.session_state.filtro_Data.strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                st.download_button(label="📥 Baixar Dados em Excel", data=excel_bytes, file_name=f"Dados_{st.session_state.filtro_data.strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
             st.markdown("---")
             st.subheader("📋 Detalhes dos Ensaios")
@@ -392,7 +392,7 @@ def pagina_visao_diaria(df_completo):
 # [BLOCO 07] - PÁGINA: VISÃO MENSAL
 def get_stats_por_dia(df_mes):
     daily_stats = []
-    for Data, group in df_mes.groupby('Data_dt'):
+    for data, group in df_mes.groupby('Data_dt'):
         medidores = []
         for _, row in group.iterrows(): 
             medidores.extend(processar_ensaio(row, 'B'))
@@ -405,7 +405,7 @@ def get_stats_por_dia(df_mes):
         taxa_aprovacao = (aprovados / total_ensaiados * 100) if total_ensaiados > 0 else 0
         
         daily_stats.append({
-            'Data': Data, 
+            'Data': data, 
             'Aprovados': aprovados, 
             'Reprovados': reprovados, 
             'Contra Consumidor': consumidor,
@@ -537,7 +537,7 @@ def pagina_visao_mensal(df_completo):
             st.plotly_chart(fig_line, use_container_width=True)
             
         with st.expander("📄 Visualizar Tabela de Performance Diária"):
-            st.Dataframe(df_daily.sort_values('Data', ascending=False), use_container_width=True, hide_index=True)
+            st.dataframe(df_daily.sort_values('Data', ascending=False), use_container_width=True, hide_index=True)
             
 # [BLOCO 08] - PÁGINA: ANÁLISE DE POSIÇÕES (MAPA DE CALOR)
 def pagina_analise_posicoes(df_completo):
@@ -590,7 +590,7 @@ def pagina_analise_posicoes(df_completo):
     min_date = df_completo['Data_dt'].min().date()
     max_date = df_completo['Data_dt'].max().date()
     
-    Data_inicio, Data_fim = st.sidebar.date_input(
+    data_inicio, data_fim = st.sidebar.date_input(
         "Selecione o Período",
         value=(max_date - pd.Timedelta(days=30), max_date),
         min_value=min_date,
@@ -598,8 +598,8 @@ def pagina_analise_posicoes(df_completo):
         key='heatmap_periodo'
     )
 
-    if not Data_inicio or not Data_fim or Data_inicio > Data_fim:
-        st.warning("Por favor, selecione um período de Datas válido.")
+    if not data_inicio or not data_fim or data_inicio > data_fim:
+        st.warning("Por favor, selecione um período de datas válido.")
         return
         
     if not bancadas_selecionadas:
@@ -613,8 +613,8 @@ def pagina_analise_posicoes(df_completo):
         with st.spinner(f"Processando dados para a {bancada.replace('_', ' ')}..."):
             df_filtrado = df_completo[
                 (df_completo['Bancada_Nome'] == bancada) &
-                (df_completo['Data_dt'].dt.date >= Data_inicio) &
-                (df_completo['Data_dt'].dt.date <= Data_fim)
+                (df_completo['Data_dt'].dt.date >= data_inicio) &
+                (df_completo['Data_dt'].dt.date <= data_fim)
             ]
 
             if df_filtrado.empty:
@@ -644,160 +644,47 @@ def pagina_analise_posicoes(df_completo):
 
             df_reprovacoes = pd.DataFrame(reprovacoes_detalhadas)
             
-            heatmap_Data = df_reprovacoes.pivot_table(index='Posição', columns='Ponto do Erro', aggfunc='size', fill_value=0)
+            heatmap_data = df_reprovacoes.pivot_table(index='Posição', columns='Ponto do Erro', aggfunc='size', fill_value=0)
             for ponto in ['CN', 'CP', 'CI']:
-                if ponto not in heatmap_Data.columns:
-                    heatmap_Data[ponto] = 0
-            heatmap_Data = heatmap_Data[['CN', 'CP', 'CI']]
+                if ponto not in heatmap_data.columns:
+                    heatmap_data[ponto] = 0
+            heatmap_data = heatmap_data[['CN', 'CP', 'CI']]
 
-            fig = go.Figure(Data=go.Heatmap(z=heatmap_Data.values, x=heatmap_Data.columns, y=[f"Posição {i}" for i in heatmap_Data.index], colorscale='Reds', hoverongaps=False, text=heatmap_Data.values, texttemplate="%{text}", showscale=True))
+            fig = go.Figure(data=go.Heatmap(z=heatmap_data.values, x=heatmap_data.columns, y=[f"Posição {i}" for i in heatmap_data.index], colorscale='Reds', hoverongaps=False, text=heatmap_data.values, texttemplate="%{text}", showscale=True))
             fig.update_layout(title=f'<b>Mapa de Calor de Reprovações - {bancada.replace("_", " ")}</b>', xaxis_title="Ponto de Medição", yaxis_title="Posição na Bancada", yaxis=dict(autorange='reversed'), height=600)
             st.plotly_chart(fig, use_container_width=True)
             
             with st.expander(f"📄 Detalhes dos {len(df_reprovacoes)} Medidores Reprovados na {bancada.replace('_', ' ')} (Clique para expandir)"):
-                st.Dataframe(df_reprovacoes[['Data', 'Ensaio #', 'Posição', 'Série', 'Ponto do Erro', 'Valor CN', 'Valor CP', 'Valor CI']], use_container_width=True, hide_index=True)
+                st.dataframe(df_reprovacoes[['Data', 'Ensaio #', 'Posição', 'Série', 'Ponto do Erro', 'Valor CN', 'Valor CP', 'Valor CI']], use_container_width=True, hide_index=True)
                 
                 excel_bytes_reprovacoes = to_excel(df_reprovacoes)
                 st.download_button(
                     label=f"📥 Baixar detalhes da {bancada.replace('_', ' ')} em Excel",
-                    Data=excel_bytes_reprovacoes,
-                    file_name=f"Detalhes_Reprovacoes_{bancada}_{Data_inicio.strftime('%Y%m%d')}-{Data_fim.strftime('%Y%m%d')}.xlsx",
+                    data=excel_bytes_reprovacoes,
+                    file_name=f"Detalhes_Reprovacoes_{bancada}_{data_inicio.strftime('%Y%m%d')}-{data_fim.strftime('%Y%m%d')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
-
+            
 # [BLOCO 09] - INICIALIZAÇÃO E MENU PRINCIPAL
-def pagina_controle_metrologico_bancadas(df_completo):
-    """
-    Página de Controle Metrológico das Bancadas
-    Esta página permite monitorar a estabilidade e desempenho das bancadas de medição (MQN-1 a MQN-4)
-    com base na planilha de calibração.
-    """
-
-    st.title("🧪 Controle Metrológico das Bancadas")
-
-    st.markdown(
-        """
-        Esta página apresenta análises metrológicas avançadas:
-        - Monitoramento da estabilidade das bancadas (deriva de erros ao longo do tempo)
-        - Identificação de tendências de viciação positiva ou negativa
-        - Alertas para medidores próximos do limite (guardbands)
-        - Resumo das calibrações recentes e desempenho por bancada
-        """
-    )
-
-    # Identificação automática das bancadas presentes nos dados
-    st.subheader("Bancadas disponíveis nos ensaios")
-    if 'Bancada' in df_completo.columns:
-        bancadas = df_completo['Bancada'].unique()
-        st.write(", ".join(bancadas))
-    else:
-        st.error("A coluna 'Bancada' não foi encontrada na planilha.")
-
-    # Seleção de bancada para análise detalhada
-    bancada_selecionada = st.selectbox("Escolha a bancada para análise detalhada:", bancadas)
-
-    # Filtrar dados da bancada selecionada
-    df_bancada = df_completo[df_completo['Bancada'] == bancada_selecionada].copy()
-    if df_bancada.empty:
-        st.warning("Nenhum dado encontrado para essa bancada.")
-        return
-
-    # Converter coluna Data para datetime
-    df_bancada['Data_dt'] = pd.to_datetime(df_bancada['Data'], errors='coerce', dayfirst=True)
-    df_bancada.sort_values(by='Data_dt', inplace=True)
-
-    # Exibição da tabela resumida
-    st.subheader(f"Resumo da bancada {bancada_selecionada}")
-    st.Dataframe(df_bancada[['Data', 'N_ENSAIO', 'Temperatura', 'Classe']])
-
-    # Placeholder para gráficos de controle (Shewhart, etc.)
-    st.subheader("📈 Gráficos de Controle")
-    st.markdown("Os gráficos de controle irão mostrar a média e a deriva dos erros ao longo do tempo.")
-    st.markdown("**[A ser implementado: Gráficos de Shewhart por tipo de erro: CN, CP, CI]**")
-
-    # Alertas de guardband
-    st.subheader("⚠️ Alertas de Zona Crítica")
-    st.markdown(
-        """
-        Aqui serão exibidos os medidores que estão próximos do limite de aprovação,
-        permitindo ações preventivas antes de reprovar medidores bons.
-        """
-    )
-    st.markdown("**[A ser implementado: Identificação de medidores próximos do limite ±0,1%]**")
-
-    # Instruções e figura explicativa
-    st.subheader("Como interpretar esta página")
-    st.markdown(
-        """
-        1. Escolha a bancada desejada no menu suspenso.
-        2. Verifique a tabela de ensaios e os alertas.
-        3. Observe os gráficos de controle para identificar tendências de viciação.
-        4. Use estas informações para calibrar preventivamente as bancadas.
-        """
-    )
-    st.image("imagens/controle_metrologico_exemplo.png", caption="Exemplo de gráfico de controle", use_column_width=True)
-
-
-# Função principal do app
-def main():
-    try:
-        df_completo = carregar_dados()
-        if not df_completo.empty:
-            # --- CABEÇALHO ---
-            col_titulo, col_Data = st.columns([3, 1])
-
-            with col_titulo:
-                st.title("📊 Dashboard de Ensaios")
-
-            with col_Data:
-                ultima_Data = df_completo['Data'].max()
-                st.markdown(
-                    f"""
-                    <div style="text-align: right; padding-top: 15px;">
-                        <span style="font-size: 0.9em; color: #64748b;">Último ensaio: <strong>{ultima_Data}</strong></span>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-
-            # --- MENU LATERAL ---
-            st.sidebar.title("Menu de Navegação")
-            paginas = {
-                'Visão Diária': pagina_visao_diaria,
-                'Visão Mensal': pagina_visao_mensal,
-                'Análise de Posições': pagina_analise_posicoes,
-                'Controle Metrológico das Bancadas 🧪': pagina_controle_metrologico_bancadas
-            }
-            escolha = st.sidebar.radio("Escolha a análise:", tuple(paginas.keys()))
-            pagina_selecionada = paginas[escolha]
-            pagina_selecionada(df_completo)
-
-        else:
-            st.error("Erro ao carregar dados. Verifique a conexão com o driver/planilha.")
-    except Exception as e:
-        st.error("Ocorreu um erro inesperado na aplicação.")
-        st.code(traceback.format_exc())
-
-# [BLOCO 10] - INICIALIZAÇÃO E MENU PRINCIPAL
 def main():
     try:
         df_completo = carregar_dados()
         if not df_completo.empty:
             # --- INÍCIO DA NOVA FUNCIONALIDADE ---
-            # Cria duas colunas: uma para o título, outra para a Data
-            col_titulo, col_Data = st.columns([3, 1])
+            # Cria duas colunas: uma para o título, outra para a data
+            col_titulo, col_data = st.columns([3, 1])
 
             with col_titulo:
                 st.title("📊 Dashboard de Ensaios")
 
-            with col_Data:
-                # Encontra a Data mais recente no DataFrame
-                ultima_Data = df_completo['Data_dt'].max()
+            with col_data:
+                # Encontra a data mais recente no DataFrame
+                ultima_data = df_completo['Data_dt'].max()
                 # Usa HTML para alinhar o texto à direita e estilizar
                 st.markdown(
                     f"""
                     <div style="text-align: right; padding-top: 15px;">
-                        <span style="font-size: 0.9em; color: #64748b;">Último ensaio: <strong>{ultima_Data.strftime('%d/%m/%Y')}</strong></span>
+                        <span style="font-size: 0.9em; color: #64748b;">Último ensaio: <strong>{ultima_data.strftime('%d/%m/%Y')}</strong></span>
                     </div>
                     """,
                     unsafe_allow_html=True
@@ -808,14 +695,13 @@ def main():
             paginas = {
                 'Visão Diária': pagina_visao_diaria,
                 'Visão Mensal': pagina_visao_mensal,
-                'Análise de Posições': pagina_analise_posicoes,
-                'Controle Metrológico das Bancadas': pagina_controle_metrologico_bancadas
+                'Análise de Posições': pagina_analise_posicoes
             }
             escolha = st.sidebar.radio("Escolha a análise:", tuple(paginas.keys()))
-                        
+            
             pagina_selecionada = paginas[escolha]
             pagina_selecionada(df_completo)
-            
+
         else:
             st.error("Erro ao carregar dados. Verifique a conexão com o Google Sheets.")
     except Exception as e:
