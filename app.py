@@ -26,7 +26,7 @@ st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
 # =======================================================================
-# [BLOCO ISOLADO] - METROLOGIA AVANÇADA
+# [BLOCO ISOLADO] - METROLOGIA AVANÇADA (VERSÃO FINAL OTIMIZADA)
 # =======================================================================
 
 # --- CONSTANTES EXCLUSIVAS DO BLOCO DE METROLOGIA ---
@@ -44,44 +44,34 @@ def carregar_tabela_mestra_sheets():
     url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv"
     
     try:
-        # Tenta ler o CSV do Google Sheets
-        df = pd.read_csv(url)
-        
-        # Validação mínima das colunas necessárias
+        df = pd.read_csv(url )
         cols_needed = ['Serie_Bancada', 'Posicao', 'Erro_Sistematico_Pct']
         if not all(c in df.columns for c in cols_needed):
             st.error(f"A planilha do Sheets precisa ter as colunas: {', '.join(cols_needed)}")
             return None
 
-        # --- CORREÇÃO DE TIPOS (dtype->object fix) ---
         def limpar_numero(v):
             if pd.isna(v) or v == "": return 0.0
             try:
-                # Remove %, substitui vírgula por ponto e converte para float
                 return float(str(v).replace("%", "").replace(",", ".").strip())
             except:
                 return 0.0
 
-        # Aplica a limpeza nas colunas numéricas antes da agregação
         df['Erro_Sistematico_Pct'] = df['Erro_Sistematico_Pct'].apply(limpar_numero)
         if 'Incerteza_U_Pct' in df.columns:
             df['Incerteza_U_Pct'] = df['Incerteza_U_Pct'].apply(limpar_numero)
 
-        # Agrupa para obter o resumo necessário (Agora com tipos numéricos garantidos)
         df_resumo = df.groupby(['Serie_Bancada', 'Posicao']).agg({
             'Erro_Sistematico_Pct': 'mean',
             'Incerteza_U_Pct': 'mean' if 'Incerteza_U_Pct' in df.columns else 'first'
         }).reset_index()
         return df_resumo
     except Exception as e:
-        if "401" in str(e) or "Unauthorized" in str(e):
-            st.error("🔒 **Erro de Acesso (401):** A planilha da Tabela Mestra não está pública.")
-        else:
-            st.error(f"Erro ao carregar Tabela Mestra: {e}")
+        st.error(f"Erro ao carregar Tabela Mestra: {e}")
         return None
 
 def processar_metrologia_isolada(row, df_mestra=None, classe_banc20=None):
-    """Lógica isolada de metrologia para análise avançada."""
+    """Lógica isolada de metrologia com Guardband e Incerteza do Certificado."""
     medidores = []
     bancada = row.get('Bancada_Nome')
     serie_bancada = MAPA_BANCADA_SERIE.get(bancada)
@@ -91,17 +81,19 @@ def processar_metrologia_isolada(row, df_mestra=None, classe_banc20=None):
     if not classe: classe = 'B'
     
     limite = 4.0 if "ELETROMEC" in classe else LIMITES_CLASSE.get(classe.replace("ELETROMEC", "").strip(), 1.3)
-    limite_alerta = limite * 0.9
-
+    
     for pos in range(1, tamanho_bancada + 1):
         serie = texto(row.get(f"P{pos}_Série"))
         cn, cp, ci = row.get(f"P{pos}_CN"), row.get(f"P{pos}_CP"), row.get(f"P{pos}_CI")
         v_cn, v_cp, v_ci = valor_num(cn), valor_num(cp), valor_num(ci)
         
         erro_ref = 0.0
+        incerteza_bancada = 0.0
         if df_mestra is not None and serie_bancada:
             ref_row = df_mestra[(df_mestra['Serie_Bancada'].astype(str) == str(serie_bancada)) & (df_mestra['Posicao'] == pos)]
-            if not ref_row.empty: erro_ref = ref_row['Erro_Sistematico_Pct'].values[0]
+            if not ref_row.empty: 
+                erro_ref = ref_row['Erro_Sistematico_Pct'].values[0]
+                incerteza_bancada = ref_row['Incerteza_U_Pct'].values[0] if 'Incerteza_U_Pct' in ref_row.columns else 0.05
 
         if pd.isna(cn) and pd.isna(cp) and pd.isna(ci):
             status, detalhe, motivo = "Não Ligou / Não Ensaido", "", "N/A"
@@ -109,15 +101,19 @@ def processar_metrologia_isolada(row, df_mestra=None, classe_banc20=None):
         else:
             status, detalhe, motivo = "APROVADO", "", "Nenhum"
             erros_pontuais, alertas_gb = [], []
+            
+            # --- LÓGICA DE GUARDBAND (ALERTA DE RISCO) ---
             for n, v in [('CN', v_cn), ('CP', v_cp), ('CI', v_ci)]:
                 if v is not None:
-                    if abs(v) > limite: erros_pontuais.append(n)
-                    elif abs(v) > limite_alerta: alertas_gb.append(n)
+                    abs_v = abs(v)
+                    if abs_v > limite: 
+                        erros_pontuais.append(n)
+                    elif (abs_v + incerteza_bancada) > limite:
+                        alertas_gb.append(n)
             
             erro_exatidao = len(erros_pontuais) > 0
             reg_ini, reg_fim = valor_num(row.get(f"P{pos}_REG_Inicio")), valor_num(row.get(f"P{pos}_REG_Fim"))
             mv_nok = str(texto(row.get(f"P{pos}_MV"))).upper() in ["REPROVADO", "NOK", "FAIL", "-"]
-            
             incremento_maior = (reg_fim - reg_ini > 1) if reg_ini is not None and reg_fim is not None else False
             
             if (sum([sum(1 for v in [v_cn, v_cp, v_ci] if v is not None and v > 0 and abs(v) > limite) >= 1, mv_nok, incremento_maior]) >= 2):
@@ -126,46 +122,73 @@ def processar_metrologia_isolada(row, df_mestra=None, classe_banc20=None):
                 status, motivo = "REPROVADO", " / ".join([x for x, y in zip(["Exatidão", "Registrador", "Mostrador"], [erro_exatidao, (reg_fim - reg_ini != 1 if reg_ini is not None and reg_fim is not None else False), mv_nok]) if y])
                 detalhe = "⚠️ Verifique este medidor"
             elif alertas_gb:
-                status, detalhe = "ZONA CRÍTICA", f"⚠️ Guardband: {', '.join(alertas_gb)}"
+                status, detalhe = "ZONA CRÍTICA", f"⚠️ Guardband: {', '.join(alertas_gb)} (Risco de Reprovação por Incerteza)"
                     
         medidores.append({
             "pos": pos, "serie": serie, "cn": texto(cn), "cp": texto(cp), "ci": texto(ci), 
             "mv": texto(row.get(f"P{pos}_MV")), "status": status, "detalhe": detalhe, 
-            "motivo": motivo, "limite": limite, "erro_ref": erro_ref, "erros_pontuais": erros_pontuais
+            "motivo": motivo, "limite": limite, "erro_ref": erro_ref, "incerteza": incerteza_bancada, "erros_pontuais": erros_pontuais
         })
     return medidores
 
 def pagina_metrologia_avancada(df_completo):
-    """Interface da aba de Metrologia Avançada."""
+    """Interface da aba de Metrologia Avançada com Visão Moderna."""
     st.markdown("## 🔬 Metrologia Avançada e Monitoramento")
     df_mestra = carregar_tabela_mestra_sheets()
     
-    if df_mestra is None:
-        return # Erro já mostrado na função de carregamento
+    if df_mestra is None: return 
     
-    tabs = st.tabs(["📈 Cartas de Controle", "⚠️ Guardband", "🏭 Inteligência Fabricante"])
+    tabs = st.tabs(["📈 Cartas de Controle", "⚠️ Alertas Guardband", "📊 Histórico de Precisão"])
+    
+    # Processamento centralizado
+    todos_meds = []
+    for _, r in df_completo.sort_values('Data_dt').iterrows():
+        for m in processar_metrologia_isolada(r, df_mestra):
+            m['Data'] = r['Data_dt']; m['Bancada'] = r['Bancada_Nome']
+            todos_meds.append(m)
+    df_met = pd.DataFrame(todos_meds)
+
     with tabs[0]:
         col1, col2 = st.columns(2)
         with col1: b_sel = st.selectbox("Bancada", list(MAPA_BANCADA_SERIE.keys()), key="met_banc")
         with col2: p_sel = st.slider("Posição", 1, 20, 1, key="met_pos")
-        df_h = df_completo[df_completo['Bancada_Nome'] == b_sel].sort_values('Data_dt')
-        pts = []
-        for _, r in df_h.iterrows():
-            meds = processar_metrologia_isolada(r, df_mestra)
-            if p_sel <= len(meds):
-                m = meds[p_sel-1]
-                v = [valor_num(m['cn']), valor_num(m['cp']), valor_num(m['ci'])]
-                v = [x for x in v if x is not None]
-                if v: pts.append({'Data': r['Data_dt'], 'Erro (%)': sum(v)/len(v), 'Ref': m['erro_ref']})
-        if pts:
-            df_p = pd.DataFrame(pts)
+        
+        df_plot = df_met[(df_met['Bancada'] == b_sel) & (df_met['pos'] == p_sel)].copy()
+        df_plot['Erro_Medio'] = df_plot.apply(lambda r: np.mean([valor_num(r[c]) for c in ['cn', 'cp', 'ci'] if valor_num(r[c]) is not None]), axis=1)
+        df_plot = df_plot.dropna(subset=['Erro_Medio'])
+
+        if not df_plot.empty:
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=df_p['Data'], y=df_p['Erro (%)'], mode='lines+markers', name='Medido'))
-            fig.add_trace(go.Scatter(x=df_p['Data'], y=df_p['Ref'], mode='lines', name='Referência', line=dict(dash='dash', color='red')))
-            fig.update_layout(title=f"Histórico de Erros - {b_sel} - Posição {p_sel}", xaxis_title="Data", yaxis_title="Erro (%)")
+            fig.add_trace(go.Scatter(x=df_plot['Data'], y=df_plot['Erro_Medio'], mode='lines+markers', name='Erro Médio', line=dict(color='#00f2ff')))
+            fig.add_trace(go.Scatter(x=df_plot['Data'], y=df_plot['erro_ref'], mode='lines', name='Referência (Certificado)', line=dict(dash='dash', color='red')))
+            
+            # Limites de Controle Estatístico
+            avg, std = df_plot['Erro_Medio'].mean(), df_plot['Erro_Medio'].std()
+            if not pd.isna(std):
+                fig.add_hline(y=avg + 2*std, line_dash="dot", line_color="orange", annotation_text="LSC")
+                fig.add_hline(y=avg - 2*std, line_dash="dot", line_color="orange", annotation_text="LIC")
+
+            fig.update_layout(title=f"Carta de Controle - {b_sel} Pos {p_sel}", template="plotly_dark")
             st.plotly_chart(fig, use_container_width=True)
-    with tabs[1]: st.info("Módulo Guardband ativo.")
-    with tabs[2]: st.info("Módulo Inteligência Fabricante ativo.")
+
+    with tabs[1]:
+        df_gb = df_met[df_met['status'] == 'ZONA CRÍTICA']
+        if not df_gb.empty:
+            st.warning(f"Atenção: {len(df_gb)} medidores identificados na Zona de Risco (Guardband).")
+            st.dataframe(df_gb[['Data', 'Bancada', 'pos', 'serie', 'detalhe']], use_container_width=True, hide_index=True)
+        else:
+            st.success("Nenhum medidor em zona crítica.")
+
+    with tabs[2]:
+        st.subheader("Análise de Dispersão de Janeiro")
+        df_jan = df_met[df_met['Data'].dt.month == 1]
+        if not df_jan.empty:
+            df_jan['Erro_Abs'] = df_jan.apply(lambda r: max([abs(valor_num(r[c])) for c in ['cn', 'cp', 'ci'] if valor_num(r[c]) is not None] or [0]), axis=1)
+            fig_jan = px.scatter(df_jan, x='Data', y='Erro_Abs', color='Bancada', size='Erro_Abs', hover_data=['serie', 'pos'], title="Dispersão de Erros Máximos - Janeiro")
+            fig_jan.update_layout(template="plotly_dark")
+            st.plotly_chart(fig_jan, use_container_width=True)
+        else:
+            st.info("Sem dados para o mês de Janeiro.")
 
 # =======================================================================
 # [FIM DO BLOCO ISOLADO]
