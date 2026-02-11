@@ -40,20 +40,37 @@ MAPA_BANCADA_SERIE = {
 @st.cache_data(ttl=600)
 def carregar_tabela_mestra_sheets():
     """Carrega a tabela de calibração do IPEM a partir do Google Sheets."""
+    sheet_id = "1kcN5lUZ14hwFyQMdrsFbMxjpALI4x6yd2AMCMq_who8"
+    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv"
+    
     try:
-        # Link fornecido pelo usuário convertido para exportação CSV
-        sheet_id = "1kcN5lUZ14hwFyQMdrsFbMxjpALI4x6yd2AMCMq_who8"
-        url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv"
+        # Tenta ler o CSV do Google Sheets
         df = pd.read_csv(url)
         
+        # Validação mínima das colunas necessárias
+        cols_needed = ['Serie_Bancada', 'Posicao', 'Erro_Sistematico_Pct']
+        if not all(c in df.columns for c in cols_needed):
+            st.error(f"A planilha do Sheets precisa ter as colunas: {', '.join(cols_needed)}")
+            return None
+
         # Agrupa para obter o resumo necessário
         df_resumo = df.groupby(['Serie_Bancada', 'Posicao']).agg({
             'Erro_Sistematico_Pct': 'mean',
-            'Incerteza_U_Pct': 'mean'
+            'Incerteza_U_Pct': 'mean' if 'Incerteza_U_Pct' in df.columns else 'first'
         }).reset_index()
         return df_resumo
     except Exception as e:
-        st.error(f"Erro ao carregar Tabela Mestra do Sheets: {e}")
+        if "401" in str(e) or "Unauthorized" in str(e):
+            st.error("🔒 **Erro de Acesso (401):** A planilha da Tabela Mestra não está pública.")
+            st.info("""
+            **Como resolver:**
+            1. Abra a planilha no Google Drive.
+            2. Clique no botão **Compartilhar** (canto superior direito).
+            3. Em 'Acesso Geral', mude de 'Restrito' para **'Qualquer pessoa com o link'**.
+            4. Certifique-se de que a permissão é de **'Leitor'**.
+            """)
+        else:
+            st.error(f"Erro ao carregar Tabela Mestra: {e}")
         return None
 
 def processar_metrologia_isolada(row, df_mestra=None, classe_banc20=None):
@@ -117,8 +134,7 @@ def pagina_metrologia_avancada(df_completo):
     df_mestra = carregar_tabela_mestra_sheets()
     
     if df_mestra is None:
-        st.error("Erro ao carregar a Tabela Mestra do Google Sheets.")
-        return
+        return # Erro já mostrado na função de carregamento
     
     tabs = st.tabs(["📈 Cartas de Controle", "⚠️ Guardband", "🏭 Inteligência Fabricante"])
     with tabs[0]:
