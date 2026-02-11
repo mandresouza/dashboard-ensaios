@@ -751,13 +751,14 @@ def main():
             paginas = {
                 'Visão Diária': pagina_visao_diaria,
                 'Visão Mensal': pagina_visao_mensal,
-                'Análise de Posições': pagina_analise_posicoes
+                'Análise de Posições': pagina_analise_posicoes,
+                'Controle Metrológico das Bancadas': pagina_controle_metrologico_bancadas
             }
             escolha = st.sidebar.radio("Escolha a análise:", tuple(paginas.keys()))
-            
+                        
             pagina_selecionada = paginas[escolha]
             pagina_selecionada(df_completo)
-
+            
         else:
             st.error("Erro ao carregar dados. Verifique a conexão com o Google Sheets.")
     except Exception as e:
