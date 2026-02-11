@@ -16,7 +16,7 @@ st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
 # [BLOCO 02] - CARREGAMENTO DE DADOS
-@st.cache_data(ttl=600)
+@st.cache_DATA(ttl=600)
 def carregar_dados():
     try:
         sheet_id = "1QxZ7bCSBClsmXLG1JOrFKNkMWZMK3P5Sp4LP81HV3Rs"
@@ -27,13 +27,13 @@ def carregar_dados():
         df_banc20 = pd.read_csv(url_banc20)
         df_banc20['Bancada_Nome'] = 'BANC_20_POS'
         df_completo = pd.concat([df_banc10, df_banc20], ignore_index=True)
-        df_completo['Data_dt'] = pd.to_datetime(df_completo['Data'], errors='coerce', dayfirst=True)
-        df_completo = df_completo.dropna(subset=['Data_dt'])
-        df_completo['Data'] = df_completo['Data_dt'].dt.strftime('%d/%m/%y')
+        df_completo['DATA_dt'] = pd.to_datetime(df_completo['DATA'], errors='coerce', dayfirst=True)
+        df_completo = df_completo.dropna(subset=['DATA_dt'])
+        df_completo['DATA'] = df_completo['DATA_dt'].dt.strftime('%d/%m/%y')
         return df_completo
     except Exception as e:
         st.error(f"ERRO AO ACESSAR GOOGLE SHEETS: {e}")
-        return pd.DataFrame()
+        return pd.DATAFrame()
         
 # [BLOCO 03] - FUNÇÕES AUXILIARES
 def valor_num(v):
@@ -58,8 +58,8 @@ def to_excel(df):
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Relatorio')
-    processed_data = output.getvalue()
-    return processed_data
+    processed_DATA = output.getvalue()
+    return processed_DATA
 
 # [BLOCO 04] - PROCESSAMENTO TÉCNICO
 def processar_ensaio(row, classe_banc20=None):
@@ -176,7 +176,7 @@ def renderizar_grafico_reprovacoes(medidores):
         for parte in partes:
             contagem[parte] = contagem.get(parte, 0) + 1
             
-    df_motivos = pd.DataFrame(list(contagem.items()), columns=['Motivo', 'Quantidade']).sort_values('Quantidade', ascending=True)
+    df_motivos = pd.DATAFrame(list(contagem.items()), columns=['Motivo', 'Quantidade']).sort_values('Quantidade', ascending=True)
     
     fig = px.bar(df_motivos, x='Quantidade', y='Motivo', orientation='h', title='<b>Principais Motivos de Reprovação</b>', text='Quantidade', color_discrete_sequence=px.colors.qualitative.Pastel)
     fig.update_layout(yaxis_title=None, xaxis_title="Número de Medidores", showlegend=False, margin=dict(l=10, r=10, t=40, b=10), height=250)
@@ -284,25 +284,25 @@ def pagina_visao_diaria(df_completo):
                     medidores_do_ensaio = processar_ensaio(ensaio_row)
                     for medidor in medidores_do_ensaio:
                         if termo_busca in medidor['serie'].lower():
-                            resultados_encontrados.append({"data": ensaio_row['Data'], "bancada": ensaio_row['Bancada_Nome'], "dados": medidor})
+                            resultados_encontrados.append({"DATA": ensaio_row['DATA'], "bancada": ensaio_row['Bancada_Nome'], "dados": medidor})
             
             if resultados_encontrados:
                 st.success(f"Encontrado(s) {len(resultados_encontrados)} registro(s) para este medidor.")
                 st.markdown(f"""
-                - **Primeiro Ensaio:** {resultados_encontrados[0]['data']}
-                - **Último Ensaio:** {resultados_encontrados[-1]['data']}
+                - **Primeiro Ensaio:** {resultados_encontrados[0]['DATA']}
+                - **Último Ensaio:** {resultados_encontrados[-1]['DATA']}
                 """)
-                for res in sorted(resultados_encontrados, key=lambda x: datetime.strptime(x['data'], '%d/%m/%y'), reverse=True):
-                    with st.expander(f"📍 **{res['data']}** | {res['bancada']} | Status: **{res['dados']['status']}**", expanded=False):
+                for res in sorted(resultados_encontrados, key=lambda x: datetime.strptime(x['DATA'], '%d/%m/%y'), reverse=True):
+                    with st.expander(f"📍 **{res['DATA']}** | {res['bancada']} | Status: **{res['dados']['status']}**", expanded=False):
                         renderizar_card(res['dados'])
             else:
                 st.warning(f"Nenhum registro encontrado para a série '{serie_input}'.")
 
     else:
-        # Lógica de relatório por data
-        if "filtro_data" not in st.session_state:
-            data_hoje = datetime.now() - pd.Timedelta(hours=3)
-            st.session_state.filtro_data = data_hoje.date()
+        # Lógica de relatório por DATA
+        if "filtro_DATA" not in st.session_state:
+            DATA_hoje = datetime.now() - pd.Timedelta(hours=3)
+            st.session_state.filtro_DATA = DATA_hoje.date()
         if "filtro_bancada" not in st.session_state:
             st.session_state.filtro_bancada = 'Todas'
         if "filtro_status" not in st.session_state:
@@ -310,7 +310,7 @@ def pagina_visao_diaria(df_completo):
         if "filtro_irregularidade" not in st.session_state:
             st.session_state.filtro_irregularidade = []
 
-        st.session_state.filtro_data = st.sidebar.date_input("Data do Ensaio", value=st.session_state.filtro_data, format="DD/MM/YYYY")
+        st.session_state.filtro_DATA = st.sidebar.date_input("DATA do Ensaio", value=st.session_state.filtro_DATA, format="DD/MM/YYYY")
         bancadas_disponiveis = df_completo['Bancada_Nome'].unique().tolist()
         st.session_state.filtro_bancada = st.sidebar.selectbox("Bancada", options=['Todas'] + bancadas_disponiveis, index=0 if st.session_state.filtro_bancada == 'Todas' else bancadas_disponiveis.index(st.session_state.filtro_bancada) + 1)
         
@@ -323,18 +323,18 @@ def pagina_visao_diaria(df_completo):
         else:
             st.session_state.filtro_irregularidade = []
 
-        if not st.session_state.filtro_data:
-            st.warning("Por favor, selecione uma data.")
+        if not st.session_state.filtro_DATA:
+            st.warning("Por favor, selecione uma DATA.")
             return
             
-        st.markdown(f"### 📅 Relatório de Ensaios Realizados em: **{st.session_state.filtro_data.strftime('%d/%m/%Y')}**")
+        st.markdown(f"### 📅 Relatório de Ensaios Realizados em: **{st.session_state.filtro_DATA.strftime('%d/%m/%Y')}**")
         
-        df_filtrado_dia = df_completo[df_completo['Data_dt'].dt.date == st.session_state.filtro_data].copy()
+        df_filtrado_dia = df_completo[df_completo['DATA_dt'].dt.date == st.session_state.filtro_DATA].copy()
         if st.session_state.filtro_bancada != 'Todas': 
             df_filtrado_dia = df_filtrado_dia[df_filtrado_dia['Bancada_Nome'] == st.session_state.filtro_bancada]
 
         if df_filtrado_dia.empty:
-            st.info(f"Não constam ensaios registrados para o dia {st.session_state.filtro_data.strftime('%d/%m/%Y')}.")
+            st.info(f"Não constam ensaios registrados para o dia {st.session_state.filtro_DATA.strftime('%d/%m/%Y')}.")
             return
 
         ensaios_do_dia = []
@@ -367,12 +367,12 @@ def pagina_visao_diaria(df_completo):
             with col_down:
                 st.write("")
                 st.write("")
-                pdf_bytes = gerar_pdf_relatorio(ensaios=ensaios_do_dia, data=st.session_state.filtro_data.strftime('%d/%m/%Y'), stats=stats)
-                st.download_button(label="📥 Baixar Relatório PDF", data=pdf_bytes, file_name=f"Relatorio_{st.session_state.filtro_data.strftime('%Y%m%d')}.pdf", mime="application/pdf")
+                pdf_bytes = gerar_pdf_relatorio(ensaios=ensaios_do_dia, DATA=st.session_state.filtro_DATA.strftime('%d/%m/%Y'), stats=stats)
+                st.download_button(label="📥 Baixar Relatório PDF", DATA=pdf_bytes, file_name=f"Relatorio_{st.session_state.filtro_DATA.strftime('%Y%m%d')}.pdf", mime="application/pdf")
                 
-                df_export = pd.DataFrame(todos_medidores_visiveis)
+                df_export = pd.DATAFrame(todos_medidores_visiveis)
                 excel_bytes = to_excel(df_export)
-                st.download_button(label="📥 Baixar Dados em Excel", data=excel_bytes, file_name=f"Dados_{st.session_state.filtro_data.strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                st.download_button(label="📥 Baixar Dados em Excel", DATA=excel_bytes, file_name=f"Dados_{st.session_state.filtro_DATA.strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
             st.markdown("---")
             st.subheader("📋 Detalhes dos Ensaios")
@@ -392,7 +392,7 @@ def pagina_visao_diaria(df_completo):
 # [BLOCO 07] - PÁGINA: VISÃO MENSAL
 def get_stats_por_dia(df_mes):
     daily_stats = []
-    for data, group in df_mes.groupby('Data_dt'):
+    for DATA, group in df_mes.groupby('DATA_dt'):
         medidores = []
         for _, row in group.iterrows(): 
             medidores.extend(processar_ensaio(row, 'B'))
@@ -405,14 +405,14 @@ def get_stats_por_dia(df_mes):
         taxa_aprovacao = (aprovados / total_ensaiados * 100) if total_ensaiados > 0 else 0
         
         daily_stats.append({
-            'Data': data, 
+            'DATA': DATA, 
             'Aprovados': aprovados, 
             'Reprovados': reprovados, 
             'Contra Consumidor': consumidor,
             'Total': total_ensaiados,
             'Taxa de Aprovação (%)': round(taxa_aprovacao, 1)
         })
-    return pd.DataFrame(daily_stats)
+    return pd.DATAFrame(daily_stats)
 
 def pagina_visao_mensal(df_completo):
     # --- INÍCIO DO CÓDIGO DO BOTÃO "VOLTAR AO TOPO" ---
@@ -447,7 +447,7 @@ def pagina_visao_mensal(df_completo):
     # --- FIM DO CÓDIGO DO BOTÃO "VOLTAR AO TOPO" ---
 
     st.sidebar.header("📅 Filtros Mensais")
-    anos = sorted(df_completo['Data_dt'].dt.year.unique(), reverse=True)
+    anos = sorted(df_completo['DATA_dt'].dt.year.unique(), reverse=True)
     meses_dict = {1: 'Janeiro', 2: 'Fevereiro', 3: 'Março', 4: 'Abril', 5: 'Maio', 6: 'Junho', 7: 'Julho', 8: 'Agosto', 9: 'Setembro', 10: 'Outubro', 11: 'Novembro', 12: 'Dezembro'}
     
     col_filt1, col_filt2 = st.sidebar.columns(2)
@@ -456,7 +456,7 @@ def pagina_visao_mensal(df_completo):
     with col_filt2:
         mes_selecionado_num = st.selectbox("Mês", options=list(meses_dict.keys()), format_func=lambda x: meses_dict[x])
     
-    df_mes = df_completo[(df_completo['Data_dt'].dt.year == ano_selecionado) & (df_completo['Data_dt'].dt.month == mes_selecionado_num)]
+    df_mes = df_completo[(df_completo['DATA_dt'].dt.year == ano_selecionado) & (df_completo['DATA_dt'].dt.month == mes_selecionado_num)]
     
     st.markdown(f"## 📈 Análise Consolidada: {meses_dict[mes_selecionado_num]} / {ano_selecionado}")
     # ===== MÉDIA DE TEMPERATURA DO MÊS =====
@@ -512,7 +512,7 @@ def pagina_visao_mensal(df_completo):
         col_g1, col_g2 = st.columns([1, 1.5])
         
         with col_g1:
-            df_pie = pd.DataFrame({'Status': ['Aprovados', 'Reprovados', 'Contra Consumidor'], 'Qtd': [aprov_m, repro_m, cons_m]})
+            df_pie = pd.DATAFrame({'Status': ['Aprovados', 'Reprovados', 'Contra Consumidor'], 'Qtd': [aprov_m, repro_m, cons_m]})
             fig_donut = px.pie(df_pie, values='Qtd', names='Status', hole=.5, title='<b>Distribuição de Qualidade</b>', color_discrete_map={'Aprovados':'#16a34a', 'Reprovados':'#dc2626', 'Contra Consumidor':'#7c3aed'})
             fig_donut.update_traces(textposition='inside', textinfo='percent+label')
             fig_donut.update_layout(showlegend=False, margin=dict(t=40, b=0, l=0, r=0))
@@ -521,9 +521,9 @@ def pagina_visao_mensal(df_completo):
         with col_g2:
             df_daily = get_stats_por_dia(df_mes)
             fig_bar = go.Figure()
-            fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Aprovados'], name='Aprovados', marker_color='#16a34a'))
-            fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Reprovados'], name='Reprovados', marker_color='#dc2626'))
-            fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Contra Consumidor'], name='Contra Consumidor', marker_color='#7c3aed'))
+            fig_bar.add_trace(go.Bar(x=df_daily['DATA'], y=df_daily['Aprovados'], name='Aprovados', marker_color='#16a34a'))
+            fig_bar.add_trace(go.Bar(x=df_daily['DATA'], y=df_daily['Reprovados'], name='Reprovados', marker_color='#dc2626'))
+            fig_bar.add_trace(go.Bar(x=df_daily['DATA'], y=df_daily['Contra Consumidor'], name='Contra Consumidor', marker_color='#7c3aed'))
             
             fig_bar.update_layout(barmode='stack', title='<b>Evolução Diária de Ensaios</b>', xaxis_title="Dia do Mês", yaxis_title="Quantidade de Medidores", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), margin=dict(t=80, b=40, l=0, r=0), hovermode="x unified")
             st.plotly_chart(fig_bar, use_container_width=True)
@@ -531,13 +531,13 @@ def pagina_visao_mensal(df_completo):
         st.markdown("---")
         st.subheader("Tendência da Taxa de Aprovação")
         if not df_daily.empty:
-            fig_line = px.line(df_daily, x='Data', y='Taxa de Aprovação (%)', title='<b>Evolução da Taxa de Aprovação ao Longo do Mês</b>', markers=True, text='Taxa de Aprovação (%)')
+            fig_line = px.line(df_daily, x='DATA', y='Taxa de Aprovação (%)', title='<b>Evolução da Taxa de Aprovação ao Longo do Mês</b>', markers=True, text='Taxa de Aprovação (%)')
             fig_line.update_traces(textposition="top center")
             fig_line.update_layout(yaxis=dict(range=[0, 110]), yaxis_title="Taxa de Aprovação (%)", xaxis_title="Dia do Mês")
             st.plotly_chart(fig_line, use_container_width=True)
             
         with st.expander("📄 Visualizar Tabela de Performance Diária"):
-            st.dataframe(df_daily.sort_values('Data', ascending=False), use_container_width=True, hide_index=True)
+            st.DATAframe(df_daily.sort_values('DATA', ascending=False), use_container_width=True, hide_index=True)
             
 # [BLOCO 08] - PÁGINA: ANÁLISE DE POSIÇÕES (MAPA DE CALOR)
 def pagina_analise_posicoes(df_completo):
@@ -587,10 +587,10 @@ def pagina_analise_posicoes(df_completo):
         key='heatmap_bancadas'
     )
     
-    min_date = df_completo['Data_dt'].min().date()
-    max_date = df_completo['Data_dt'].max().date()
+    min_date = df_completo['DATA_dt'].min().date()
+    max_date = df_completo['DATA_dt'].max().date()
     
-    data_inicio, data_fim = st.sidebar.date_input(
+    DATA_inicio, DATA_fim = st.sidebar.date_input(
         "Selecione o Período",
         value=(max_date - pd.Timedelta(days=30), max_date),
         min_value=min_date,
@@ -598,8 +598,8 @@ def pagina_analise_posicoes(df_completo):
         key='heatmap_periodo'
     )
 
-    if not data_inicio or not data_fim or data_inicio > data_fim:
-        st.warning("Por favor, selecione um período de datas válido.")
+    if not DATA_inicio or not DATA_fim or DATA_inicio > DATA_fim:
+        st.warning("Por favor, selecione um período de DATAs válido.")
         return
         
     if not bancadas_selecionadas:
@@ -613,8 +613,8 @@ def pagina_analise_posicoes(df_completo):
         with st.spinner(f"Processando dados para a {bancada.replace('_', ' ')}..."):
             df_filtrado = df_completo[
                 (df_completo['Bancada_Nome'] == bancada) &
-                (df_completo['Data_dt'].dt.date >= data_inicio) &
-                (df_completo['Data_dt'].dt.date <= data_fim)
+                (df_completo['DATA_dt'].dt.date >= DATA_inicio) &
+                (df_completo['DATA_dt'].dt.date <= DATA_fim)
             ]
 
             if df_filtrado.empty:
@@ -628,7 +628,7 @@ def pagina_analise_posicoes(df_completo):
                     if medidor['status'] == 'REPROVADO' and 'Exatidão' in medidor['motivo']:
                         for erro_tipo in medidor['erros_pontuais']:
                             reprovacoes_detalhadas.append({
-                                'Data': row['Data'],
+                                'DATA': row['DATA'],
                                 'Ensaio #': row.get('N_ENSAIO', 'N/A'),
                                 'Posição': medidor['pos'],
                                 'Série': medidor['serie'],
@@ -642,26 +642,26 @@ def pagina_analise_posicoes(df_completo):
                 st.success(f"🎉 Excelente! Nenhuma reprovação por exatidão encontrada na {bancada.replace('_', ' ')} para os filtros selecionados.")
                 continue
 
-            df_reprovacoes = pd.DataFrame(reprovacoes_detalhadas)
+            df_reprovacoes = pd.DATAFrame(reprovacoes_detalhadas)
             
-            heatmap_data = df_reprovacoes.pivot_table(index='Posição', columns='Ponto do Erro', aggfunc='size', fill_value=0)
+            heatmap_DATA = df_reprovacoes.pivot_table(index='Posição', columns='Ponto do Erro', aggfunc='size', fill_value=0)
             for ponto in ['CN', 'CP', 'CI']:
-                if ponto not in heatmap_data.columns:
-                    heatmap_data[ponto] = 0
-            heatmap_data = heatmap_data[['CN', 'CP', 'CI']]
+                if ponto not in heatmap_DATA.columns:
+                    heatmap_DATA[ponto] = 0
+            heatmap_DATA = heatmap_DATA[['CN', 'CP', 'CI']]
 
-            fig = go.Figure(data=go.Heatmap(z=heatmap_data.values, x=heatmap_data.columns, y=[f"Posição {i}" for i in heatmap_data.index], colorscale='Reds', hoverongaps=False, text=heatmap_data.values, texttemplate="%{text}", showscale=True))
+            fig = go.Figure(DATA=go.Heatmap(z=heatmap_DATA.values, x=heatmap_DATA.columns, y=[f"Posição {i}" for i in heatmap_DATA.index], colorscale='Reds', hoverongaps=False, text=heatmap_DATA.values, texttemplate="%{text}", showscale=True))
             fig.update_layout(title=f'<b>Mapa de Calor de Reprovações - {bancada.replace("_", " ")}</b>', xaxis_title="Ponto de Medição", yaxis_title="Posição na Bancada", yaxis=dict(autorange='reversed'), height=600)
             st.plotly_chart(fig, use_container_width=True)
             
             with st.expander(f"📄 Detalhes dos {len(df_reprovacoes)} Medidores Reprovados na {bancada.replace('_', ' ')} (Clique para expandir)"):
-                st.dataframe(df_reprovacoes[['Data', 'Ensaio #', 'Posição', 'Série', 'Ponto do Erro', 'Valor CN', 'Valor CP', 'Valor CI']], use_container_width=True, hide_index=True)
+                st.DATAframe(df_reprovacoes[['DATA', 'Ensaio #', 'Posição', 'Série', 'Ponto do Erro', 'Valor CN', 'Valor CP', 'Valor CI']], use_container_width=True, hide_index=True)
                 
                 excel_bytes_reprovacoes = to_excel(df_reprovacoes)
                 st.download_button(
                     label=f"📥 Baixar detalhes da {bancada.replace('_', ' ')} em Excel",
-                    data=excel_bytes_reprovacoes,
-                    file_name=f"Detalhes_Reprovacoes_{bancada}_{data_inicio.strftime('%Y%m%d')}-{data_fim.strftime('%Y%m%d')}.xlsx",
+                    DATA=excel_bytes_reprovacoes,
+                    file_name=f"Detalhes_Reprovacoes_{bancada}_{DATA_inicio.strftime('%Y%m%d')}-{DATA_fim.strftime('%Y%m%d')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
 
@@ -683,7 +683,7 @@ def pagina_controle_metrologico_bancadas(df_completo):
 
         # Filtrar dados da bancada
         df_bancada = df_completo[df_completo['BANCADA'] == bancada].copy()
-        df_bancada.sort_values(by='Data_dt', inplace=True)
+        df_bancada.sort_values(by='DATA_dt', inplace=True)
 
         # Colunas de erro para análise
         col_erros = ['CN', 'CP', 'CI']  # ajuste se tiver outros nomes
@@ -700,7 +700,7 @@ def pagina_controle_metrologico_bancadas(df_completo):
             # Criar gráfico de controle com Plotly
             fig = go.Figure()
             fig.add_trace(go.Scatter(
-                x=df_bancada['Data_dt'],
+                x=df_bancada['DATA_dt'],
                 y=df_bancada[erro],
                 mode='lines+markers',
                 name=f'Erro {erro}',
@@ -712,7 +712,7 @@ def pagina_controle_metrologico_bancadas(df_completo):
 
             fig.update_layout(
                 title=f"Gráfico de Controle - {erro}",
-                xaxis_title="Data do Ensaio",
+                xaxis_title="DATA do Ensaio",
                 yaxis_title=f"Erro {erro} (%)",
                 height=400
             )
@@ -727,20 +727,20 @@ def main():
         df_completo = carregar_dados()
         if not df_completo.empty:
             # --- INÍCIO DA NOVA FUNCIONALIDADE ---
-            # Cria duas colunas: uma para o título, outra para a data
-            col_titulo, col_data = st.columns([3, 1])
+            # Cria duas colunas: uma para o título, outra para a DATA
+            col_titulo, col_DATA = st.columns([3, 1])
 
             with col_titulo:
                 st.title("📊 Dashboard de Ensaios")
 
-            with col_data:
-                # Encontra a data mais recente no DataFrame
-                ultima_data = df_completo['Data_dt'].max()
+            with col_DATA:
+                # Encontra a DATA mais recente no DATAFrame
+                ultima_DATA = df_completo['DATA_dt'].max()
                 # Usa HTML para alinhar o texto à direita e estilizar
                 st.markdown(
                     f"""
                     <div style="text-align: right; padding-top: 15px;">
-                        <span style="font-size: 0.9em; color: #64748b;">Último ensaio: <strong>{ultima_data.strftime('%d/%m/%Y')}</strong></span>
+                        <span style="font-size: 0.9em; color: #64748b;">Último ensaio: <strong>{ultima_DATA.strftime('%d/%m/%Y')}</strong></span>
                     </div>
                     """,
                     unsafe_allow_html=True
