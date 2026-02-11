@@ -545,8 +545,15 @@ def pagina_visao_diaria(df_completo):
             st.info("Nenhum medidor encontrado para os filtros selecionados.")
             
 # =========================================================
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO COMPLETA CORRIGIDA)
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO FINAL LIMPA)
 # =========================================================
+
+# ✔ Taxa mensal correta
+# ✔ Não ensaiados corretos
+# ✔ Tendência diária correta
+# ✔ Temperatura média do mês exibida abaixo das métricas
+# ✔ Removida redundância de média mensal de aprovação
+
 
 def get_stats_por_dia(df_mes):
     daily_stats = []
@@ -561,10 +568,7 @@ def get_stats_por_dia(df_mes):
         consumidor = sum(1 for m in medidores if m['status'] == 'CONTRA O CONSUMIDOR')
         nao_ensaiados = sum(1 for m in medidores if m['status'] == 'Não Ligou / Não Ensaido')
 
-        # TOTAL REAL DE ENSAIADOS (somente os válidos)
         total_ensaiados = aprovados + reprovados + consumidor
-
-        # TAXA DE APROVAÇÃO REAL
         taxa_aprovacao = (aprovados / total_ensaiados * 100) if total_ensaiados > 0 else 0
 
         daily_stats.append({
@@ -654,22 +658,27 @@ def pagina_visao_mensal(df_completo):
     taxa_m = (aprov_m / total_m * 100) if total_m > 0 else 0
 
     # ==============================
-    # DADOS DIÁRIOS (ANTES DOS CARDS)
+    # DADOS DIÁRIOS
     # ==============================
     df_daily = get_stats_por_dia(df_mes)
-    media_taxa_mensal = df_daily['Taxa de Aprovação (%)'].mean() if not df_daily.empty else 0
 
     # ==============================
-    # CARDS DE MÉTRICAS
+    # MÉTRICAS PRINCIPAIS
     # ==============================
-    col_m1, col_m2, col_m3, col_m4, col_m5, col_m6 = st.columns(6)
+    col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
 
     col_m1.metric("Total Ensaiados", f"{total_m:,.0f}".replace(",", "."))
     col_m2.metric("Taxa de Aprovação", f"{taxa_m:.1f}%", delta=f"{taxa_m-95:.1f}% vs Meta (95%)" if taxa_m > 0 else None)
-    col_m3.metric("Média Mensal de Aprovação", f"{media_taxa_mensal:.1f}%")
-    col_m4.metric("Total Reprovados", f"{repro_m:,.0f}".replace(",", "."), delta=repro_m, delta_color="inverse")
-    col_m5.metric("Contra Consumidor", f"{cons_m:,.0f}".replace(",", "."), delta=cons_m, delta_color="inverse")
-    col_m6.metric("Não Ensaidos", f"{nao_ensaiados_m:,.0f}".replace(",", "."))
+    col_m3.metric("Total Reprovados", f"{repro_m:,.0f}".replace(",", "."), delta=repro_m, delta_color="inverse")
+    col_m4.metric("Contra Consumidor", f"{cons_m:,.0f}".replace(",", "."), delta=cons_m, delta_color="inverse")
+    col_m5.metric("Não Ensaidos", f"{nao_ensaiados_m:,.0f}".replace(",", "."))
+
+    # ==============================
+    # TEMPERATURA MÉDIA DO MÊS
+    # ==============================
+    if 'Temperatura' in df_mes.columns:
+        temp_media = df_mes['Temperatura'].mean()
+        st.metric("🌡️ Temperatura Média do Mês", f"{temp_media:.1f} °C")
 
     st.markdown("---")
 
