@@ -665,61 +665,135 @@ def pagina_analise_posicoes(df_completo):
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
 
-# [BLOCO 09] - CONTROLE METROLÓGICO DAS BANCADAS
-import pandas as pd
+# =========================================================
+# [BLOCO 09] - INICIALIZAÇÃO, MENU E CONTROLE METROLÓGICO
+# =========================================================
 import streamlit as st
-import plotly.graph_objects as go
+import pandas as pd
+import traceback
 
+# Função para carregar dados da planilha mestre do IPEM
+@st.cache_data(ttl=600)
+def carregar_dados():
+    try:
+        # Caminho da planilha no seu driver
+        df = pd.read_excel("Tabela_Mestra_Calibracao_IPEM.xlsx")
+        # Padronizar nomes de colunas para evitar KeyErrors
+        df.columns = df.columns.str.strip().str.upper()
+        # Converter coluna de datas para datetime
+        if 'DATA' in df.columns:
+            df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce')
+        return df
+    except Exception as e:
+        st.error("Erro ao carregar dados da planilha.")
+        st.code(traceback.format_exc())
+        return pd.DataFrame()
+
+# =========================================================
+# Função da aba Controle Metrológico das Bancadas
+# =========================================================
 def pagina_controle_metrologico_bancadas(df_completo):
-    st.title("Controle Metrológico das Bancadas 🧪")
-    st.markdown("---")
+    st.subheader("Controle Metrológico das Bancadas 🧪")
+    
+    # Texto explicativo
+    st.markdown("""
+    Esta aba tem como objetivo **monitorar a estabilidade e desempenho das bancadas** do laboratório.
+    - Permite identificar desvios antes que medidores bons sejam reprovados.
+    - Ajuda na manutenção preventiva e calibração correta.
+    - Fornece inteligência sobre a performance por bancada.
+    """)
 
-    # Identificar as bancadas existentes
-    df_completo.columns = df_completo.columns.str.strip().str.upper()
+    # Verifica se existem as colunas necessárias
+    if 'BANCADA' not in df_completo.columns or 'DATA' not in df_completo.columns:
+        st.error("Colunas 'BANCADA' ou 'DATA' não encontradas na planilha.")
+        st.write("Colunas disponíveis:", df_completo.columns)
+        return
+
+    # Identificação automática das bancadas
     bancadas = df_completo['BANCADA'].unique()
-        
+    st.write("Bancadas encontradas:", bancadas)
+
     for bancada in bancadas:
-        st.subheader(f"Bancada: {bancada}")
+        st.markdown(f"### Bancada: {bancada}")
 
-        # Filtrar dados da bancada
+        # Filtra somente os ensaios da bancada
         df_bancada = df_completo[df_completo['BANCADA'] == bancada].copy()
-        df_bancada.sort_values(by='DATA_dt', inplace=True)
+        df_bancada.sort_values(by='DATA', inplace=True)
 
-        # Colunas de erro para análise
-        col_erros = ['CN', 'CP', 'CI']  # ajuste se tiver outros nomes
-        for erro in col_erros:
-            if erro not in df_bancada.columns:
-                continue  # pula se a coluna não existir
-            
-            # Calcular média e desvio padrão
-            media = df_bancada[erro].mean()
-            desvio = df_bancada[erro].std()
-            LSC = media + 3 * desvio
-            LIC = media - 3 * desvio
+        # Exibição de tabela resumida
+        st.dataframe(df_bancada[['N_ENSAIO', 'DATA', 'RESULTADO']])
 
-            # Criar gráfico de controle com Plotly
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=df_bancada['DATA_dt'],
-                y=df_bancada[erro],
-                mode='lines+markers',
-                name=f'Erro {erro}',
-                line=dict(color='blue')
-            ))
-            fig.add_hline(y=media, line_dash="dash", line_color="green", annotation_text="Média", annotation_position="top left")
-            fig.add_hline(y=LSC, line_dash="dot", line_color="red", annotation_text="LSC", annotation_position="top left")
-            fig.add_hline(y=LIC, line_dash="dot", line_color="red", annotation_text="LIC", annotation_position="bottom left")
+        # Texto explicativo sobre gráficos
+        st.markdown("""
+        **Visualização do Desempenho:**  
+        O gráfico abaixo mostra a **deriva dos erros** (CN, CP, CI) ao longo do tempo para esta bancada.
+        Isso é equivalente a uma **Carta de Controle de Shewhart**, permitindo identificar tendências de desvios.
+        """)
 
-            fig.update_layout(
-                title=f"Gráfico de Controle - {erro}",
-                xaxis_title="DATA do Ensaio",
-                yaxis_title=f"Erro {erro} (%)",
-                height=400
-            )
+        # Se existir coluna de erro, exibe gráfico de linha
+        if 'ERRO' in df_bancada.columns:
+            st.line_chart(df_bancada[['DATA', 'ERRO']].set_index('DATA'))
 
-            st.plotly_chart(fig, use_container_width=True)
+        # Alertas de "quase reprovado"
+        if 'ERRO' in df_bancada.columns and 'LIMITE' in df_bancada.columns:
+            df_alerta = df_bancada[(df_bancada['ERRO'] >= 0.8*df_bancada['LIMITE']) & (df_bancada['ERRO'] < df_bancada['LIMITE'])]
+            if not df_alerta.empty:
+                st.warning(f"⚠️ Medidores próximos do limite encontrados na bancada {bancada}:")
+                st.dataframe(df_alerta[['N_ENSAIO', 'DATA', 'ERRO', 'LIMITE']])
+            else:
+                st.success("✅ Nenhum medidor próximo do limite.")
 
-    st.success("✅ Monitoramento metrológico atualizado.")
+    # Observações finais com ícones
+    st.markdown("""
+    ---
+    **Notas:**
+    - 🧪 Monitoramento contínuo das bancadas evita falhas de calibração.
+    - 📈 Cartas de Controle permitem detectar tendências antes de ocorrências críticas.
+    - ⚠️ Alertas de zona crítica (quase reprovados) ajudam na **qualidade e segurança jurídica**.
+    """)
+
+# =========================================================
+# Função main com menu
+# =========================================================
+def main():
+    try:
+        df_completo = carregar_dados()
+        if not df_completo.empty:
+            # --- Cabeçalho ---
+            col_titulo, col_data = st.columns([3, 1])
+            with col_titulo:
+                st.title("📊 Dashboard de Ensaios")
+            with col_data:
+                ultima_data = df_completo['DATA'].max() if 'DATA' in df_completo.columns else None
+                if ultima_data is not None:
+                    st.markdown(
+                        f"""
+                        <div style="text-align: right; padding-top: 15px;">
+                            <span style="font-size: 0.9em; color: #64748b;">
+                                Último ensaio: <strong>{ultima_data.strftime('%d/%m/%Y')}</strong>
+                            </span>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+            # --- Menu lateral ---
+            st.sidebar.title("Menu de Navegação")
+            paginas = {
+                'Visão Diária': pagina_visao_diaria,
+                'Visão Mensal': pagina_visao_mensal,
+                'Análise de Posições': pagina_analise_posicoes,
+                'Controle Metrológico das Bancadas': pagina_controle_metrologico_bancadas
+            }
+            escolha = st.sidebar.radio("Escolha a análise:", tuple(paginas.keys()))
+            pagina_selecionada = paginas[escolha]
+            pagina_selecionada(df_completo)
+
+        else:
+            st.error("Erro ao carregar dados. Verifique a planilha.")
+    except Exception as e:
+        st.error("Ocorreu um erro inesperado na aplicação.")
+        st.code(traceback.format_exc())
 
 # [BLOCO 10] - INICIALIZAÇÃO E MENU PRINCIPAL
 def main():
