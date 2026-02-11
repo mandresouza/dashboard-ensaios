@@ -620,7 +620,7 @@ def pagina_visao_mensal(df_completo):
         for _, row in df_mes.iterrows():
             todos_mes.extend(processar_ensaio(row))
         
-        total_m = len(todos_mes)
+        total_m = len(todos_mes) - nao_ensaiados_m
         aprov_m = sum(1 for m in todos_mes if m['status'] == 'APROVADO')
         repro_m = sum(1 for m in todos_mes if m['status'] == 'REPROVADO')
         cons_m = sum(1 for m in todos_mes if m['status'] == 'CONTRA O CONSUMIDOR')
