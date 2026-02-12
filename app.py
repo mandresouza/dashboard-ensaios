@@ -506,16 +506,15 @@ def renderizar_botao_scroll_topo():
     """
     st.components.v1.html(scroll_button_html, height=0)
 
-# =========================================================
-# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (RESTAURADO - SEM AUDITORIA)
-# =========================================================
-
+# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (ORIGINAL + AUDITORIA REAL)
 def pagina_visao_diaria(df_completo):
 
-    # --- BOTÃO VOLTAR AO TOPO ---
+    # --- INÍCIO DO CÓDIGO DO BOTÃO "VOLTAR AO TOPO" ---
     st.markdown('''
         <style>
-            .stApp { scroll-behavior: smooth; }
+            .stApp {
+                scroll-behavior: smooth;
+            }
             #scroll-to-top {
                 position: fixed;
                 bottom: 20px;
@@ -537,14 +536,15 @@ def pagina_visao_diaria(df_completo):
             }
         </style>
         <a id="top"></a>
-        <a href="#top" id="scroll-to-top"><b>^</b></a>
+        <a href="#top" id="scroll-to-top" title="Voltar ao topo"><b>^</b></a>
     ''', unsafe_allow_html=True)
+    # --- FIM DO CÓDIGO DO BOTÃO ---
 
     st.sidebar.header("🔍 Busca e Filtros")
 
-    # =====================================================
+    # ==============================
     # BUSCA POR SÉRIE
-    # =====================================================
+    # ==============================
     if "search_key" not in st.session_state:
         st.session_state.search_key = 0
 
@@ -553,7 +553,6 @@ def pagina_visao_diaria(df_completo):
         value="",
         key=f"busca_{st.session_state.search_key}"
     )
-
     termo_busca = serie_input.strip().lower()
 
     if termo_busca:
@@ -562,163 +561,134 @@ def pagina_visao_diaria(df_completo):
             st.rerun()
 
     if termo_busca:
-
         st.markdown(f"### 🔍 Histórico de Ensaios para a Série: **{serie_input}**")
 
-        resultados = []
+        resultados_encontrados = []
 
         for _, ensaio_row in df_completo.iterrows():
             colunas_serie = [c for c in ensaio_row.index if "_Série" in str(c)]
-            if any(termo_busca in str(ensaio_row[col]).lower() for col in colunas_serie if pd.notna(ensaio_row[col])):
-                medidores = processar_ensaio(ensaio_row)
-                for m in medidores:
-                    if termo_busca in m['serie'].lower():
-                        resultados.append({
+
+            if any(termo_busca in str(ensaio_row[col]).lower()
+                   for col in colunas_serie if pd.notna(ensaio_row[col])):
+
+                medidores_do_ensaio = processar_ensaio(ensaio_row)
+
+                for medidor in medidores_do_ensaio:
+                    if termo_busca in medidor['serie'].lower():
+                        resultados_encontrados.append({
                             "data": ensaio_row['Data'],
                             "bancada": ensaio_row['Bancada_Nome'],
-                            "dados": m
+                            "dados": medidor
                         })
 
-        if resultados:
-            st.success(f"{len(resultados)} registro(s) encontrado(s).")
+        if resultados_encontrados:
+            st.success(f"Encontrado(s) {len(resultados_encontrados)} registro(s).")
 
-            for res in sorted(resultados, key=lambda x: datetime.strptime(x['data'], '%d/%m/%y'), reverse=True):
-                with st.expander(f"{res['data']} | {res['bancada']} | {res['dados']['status']}"):
+            for res in sorted(
+                resultados_encontrados,
+                key=lambda x: datetime.strptime(x['data'], '%d/%m/%y'),
+                reverse=True
+            ):
+                with st.expander(
+                    f"{res['data']} | {res['bancada']} | {res['dados']['status']}"
+                ):
                     renderizar_card(res['dados'])
         else:
             st.warning("Nenhum registro encontrado.")
 
         return
 
-    # =====================================================
-    # FILTROS DO DIA
-    # =====================================================
+    # ==============================
+    # FILTROS DE DATA
+    # ==============================
     if "filtro_data" not in st.session_state:
-        st.session_state.filtro_data = (datetime.now() - pd.Timedelta(hours=3)).date()
-
-    if "filtro_bancada" not in st.session_state:
-        st.session_state.filtro_bancada = "Todas"
-
-    if "filtro_status" not in st.session_state:
-        st.session_state.filtro_status = []
-
-    if "filtro_irregularidade" not in st.session_state:
-        st.session_state.filtro_irregularidade = []
+        data_hoje = datetime.now() - pd.Timedelta(hours=3)
+        st.session_state.filtro_data = data_hoje.date()
 
     st.session_state.filtro_data = st.sidebar.date_input(
         "Data do Ensaio",
-        value=st.session_state.filtro_data,
-        format="DD/MM/YYYY"
+        value=st.session_state.filtro_data
     )
 
-    bancadas = df_completo['Bancada_Nome'].unique().tolist()
-    st.session_state.filtro_bancada = st.sidebar.selectbox(
-        "Bancada",
-        ['Todas'] + bancadas
+    st.markdown(
+        f"### 📅 Relatório de Ensaios: "
+        f"{st.session_state.filtro_data.strftime('%d/%m/%Y')}"
     )
 
-    status_options = ["APROVADO", "REPROVADO", "CONTRA O CONSUMIDOR", "Não Ligou / Não Ensaido"]
-    st.session_state.filtro_status = st.sidebar.multiselect(
-        "Filtrar Status",
-        status_options,
-        default=st.session_state.filtro_status
-    )
+    df_filtrado_dia = df_completo[
+        df_completo['Data_dt'].dt.date == st.session_state.filtro_data
+    ].copy()
 
-    if "REPROVADO" in st.session_state.filtro_status:
-        st.session_state.filtro_irregularidade = st.sidebar.multiselect(
-            "Filtrar Irregularidade",
-            ["Exatidão", "Registrador", "Mostrador/MV"],
-            default=st.session_state.filtro_irregularidade
-        )
-    else:
-        st.session_state.filtro_irregularidade = []
-
-    # =====================================================
-    # FILTRA DATA
-    # =====================================================
-    df_filtrado = df_completo[df_completo['Data_dt'].dt.date == st.session_state.filtro_data]
-
-    if st.session_state.filtro_bancada != "Todas":
-        df_filtrado = df_filtrado[df_filtrado['Bancada_Nome'] == st.session_state.filtro_bancada]
-
-    if df_filtrado.empty:
-        st.info("Nenhum ensaio neste dia.")
+    if df_filtrado_dia.empty:
+        st.info("Nenhum ensaio nesta data.")
         return
 
-    # =====================================================
-    # PROCESSA MEDIDORES
-    # =====================================================
-    ensaios = []
+    # ==============================
+    # PROCESSAR MEDIDORES
+    # ==============================
+    ensaios_do_dia = []
 
-    for _, row in df_filtrado.iterrows():
-        medidores = processar_ensaio(row)
+    for _, ensaio_row in df_filtrado_dia.iterrows():
+        medidores = processar_ensaio(ensaio_row)
 
-        medidores_filtrados = []
-        for m in medidores:
-            status_ok = not st.session_state.filtro_status or m['status'] in st.session_state.filtro_status
-            irr_ok = not st.session_state.filtro_irregularidade or any(i in m['motivo'] for i in st.session_state.filtro_irregularidade)
-            if status_ok and irr_ok:
-                medidores_filtrados.append(m)
-
-        if medidores_filtrados:
-            ensaios.append({
-                "n_ensaio": row.get("N_ENSAIO", "N/A"),
-                "bancada": row["Bancada_Nome"],
-                "temperatura": row.get("Temperatura", "--"),
-                "medidores": medidores_filtrados
+        if medidores:
+            ensaios_do_dia.append({
+                'n_ensaio': ensaio_row.get('N_ENSAIO', 'N/A'),
+                'bancada': ensaio_row['Bancada_Nome'],
+                'temperatura': ensaio_row.get('Temperatura', ''),
+                'medidores': medidores
             })
 
-    if not ensaios:
-        st.info("Nenhum medidor para os filtros.")
+    if not ensaios_do_dia:
+        st.info("Nenhum medidor encontrado.")
         return
 
-    todos = [m for e in ensaios for m in e["medidores"]]
+    # ==============================
+    # ESTATÍSTICAS
+    # ==============================
+    todos_medidores = [
+        m for e in ensaios_do_dia for m in e['medidores']
+    ]
 
-    # =====================================================
-    # RESUMO
-    # =====================================================
-    stats = calcular_estatisticas(todos)
+    stats = calcular_estatisticas(todos_medidores)
     renderizar_resumo(stats)
 
-    # =====================================================
-    # GRÁFICOS E EXPORTAÇÃO
-    # =====================================================
-    col1, col2 = st.columns([3,1])
+    # ==========================================================
+    # 🔎 AUDITORIA TÉCNICA REAL DOS ENSAIOS (NOVO)
+    # ==========================================================
+    try:
+        if 'auditoria_real_ensaios' in globals():
+            st.markdown("---")
+            st.subheader("🧪 Auditoria Técnica Real dos Ensaios")
+            auditoria_real_ensaios(df_filtrado_dia)
+    except Exception as e:
+        st.warning(f"Erro ao executar auditoria: {e}")
 
-    with col1:
-        renderizar_grafico_reprovacoes(todos)
+    # ==============================
+    # GRÁFICO
+    # ==============================
+    renderizar_grafico_reprovacoes(todos_medidores)
 
-    with col2:
-        pdf_bytes = gerar_pdf_relatorio(
-            ensaios=ensaios,
-            data=st.session_state.filtro_data.strftime('%d/%m/%Y'),
-            stats=stats
-        )
-        st.download_button("📥 PDF", pdf_bytes, file_name="relatorio.pdf")
-
-        df_export = pd.DataFrame(todos)
-        excel_bytes = to_excel(df_export)
-        st.download_button("📥 Excel", excel_bytes, file_name="dados.xlsx")
-
-    # =====================================================
-    # DETALHES
-    # =====================================================
     st.markdown("---")
     st.subheader("📋 Detalhes dos Ensaios")
 
-    for ensaio in ensaios:
+    for ensaio in ensaios_do_dia:
         renderizar_cabecalho_ensaio(
-            ensaio["n_ensaio"],
-            ensaio["bancada"],
-            ensaio["temperatura"]
+            ensaio['n_ensaio'],
+            ensaio['bancada'],
+            ensaio['temperatura']
         )
 
-        cols_n = 5
-        for i in range(0, len(ensaio["medidores"]), cols_n):
-            cols = st.columns(cols_n)
-            for j, m in enumerate(ensaio["medidores"][i:i+cols_n]):
+        num_colunas = 5
+
+        for idx in range(0, len(ensaio['medidores']), num_colunas):
+            cols = st.columns(num_colunas)
+
+            for j, medidor in enumerate(
+                ensaio['medidores'][idx:idx + num_colunas]
+            ):
                 with cols[j]:
-                    renderizar_card(m)
+                    renderizar_card(medidor)
             
 # =========================================================
 # [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO FINAL LIMPA)
