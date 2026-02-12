@@ -261,7 +261,7 @@ def to_excel(df):
     return processed_data
 
 # =======================================================================
-# [BLOCO 04] - PROCESSAMENTO TÉCNICO (VERSÃO FINAL - ZERO ERROS)
+# [BLOCO 04] - PROCESSAMENTO TÉCNICO (VERSÃO FINAL - RIGOR REGISTRADOR)
 # =======================================================================
 
 def valor_num(valor):
@@ -286,7 +286,8 @@ def texto(valor):
 
 def processar_ensaio(row, classe_banc20=None):
     """
-    Processa uma linha com RIGOR TOTAL e compatibilidade com Gráficos de Posição.
+    Processa uma linha com RIGOR TOTAL:
+    Aprovação exige Registrador EXATAMENTE 1.0 e validação de vazios.
     """
     medidores = []
     bancada = row.get('Bancada_Nome')
@@ -316,30 +317,31 @@ def processar_ensaio(row, classe_banc20=None):
         v_reg_fim = valor_num(r_fim_val)
         mv_str = str(texto(mv)).strip().upper()
 
-        # --- COLETA DE ERROS PONTUAIS (O QUE ESTAVA FALTANDO!) ---
+        # --- COLETA DE ERROS PONTUAIS ---
         erros_pontuais = []
         if v_cn is not None and abs(v_cn) > limite: erros_pontuais.append('CN')
         if v_cp is not None and abs(v_cp) > limite: erros_pontuais.append('CP')
         if v_ci is not None and abs(v_ci) > limite: erros_pontuais.append('CI')
 
-        # Caso 0: Não ensaiado
-        if v_cn is None and v_cp is None and v_ci is None:
+        # --- TRATAMENTO DE VAZIOS (MELHORADO) ---
+        # Se exatidão está vazia OU os registradores estão vazios, considera "Não Ensaidado"
+        if (v_cn is None and v_cp is None and v_ci is None) or (v_reg_ini is None or v_reg_fim is None):
             medidores.append({
                 "pos": pos, "serie": serie, "cn": "-", "cp": "-", "ci": "-", "mv": "-",
                 "reg_inicio": "-", "reg_fim": "-", "reg_erro": "-",
                 "status": "Não Ligou / Não Ensaido", "detalhe": "", "motivo": "N/A", 
-                "limite": limite, "erros_pontuais": [] # Lista vazia para não dar KeyError
+                "limite": limite, "erros_pontuais": []
             })
             continue
 
         # --- APLICAÇÃO DA REGRA DE OURO ---
         erros_list = []
         
-        # 1. Exatidão
+        # 1. Validação de Exatidão
         if len(erros_pontuais) > 0:
             erros_list.append("Exatidão")
         
-        # 2. Mostrador (MV)
+        # 2. Validação de Mostrador (MV)
         mv_reprovado = False
         if bancada == 'BANC_10_POS':
             if mv_str != "+": 
@@ -350,18 +352,14 @@ def processar_ensaio(row, classe_banc20=None):
                 mv_reprovado = True
                 erros_list.append("Mostrador/MV")
 
-        # 3. Registrador
-        reg_diff = "-"
+        # 3. Validação de Registrador (Regra: Fim - Inicio deve ser EXATAMENTE 1.0)
+        reg_diff = round(v_reg_fim - v_reg_ini, 4)
         incremento_maior = False
-        if v_reg_ini is not None and v_reg_fim is not None:
-            reg_diff = round(v_reg_fim - v_reg_ini, 4)
-            if reg_diff != 1.0:
-                erros_list.append("Registrador")
-                if reg_diff > 1.0: incremento_maior = True
-        else:
+        if reg_diff != 1.0:
             erros_list.append("Registrador")
+            if reg_diff > 1.0: incremento_maior = True
 
-        # 4. Lógica Contra Consumidor
+        # 4. Lógica Contra Consumidor (Exatidão Positiva + (Registrador Alto OU MV Errado))
         erro_pos_exat = any(v is not None and v > limite for v in [v_cn, v_cp, v_ci])
         
         if (erro_pos_exat and incremento_maior) or (erro_pos_exat and mv_reprovado):
@@ -377,14 +375,13 @@ def processar_ensaio(row, classe_banc20=None):
             motivo = "Nenhum"
             detalhe = "✅ Aprovado em todas as etapas."
 
-        # Retorno completo com a chave erros_pontuais
         medidores.append({
             "pos": pos, "serie": serie,
             "cn": texto(cn), "cp": texto(cp), "ci": texto(ci), "mv": mv_str,
             "reg_inicio": texto(r_ini_val), "reg_fim": texto(r_fim_val),
             "reg_erro": reg_diff, "status": status, "detalhe": detalhe,
             "motivo": motivo, "limite": limite,
-            "erros_pontuais": erros_pontuais # AGORA A OUTRA ABA VAI FUNCIONAR!
+            "erros_pontuais": erros_pontuais
         })
         
     return medidores
