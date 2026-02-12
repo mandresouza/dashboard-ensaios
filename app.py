@@ -261,16 +261,15 @@ def to_excel(df):
     return processed_data
 
 # =======================================================================
-# [BLOCO 04] - PROCESSAMENTO TÉCNICO (CORRIGIDO - REGRA MV REAL)
+# [BLOCO 04] - PROCESSAMENTO TÉCNICO (INCLUINDO DADOS DO REGISTRADOR)
 # =======================================================================
 
 def processar_ensaio(row, classe_banc20=None):
     medidores = []
     bancada = row.get('Bancada_Nome')
     tamanho_bancada = 20 if bancada == 'BANC_20_POS' else 10
-    
-    # Definição de Classe e Limites
     classe = str(row.get("Classe", "")).upper()
+    
     if not classe and bancada == 'BANC_20_POS' and classe_banc20:
         classe = classe_banc20
     if not classe:
@@ -283,6 +282,11 @@ def processar_ensaio(row, classe_banc20=None):
         cn = row.get(f"P{pos}_CN")
         cp = row.get(f"P{pos}_CP")
         ci = row.get(f"P{pos}_CI")
+        mv = row.get(f"P{pos}_MV")
+        
+        # Coleta de dados do Registrador para o Card
+        reg_ini_val = row.get(f"P{pos}_REG_Inicio")
+        reg_fim_val = row.get(f"P{pos}_REG_Fim")
         
         if pd.isna(cn) and pd.isna(cp) and pd.isna(ci):
             status = "Não Ligou / Não Ensaido"
@@ -299,37 +303,27 @@ def processar_ensaio(row, classe_banc20=None):
             v_cp = valor_num(cp)
             v_ci = valor_num(ci)
             
-            # Verificação de Exatidão
-            if v_cn is not None and abs(v_cn) > limite:
-                erros_pontuais.append('CN')
-            if v_cp is not None and abs(v_cp) > limite:
-                erros_pontuais.append('CP')
-            if v_ci is not None and abs(v_ci) > limite:
-                erros_pontuais.append('CI')
+            if v_cn is not None and abs(v_cn) > limite: erros_pontuais.append('CN')
+            if v_cp is not None and abs(v_cp) > limite: erros_pontuais.append('CP')
+            if v_ci is not None and abs(v_ci) > limite: erros_pontuais.append('CI')
             
             erro_exatidao = len(erros_pontuais) > 0
             
-            # Verificação do Registrador
-            reg_ini = valor_num(row.get(f"P{pos}_REG_Inicio"))
-            reg_fim = valor_num(row.get(f"P{pos}_REG_Fim"))
+            v_reg_ini = valor_num(reg_ini_val)
+            v_reg_fim = valor_num(reg_fim_val)
             
-            if reg_ini is not None and reg_fim is not None:
-                reg_err = reg_fim - reg_ini
-                erro_registrador = (reg_err != 1)
-                incremento_maior = (reg_err > 1)
+            if v_reg_ini is not None and v_reg_fim is not None:
+                reg_diff = round(v_reg_fim - v_reg_ini, 4)
+                erro_registrador = (reg_diff != 1)
+                incremento_maior = (reg_diff > 1)
             else:
+                reg_diff = "-"
                 erro_registrador = False
                 incremento_maior = False
 
-            # ================= REGRA REAL MV =================
-            mv = str(texto(row.get(f"P{pos}_MV"))).strip().upper()
-            if bancada == 'BANC_10_POS':
-                mv_reprovado = (mv != "+")
-            else:
-                mv_reprovado = (mv != "OK")
-            # =================================================
+            mv_str = str(texto(mv)).strip().upper()
+            mv_reprovado = (mv_str != "+") if bancada == 'BANC_10_POS' else (mv_str != "OK")
 
-            # Regra "Contra o Consumidor" (Acúmulo de 2 ou mais falhas graves positivas)
             pontos_contra = sum([
                 sum(1 for v in [v_cn, v_cp, v_ci] if v is not None and v > 0 and abs(v) > limite) >= 1,
                 mv_reprovado,
@@ -350,109 +344,31 @@ def processar_ensaio(row, classe_banc20=None):
                 detalhe = "⚠️ Verifique este medidor"
 
         medidores.append({
-            "pos": pos,
-            "serie": serie,
-            "cn": texto(cn),
-            "cp": texto(cp),
-            "ci": texto(ci),
-            "mv": texto(row.get(f"P{pos}_MV")),
-            "status": status,
-            "detalhe": detalhe,
-            "motivo": motivo,
-            "limite": limite,
-            "erros_pontuais": erros_pontuais
+            "pos": pos, "serie": serie,
+            "cn": texto(cn), "cp": texto(cp), "ci": texto(ci), "mv": texto(mv),
+            "reg_inicio": texto(reg_ini_val), 
+            "reg_fim": texto(reg_fim_val),
+            "reg_erro": reg_diff if 'reg_diff' in locals() else "-",
+            "status": status, "detalhe": detalhe, "motivo": motivo,
+            "limite": limite, "erros_pontuais": erros_pontuais
         })
     return medidores
 
 # =======================================================================
-# [BLOCO 04B] - CÁLCULO DA AUDITORIA REAL (SEM EXIBIÇÃO VISUAL)
-# =======================================================================
-
-def calcular_auditoria_real(df_filtrado):
-    total_posicoes = 0
-    total_ensaiadas = 0
-    total_aprovadas = 0
-    total_reprovadas = 0
-    total_nao_ensaiadas = 0
-    reprov_exatidao = 0
-    reprov_registrador = 0
-    reprov_mv = 0
-    reprov_consumidor = 0
-    
-    for _, row in df_filtrado.iterrows():
-        medidores = processar_ensaio(row)
-        for m in medidores:
-            total_posicoes += 1
-            
-            # Verifica se o medidor foi realmente ensaiado
-            tem_resultado = any([
-                m["cn"] not in [None, "", "None", "-"],
-                m["cp"] not in [None, "", "None", "-"],
-                m["ci"] not in [None, "", "None", "-"]
-            ])
-            
-            if not tem_resultado:
-                total_nao_ensaiadas += 1
-                continue
-                
-            total_ensaiadas += 1
-            
-            if m["status"] == "APROVADO":
-                total_aprovadas += 1
-            else:
-                total_reprovadas += 1
-                motivo = str(m.get("motivo", "")).upper()
-                if "EXATID" in motivo:
-                    reprov_exatidao += 1
-                if "REGISTRADOR" in motivo:
-                    reprov_registrador += 1
-                if "MOSTRADOR" in motivo or "MV" in motivo:
-                    reprov_mv += 1
-                if "CONTRA" in motivo:
-                    reprov_consumidor += 1
-                    
-    taxa_aprov = (total_aprovadas / total_ensaiadas * 100) if total_ensaiadas else 0
-    
-    return {
-        "total_posicoes": total_posicoes,
-        "total_ensaiadas": total_ensaiadas,
-        "total_aprovadas": total_aprovadas,
-        "total_reprovadas": total_reprovadas,
-        "total_nao_ensaiadas": total_nao_ensaiadas,
-        "taxa_aprovacao": taxa_aprov,
-        "reprov_exatidao": reprov_exatidao,
-        "reprov_registrador": reprov_registrador,
-        "reprov_mv": reprov_mv,
-        "reprov_consumidor": reprov_consumidor
-    }
-
-# =======================================================================
-# [BLOCO 05] - COMPONENTES VISUAIS (ATUALIZADO COM REGISTRADOR)
+# [BLOCO 05] - COMPONENTES VISUAIS (VERSÃO LIMPA E ALINHADA)
 # =======================================================================
 
 def renderizar_card(medidor):
-    """Renderiza o card individual com Exatidão e Registrador."""
     status_cor = {
-        "APROVADO": "#dcfce7", 
-        "REPROVADO": "#fee2e2", 
-        "CONTRA O CONSUMIDOR": "#ede9fe", 
-        "Não Ligou / Não Ensaido": "#e5e7eb"
+        "APROVADO": "#dcfce7", "REPROVADO": "#fee2e2", 
+        "CONTRA O CONSUMIDOR": "#ede9fe", "Não Ligou / Não Ensaido": "#e5e7eb"
     }
     cor = status_cor.get(medidor['status'], "#f3f4f6")
     
-    # Cálculo da diferença do registrador para exibição
-    # Tentamos converter para numérico para garantir que a conta apareça no card
-    try:
-        reg_ini = float(medidor.get('reg_inicio', 0)) if medidor.get('reg_inicio') not in [None, "-", ""] else None
-        reg_fim = float(medidor.get('reg_fim', 0)) if medidor.get('reg_fim') not in [None, "-", ""] else None
-        reg_erro = round(reg_fim - reg_ini, 4) if (reg_ini is not None and reg_fim is not None) else "-"
-    except:
-        reg_erro = "-"
-
     st.markdown(f"""
         <div style="background:{cor}; border-radius:12px; padding:16px; font-size:14px; 
                     box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left: 6px solid rgba(0,0,0,0.1); 
-                    display: flex; flex-direction: column; justify-content: space-between; height: 100%;">
+                    display: flex; flex-direction: column; justify-content: space-between; min-height: 320px;">
             <div>
                 <div style="font-size:18px; font-weight:700; border-bottom:2px solid rgba(0,0,0,0.15); 
                             margin-bottom:12px; padding-bottom: 8px;">🔢 Posição {medidor['pos']}</div>
@@ -468,26 +384,23 @@ def renderizar_card(medidor):
 
                 <div style="background: rgba(0,0,0,0.03); padding: 10px; border-radius: 8px; border: 1px dashed rgba(0,0,0,0.1);">
                     <b style="display: block; margin-bottom: 5px; font-size: 12px;">📑 Registrador (kWh)</b>
-                    <div style="display: grid; grid-template-columns: 1fr; gap: 2px; font-size: 11px;">
-                        <span><b>Início:</b> {medidor.get('reg_inicio', '-')}</span>
-                        <span><b>Fim:</b> {medidor.get('reg_fim', '-')}</span>
-                        <span style="color: {'red' if reg_erro != 1 and reg_erro != '-' else 'black'}; font-weight: bold;">
-                            <b>Erro:</b> {reg_erro}
-                        </span>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px;">
+                        <span><b>Ini:</b> {medidor['reg_inicio']}</span>
+                        <span><b>Fim:</b> {medidor['reg_fim']}</span>
+                        <span style="grid-column: span 2; margin-top:2px;"><b>Erro:</b> {medidor['reg_erro']}</span>
                     </div>
                 </div>
-
             </div>
             <div>
                 <div style="padding:10px; margin-top: 16px; border-radius:8px; font-weight:800; 
-                            font-size: 15px; text-align:center; background: rgba(0,0,0,0.08);">{medidor['status']}</div>
-                <div style="margin-top:8px; font-size:11px; text-align:center; line-height: 1.2;">{medidor['detalhe']}</div>
+                            font-size: 14px; text-align:center; background: rgba(0,0,0,0.08);">{medidor['status']}</div>
+                <div style="margin-top:8px; font-size:11px; text-align:center;">{medidor['detalhe']}</div>
             </div>
         </div>
     """, unsafe_allow_html=True)
 
 def renderizar_resumo(stats):
-    st.markdown("""<style>.metric-card{{background-color:#FFFFFF;padding:20px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.05);text-align:center;}}.metric-value{{font-size:32px;font-weight:700;}}.metric-label{{font-size:16px;color:#64748b;}}</style>""", unsafe_allow_html=True)
+    st.markdown("""<style>.metric-card{background-color:#FFFFFF;padding:20px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.05);text-align:center;}.metric-value{font-size:32px;font-weight:700;}.metric-label{font-size:16px;color:#64748b;}</style>""", unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns(4)
     with col1: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#1e293b;">{stats["total"]}</div><div class="metric-label">Total Ensaiados</div></div>', unsafe_allow_html=True)
     with col2: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#16a34a;">{stats["aprovados"]}</div><div class="metric-label">Aprovados</div></div>', unsafe_allow_html=True)
@@ -513,8 +426,6 @@ def renderizar_grafico_reprovacoes(medidores):
 def renderizar_botao_scroll_topo():
     scroll_button_html = """<style>#scrollTopBtn {display: none; position: fixed; bottom: 20px; right: 30px; z-index: 99; border: none; outline: none; background-color: #555; color: white; cursor: pointer; padding: 15px; border-radius: 10px; font-size: 18px; opacity: 0.7;}#scrollTopBtn:hover {background-color: #f44336; opacity: 1;}</style><button onclick="topFunction()" id="scrollTopBtn" title="Voltar ao topo"><b>^</b></button><script>var mybutton = document.getElementById("scrollTopBtn");window.onscroll = function() {scrollFunction()};function scrollFunction() {if (document.body.scrollTop > 100 || document.documentElement.scrollTop > 100) {mybutton.style.display = "block";} else {mybutton.style.display = "none";}}function topFunction() {document.body.scrollTop = 0;document.documentElement.scrollTop = 0;}</script>"""
     st.components.v1.html(scroll_button_html, height=0)
-
-# =======================================================================
 
 # =========================================================
 # [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (RESTAURADO - SEM AUDITORIA)
