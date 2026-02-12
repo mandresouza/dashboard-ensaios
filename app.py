@@ -761,7 +761,7 @@ def pagina_visao_diaria(df_completo):
                     renderizar_card(m)
 
 # =========================================================
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL (ATUALIZADO)
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO FINAL AJUSTADA)
 # =========================================================
 
 def get_stats_por_dia(df_mes):
@@ -781,18 +781,18 @@ def get_stats_por_dia(df_mes):
         taxa_aprovacao = (aprovados / total_ensaiados * 100) if total_ensaiados > 0 else 0
         
         daily_stats.append({
-            'Data': data.strftime('%d/%m/%Y'),
+            'Data': data,
             'Aprovados': aprovados,
             'Reprovados': reprovados,
             'Contra Consumidor': consumidor,
             'Não Ensaidos': nao_ensaiados,
-            'Total Ensaiados': total_ensaiados,
+            'Total': total_ensaiados,
             'Taxa de Aprovação (%)': round(taxa_aprovacao, 1)
         })
     return pd.DataFrame(daily_stats)
 
 def pagina_visao_mensal(df_completo):
-    # --- MANTENDO SEU BOTÃO VOLTAR AO TOPO INTEGRAL ---
+    # --- BOTÃO VOLTAR AO TOPO (SUAVIZADO) ---
     st.markdown('''
         <style> 
             .stApp { scroll-behavior: smooth; } 
@@ -811,7 +811,9 @@ def pagina_visao_mensal(df_completo):
     st.markdown("## 📊 Visão Mensal e Performance")
     st.markdown("---")
 
-    # --- MANTENDO AUDITORIA TÉCNICA (VITAL PARA NÃO DAR ERRO) ---
+    # =====================================================
+    # AUDITORIA TÉCNICA (ESSA PARTE É VITAL PARA OUTRAS ABAS)
+    # =====================================================
     st.markdown("## 🔎 Auditoria Técnica Real dos Ensaios")
     dados_auditoria = calcular_auditoria_real(df_completo)
     
@@ -830,7 +832,9 @@ def pagina_visao_mensal(df_completo):
     m3.metric("Mostrador / MV", dados_auditoria["reprov_mv"])
     m4.metric("Contra Consumidor", dados_auditoria["reprov_consumidor"])
 
-    # --- FILTROS E PREPARAÇÃO ---
+    # ==============================
+    # PREPARAÇÃO E FILTROS DO MÊS
+    # ==============================
     df_completo['Ano'] = df_completo['Data_dt'].dt.year
     df_completo['Mes'] = df_completo['Data_dt'].dt.month
     
@@ -850,6 +854,9 @@ def pagina_visao_mensal(df_completo):
         st.warning("Nenhum dado encontrado para o período selecionado.")
         return
 
+    # ==============================
+    # CONSOLIDAÇÃO DOS DADOS MENSAIS
+    # ==============================
     todos_mes = []
     for _, row in df_mes.iterrows():
         todos_mes.extend(processar_ensaio(row))
@@ -861,53 +868,104 @@ def pagina_visao_mensal(df_completo):
     
     total_m = aprov_m + repro_m + cons_m
     taxa_m = (aprov_m / total_m * 100) if total_m > 0 else 0
+    
     df_daily = get_stats_por_dia(df_mes)
 
-    # --- MÉTRICAS DASHBOARD ---
+    # ==============================
+    # MÉTRICAS PRINCIPAIS (DASHBOARD)
+    # ==============================
     col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
     col_m1.metric("Total Ensaiados", f"{total_m:,.0f}".replace(",", "."))
-    col_m2.metric("Taxa de Aprovação", f"{taxa_m:.1f}%")
+    col_m2.metric("Taxa de Aprovação", f"{taxa_m:.1f}%", delta=f"{taxa_m-95:.1f}% vs Meta (95%)" if taxa_m > 0 else None)
     col_m3.metric("Total Reprovados", f"{repro_m:,.0f}".replace(",", "."), delta=repro_m, delta_color="inverse")
     col_m4.metric("Contra Consumidor", f"{cons_m:,.0f}".replace(",", "."), delta=cons_m, delta_color="inverse")
     col_m5.metric("Não Ensaidos", f"{nao_ensaiados_m:,.0f}".replace(",", "."))
 
-    # --- TEMPERATURA ---
+    # ==============================
+    # CÁLCULO DA TEMPERATURA MÉDIA
+    # ==============================
+    temp_media = 0
     if 'Temperatura' in df_mes.columns:
-        temp_series = pd.to_numeric(df_mes['Temperatura'].astype(str).str.replace("°C","",regex=False).str.replace(",","."), errors="coerce")
-        if not pd.isna(temp_series.mean()):
-            st.info(f"🌡️ **Temperatura Média do Período:** {temp_series.mean():.1f}°C")
+        temp_series = (
+            df_mes['Temperatura']
+            .astype(str)
+            .str.replace("°C", "", regex=False)
+            .str.replace(",", ".", regex=False)
+            .str.strip()
+        )
+        temp_series = pd.to_numeric(temp_series, errors="coerce")
+        temp_media = temp_series.mean()
+        if not pd.isna(temp_media):
+            st.info(f"🌡️ **Temperatura Média do Período:** {temp_media:.1f}°C")
 
-    # --- GRÁFICOS ---
+    # ==============================
+    # GRÁFICOS DE PERFORMANCE
+    # ==============================
     col_g1, col_g2 = st.columns([1, 1.5])
+    
     with col_g1:
-        fig_donut = px.pie(values=[aprov_m, repro_m, cons_m], names=['Aprovados','Reprovados','Contra Consumidor'], hole=.5,
-                           color_discrete_map={'Aprovados':'#16a34a', 'Reprovados':'#dc2626', 'Contra Consumidor':'#7c3aed'})
+        df_pie = pd.DataFrame({
+            'Status': ['Aprovados','Reprovados','Contra Consumidor'],
+            'Qtd': [aprov_m, repro_m, cons_m]
+        })
+        fig_donut = px.pie(
+            df_pie, values='Qtd', names='Status', hole=.5,
+            color_discrete_map={'Aprovados':'#16a34a', 'Reprovados':'#dc2626', 'Contra Consumidor':'#7c3aed'}
+        )
+        fig_donut.update_traces(textposition='inside', textinfo='percent+label')
+        fig_donut.update_layout(showlegend=False, margin=dict(t=40,b=0,l=0,r=0))
         st.plotly_chart(fig_donut, use_container_width=True)
 
     with col_g2:
-        fig_bar = px.bar(df_daily, x='Data', y=['Aprovados', 'Reprovados', 'Contra Consumidor'], barmode='stack',
-                         color_discrete_map={'Aprovados':'#16a34a', 'Reprovados':'#dc2626', 'Contra Consumidor':'#7c3aed'})
+        fig_bar = go.Figure()
+        fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Aprovados'], name='Aprovados', marker_color='#16a34a'))
+        fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Reprovados'], name='Reprovados', marker_color='#dc2626'))
+        fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Contra Consumidor'], name='Contra Consumidor', marker_color='#7c3aed'))
+        
+        fig_bar.update_layout(
+            barmode='stack', title='<b>Evolução Diária de Ensaios</b>',
+            xaxis_title="Dia do Mês", yaxis_title="Quantidade",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            margin=dict(t=80,b=40,l=0,r=0), hovermode="x unified"
+        )
         st.plotly_chart(fig_bar, use_container_width=True)
 
-    # ====================================================================
-    # TENDÊNCIA E TABELA DETALHADA DOS DADOS DO GRÁFICO (AJUSTADO)
-    # ====================================================================
+    # ==============================
+    # TENDÊNCIA DA TAXA
+    # ==============================
     st.markdown("---")
     st.subheader("📈 Tendência da Taxa de Aprovação")
     if not df_daily.empty:
-        fig_line = px.line(df_daily, x='Data', y='Taxa de Aprovação (%)', markers=True, text='Taxa de Aprovação (%)')
-        fig_line.update_layout(yaxis=dict(range=[0,110]))
+        fig_line = px.line(
+            df_daily, x='Data', y='Taxa de Aprovação (%)', 
+            markers=True, text='Taxa de Aprovação (%)'
+        )
+        fig_line.update_traces(textposition="top center")
+        fig_line.update_layout(
+            yaxis=dict(range=[0,110]), 
+            yaxis_title="Taxa (%)", 
+            xaxis_title="Dia do Mês"
+        )
         st.plotly_chart(fig_line, use_container_width=True)
 
-        # ABAIXO DO GRÁFICO: Expander com os valores exatos do gráfico
-        with st.expander("📊 Ver Dados Detalhados da Tendência (Clique para abrir/fechar)"):
-            st.write("Valores diários consolidados que compõem o gráfico acima:")
-            # Exibe a tabela com as estatísticas diárias já calculadas
+    # =====================================================
+    # TABELA DE RESULTADOS CONSOLIDADOS (SUBSTITUÍDA)
+    # =====================================================
+    st.markdown("---")
+    with st.expander("📊 Verificação dos Resultados do Mês (Resultados Consolidados)"):
+        if not df_daily.empty:
+            # Criamos uma cópia para formatar a data na exibição sem afetar o gráfico
+            df_exibicao = df_daily.copy()
+            df_exibicao['Data'] = df_exibicao['Data'].dt.strftime('%d/%m/%Y')
+            
+            # Selecionamos as colunas que compõem os gráficos acima
             st.dataframe(
-                df_daily[['Data', 'Total Ensaiados', 'Aprovados', 'Reprovados', 'Contra Consumidor', 'Taxa de Aprovação (%)']], 
+                df_exibicao[['Data', 'Total', 'Aprovados', 'Reprovados', 'Contra Consumidor', 'Taxa de Aprovação (%)']], 
                 use_container_width=True, 
                 hide_index=True
             )
+        else:
+            st.info("Nenhum dado consolidado para exibir.")
 
 # =======================================================================
 # [BLOCO 08] - PÁGINA: ANÁLISE DE POSIÇÕES (HEATMAP DE REPROVAÇÃO)
