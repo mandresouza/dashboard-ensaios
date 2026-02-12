@@ -218,39 +218,50 @@ def to_excel(df):
     processed_data = output.getvalue()
     return processed_data
 
-# [BLOCO 04] - PROCESSAMENTO TÉCNICO (ORIGINAL)
+# [BLOCO 04] - PROCESSAMENTO TÉCNICO (CORRIGIDO - REGRA MV REAL)
+
 def processar_ensaio(row, classe_banc20=None):
     medidores = []
     bancada = row.get('Bancada_Nome')
     tamanho_bancada = 20 if bancada == 'BANC_20_POS' else 10
     classe = str(row.get("Classe", "")).upper()
     
-    if not classe and bancada == 'BANC_20_POS' and classe_banc20: 
+    if not classe and bancada == 'BANC_20_POS' and classe_banc20:
         classe = classe_banc20
-    if not classe: classe = 'B'
+    if not classe:
+        classe = 'B'
         
     limite = 4.0 if "ELETROMEC" in classe else LIMITES_CLASSE.get(classe.replace("ELETROMEC", "").strip(), 1.3)
     
     for pos in range(1, tamanho_bancada + 1):
         serie = texto(row.get(f"P{pos}_Série"))
-        cn, cp, ci = row.get(f"P{pos}_CN"), row.get(f"P{pos}_CP"), row.get(f"P{pos}_CI")
+        cn = row.get(f"P{pos}_CN")
+        cp = row.get(f"P{pos}_CP")
+        ci = row.get(f"P{pos}_CI")
         
-        # --- LÓGICA COM NOVO TERMO TÉCNICO ---
         if pd.isna(cn) and pd.isna(cp) and pd.isna(ci):
-            status, detalhe, motivo = "Não Ligou / Não Ensaido", "", "N/A"
+            status = "Não Ligou / Não Ensaido"
+            detalhe = ""
+            motivo = "N/A"
             erros_pontuais = []
         else:
-            status, detalhe, motivo = "APROVADO", "", "Nenhum"
+            status = "APROVADO"
+            detalhe = ""
+            motivo = "Nenhum"
             erros_pontuais = []
             
-            v_cn, v_cp, v_ci = valor_num(cn), valor_num(cp), valor_num(ci)
+            v_cn = valor_num(cn)
+            v_cp = valor_num(cp)
+            v_ci = valor_num(ci)
             
             if v_cn is not None and abs(v_cn) > limite: erros_pontuais.append('CN')
             if v_cp is not None and abs(v_cp) > limite: erros_pontuais.append('CP')
             if v_ci is not None and abs(v_ci) > limite: erros_pontuais.append('CI')
+            
             erro_exatidao = len(erros_pontuais) > 0
 
-            reg_ini, reg_fim = valor_num(row.get(f"P{pos}_REG_Inicio")), valor_num(row.get(f"P{pos}_REG_Fim"))
+            reg_ini = valor_num(row.get(f"P{pos}_REG_Inicio"))
+            reg_fim = valor_num(row.get(f"P{pos}_REG_Fim"))
             
             if reg_ini is not None and reg_fim is not None:
                 reg_err = reg_fim - reg_ini
@@ -260,11 +271,28 @@ def processar_ensaio(row, classe_banc20=None):
                 erro_registrador = False
                 incremento_maior = False
 
-            mv_reprovado = str(texto(row.get(f"P{pos}_MV"))).upper() in ["REPROVADO", "NOK", "FAIL", "-"]
-            pontos_contra = sum([sum(1 for v in [v_cn, v_cp, v_ci] if v is not None and v > 0 and abs(v) > limite) >= 1, mv_reprovado, incremento_maior])
+            # =====================================================
+            # REGRA REAL MV POR BANCADA (CORREÇÃO PRINCIPAL)
+            # =====================================================
+            mv = str(texto(row.get(f"P{pos}_MV"))).strip().upper()
+
+            if bancada == 'BANC_10_POS':
+                mv_reprovado = (mv != "+")
+            else:  # BANC_20_POS
+                mv_reprovado = (mv != "OK")
+            # =====================================================
+
+            pontos_contra = sum([
+                sum(1 for v in [v_cn, v_cp, v_ci] if v is not None and v > 0 and abs(v) > limite) >= 1,
+                mv_reprovado,
+                incremento_maior
+            ])
             
-            if pontos_contra >= 2: 
-                status, detalhe, motivo = "CONTRA O CONSUMIDOR", "⚠️ Medição a mais", "Contra Consumidor"
+            if pontos_contra >= 2:
+                status = "CONTRA O CONSUMIDOR"
+                detalhe = "⚠️ Medição a mais"
+                motivo = "Contra Consumidor"
+
             elif erro_exatidao or erro_registrador or mv_reprovado:
                 status = "REPROVADO"
                 m_list = []
@@ -273,13 +301,21 @@ def processar_ensaio(row, classe_banc20=None):
                 if mv_reprovado: m_list.append("Mostrador/MV")
                 motivo = " / ".join(m_list)
                 detalhe = "⚠️ Verifique este medidor"
-                    
+
         medidores.append({
-            "pos": pos, "serie": serie, "cn": texto(cn), "cp": texto(cp), "ci": texto(ci), 
-            "mv": texto(row.get(f"P{pos}_MV")), "status": status, 
-            "detalhe": detalhe, "motivo": motivo, "limite": limite,
+            "pos": pos,
+            "serie": serie,
+            "cn": texto(cn),
+            "cp": texto(cp),
+            "ci": texto(ci),
+            "mv": texto(row.get(f"P{pos}_MV")),
+            "status": status,
+            "detalhe": detalhe,
+            "motivo": motivo,
+            "limite": limite,
             "erros_pontuais": erros_pontuais
         })
+
     return medidores
     
 # [BLOCO 05] - COMPONENTES VISUAIS (ORIGINAL)
