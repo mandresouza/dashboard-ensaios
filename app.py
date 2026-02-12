@@ -261,22 +261,23 @@ def to_excel(df):
     return processed_data
 
 # =======================================================================
-# [BLOCO 04] - PROCESSAMENTO TÉCNICO (VERSÃO INTEGRAL)
+# [BLOCO 04] - PROCESSAMENTO TÉCNICO (VERSÃO REGRA DE OURO)
 # =======================================================================
 
 def valor_num(valor):
-    """Converte valores da planilha para float, tratando vírgulas e erros."""
-    if pd.isna(valor) or valor == "" or str(valor).strip() in ["-", "None"]:
+    """Converte valores da planilha para float, tratando vírgulas e erros nominais."""
+    if pd.isna(valor) or valor == "" or str(valor).strip() in ["-", "None", "SEM LEITURA", "ERRO"]:
         return None
     try:
         if isinstance(valor, str):
-            valor = valor.replace(',', '.')
+            # Remove espaços e troca vírgula por ponto
+            valor = valor.strip().replace(',', '.')
         return float(valor)
     except:
         return None
 
 def texto(valor):
-    """Trata strings para exibição, removendo decimais desnecessários de números de série."""
+    """Trata strings para exibição, removendo decimais desnecessários."""
     if pd.isna(valor) or str(valor).strip() in ["-", "None"]:
         return "-"
     val_str = str(valor).strip()
@@ -286,14 +287,13 @@ def texto(valor):
 
 def processar_ensaio(row, classe_banc20=None):
     """
-    Processa uma linha da planilha e transforma nos dados dos medidores individuais.
-    Inclui lógica de Registrador, Mostrador e Exatidão.
+    Processa uma linha com RIGOR TOTAL:
+    Aprovação = (Exatidão OK) E (MV OK) E (Registrador EXATAMENTE 1.0)
     """
     medidores = []
     bancada = row.get('Bancada_Nome')
     tamanho_bancada = 20 if bancada == 'BANC_20_POS' else 10
     
-    # Definição de Classe e Limite
     classe = str(row.get("Classe", "")).upper()
     if not classe and bancada == 'BANC_20_POS' and classe_banc20:
         classe = classe_banc20
@@ -308,152 +308,125 @@ def processar_ensaio(row, classe_banc20=None):
         cp = row.get(f"P{pos}_CP")
         ci = row.get(f"P{pos}_CI")
         mv = row.get(f"P{pos}_MV")
-        
-        # Coleta de dados do Registrador
         r_ini_val = row.get(f"P{pos}_REG_Inicio")
         r_fim_val = row.get(f"P{pos}_REG_Fim")
         
-        # Se não houver dados de erro, considera não ensaiado
-        if pd.isna(cn) and pd.isna(cp) and pd.isna(ci):
-            status = "Não Ligou / Não Ensaido"
-            detalhe = ""
-            motivo = "N/A"
-            erros_pontuais = []
-            reg_diff = "-"
+        # Conversão numérica rigorosa
+        v_cn = valor_num(cn)
+        v_cp = valor_num(cp)
+        v_ci = valor_num(ci)
+        v_reg_ini = valor_num(r_ini_val)
+        v_reg_fim = valor_num(r_fim_val)
+        mv_str = str(texto(mv)).strip().upper()
+
+        # Caso 0: Não ensaiado (Totalmente vazio)
+        if v_cn is None and v_cp is None and v_ci is None:
+            medidores.append({
+                "pos": pos, "serie": serie, "cn": "-", "cp": "-", "ci": "-", "mv": "-",
+                "reg_inicio": "-", "reg_fim": "-", "reg_erro": "-",
+                "status": "Não Ligou / Não Ensaido", "detalhe": "", "motivo": "N/A", "limite": limite
+            })
+            continue
+
+        # --- APLICAÇÃO DA REGRA DE OURO (FUNIL DE ERROS) ---
+        erros_list = []
+        
+        # 1. Validação de Exatidão
+        if v_cn is None or abs(v_cn) > limite: erros_list.append("Exatidão")
+        if v_cp is None or abs(v_cp) > limite: erros_list.append("Exatidão")
+        if v_ci is None or abs(v_ci) > limite: erros_list.append("Exatidão")
+        
+        # 2. Validação de Mostrador (MV)
+        mv_reprovado = False
+        if bancada == 'BANC_10_POS':
+            if mv_str != "+": 
+                mv_reprovado = True
+                erros_list.append("Mostrador/MV")
+        else:
+            if mv_str != "OK": 
+                mv_reprovado = True
+                erros_list.append("Mostrador/MV")
+
+        # 3. Validação de Registrador (Diferença deve ser EXATAMENTE 1.0)
+        reg_diff = "-"
+        incremento_maior = False
+        if v_reg_ini is not None and v_reg_fim is not None:
+            reg_diff = round(v_reg_fim - v_reg_ini, 4)
+            if reg_diff != 1.0:
+                erros_list.append("Registrador")
+                if reg_diff > 1.0: incremento_maior = True
+        else:
+            # Se for "SEM LEITURA" ou Vazio, REPROVA direto
+            erros_list.append("Registrador")
+
+        # 4. Lógica de "Contra o Consumidor" (Rigor Máximo)
+        # Erro positivo na exatidão
+        erro_pos_exat = any(v is not None and v > limite for v in [v_cn, v_cp, v_ci])
+        
+        if (erro_pos_exat and incremento_maior) or (erro_pos_exat and mv_reprovado):
+            status = "CONTRA O CONSUMIDOR"
+            motivo = "Contra Consumidor"
+            detalhe = "⚠️ CRÍTICO: Medição a maior detectada!"
+        elif len(erros_list) > 0:
+            status = "REPROVADO"
+            # Remove nomes duplicados na lista de motivos
+            motivo = " / ".join(sorted(list(set(erros_list))))
+            detalhe = "❌ Reprovado nos critérios técnicos."
         else:
             status = "APROVADO"
-            detalhe = ""
             motivo = "Nenhum"
-            erros_pontuais = []
-            
-            # Conversão numérica para cálculos
-            v_cn = valor_num(cn)
-            v_cp = valor_num(cp)
-            v_ci = valor_num(ci)
-            v_reg_ini = valor_num(r_ini_val)
-            v_reg_fim = valor_num(r_fim_val)
-            
-            # 1. Avaliação de Exatidão
-            if v_cn is not None and abs(v_cn) > limite: erros_pontuais.append('CN')
-            if v_cp is not None and abs(v_cp) > limite: erros_pontuais.append('CP')
-            if v_ci is not None and abs(v_ci) > limite: erros_pontuais.append('CI')
-            erro_exatidao = len(erros_pontuais) > 0
-            
-            # 2. Avaliação de Registrador
-            if v_reg_ini is not None and v_reg_fim is not None:
-                reg_diff = round(v_reg_fim - v_reg_ini, 4)
-                # Reprova se a diferença for diferente de 1.0 (ex: 1.0001 ou 0.999)
-                erro_registrador = (reg_diff != 1)
-                incremento_maior = (reg_diff > 1)
-            else:
-                reg_diff = "-"
-                erro_registrador = False
-                incremento_maior = False
+            detalhe = "✅ Aprovado em todas as etapas."
 
-            # 3. Avaliação de Mostrador (MV)
-            mv_str = str(texto(mv)).strip().upper()
-            if bancada == 'BANC_10_POS':
-                mv_reprovado = (mv_str != "+")
-            else:
-                mv_reprovado = (mv_str != "OK")
-
-            # 4. Lógica de Contra o Consumidor (2 ou mais critérios de erro positivo)
-            # Verifica se houve erro positivo de exatidão em algum ponto
-            erro_positivo_exatidao = any(v > 0 and abs(v) > limite for v in [v_cn, v_cp, v_ci] if v is not None)
-            
-            pontos_reprovação_grave = 0
-            if erro_positivo_exatidao: pontos_reprovação_grave += 1
-            if mv_reprovado: pontos_reprovação_grave += 1
-            if incremento_maior: pontos_reprovação_grave += 1
-
-            if pontos_reprovação_grave >= 2:
-                status = "CONTRA O CONSUMIDOR"
-                detalhe = "⚠️ Medição a mais (Grave)"
-                motivo = "Contra Consumidor"
-            elif erro_exatidao or erro_registrador or mv_reprovado:
-                status = "REPROVADO"
-                m_list = []
-                if erro_exatidao: m_list.append("Exatidão")
-                if erro_registrador: m_list.append("Registrador")
-                if mv_reprovado: m_list.append("Mostrador/MV")
-                motivo = " / ".join(m_list)
-                detalhe = "⚠️ Verifique este medidor"
-
-        # Adiciona o medidor processado à lista
         medidores.append({
-            "pos": pos,
-            "serie": serie,
-            "cn": texto(cn),
-            "cp": texto(cp),
-            "ci": texto(ci),
-            "mv": texto(mv),
-            "reg_inicio": texto(r_ini_val),
-            "reg_fim": texto(r_fim_val),
-            "reg_erro": reg_diff,
-            "status": status,
-            "detalhe": detalhe,
-            "motivo": motivo,
-            "limite": limite,
-            "erros_pontuais": erros_pontuais
+            "pos": pos, "serie": serie,
+            "cn": texto(cn), "cp": texto(cp), "ci": texto(ci), "mv": mv_str,
+            "reg_inicio": texto(r_ini_val), "reg_fim": texto(r_fim_val),
+            "reg_erro": reg_diff, "status": status, "detalhe": detalhe,
+            "motivo": motivo, "limite": limite
         })
         
     return medidores
 
 # =======================================================================
-# [BLOCO 04B] - FUNÇÕES DE AUDITORIA E ESTATÍSTICA
+# [BLOCO 04B] - FUNÇÕES DE AUDITORIA E ESTATÍSTICA (AJUSTADO)
 # =======================================================================
 
 def calcular_estatisticas(medidores):
-    """Gera o dicionário de totais para o resumo da página."""
     total = len(medidores)
     aprovados = sum(1 for m in medidores if m['status'] == 'APROVADO')
     reprovados = sum(1 for m in medidores if m['status'] == 'REPROVADO')
     consumidor = sum(1 for m in medidores if m['status'] == 'CONTRA O CONSUMIDOR')
     return {
-        "total": total,
-        "aprovados": aprovados,
-        "reprovados": reprovados,
-        "consumidor": consumidor
+        "total": total, "aprovados": aprovados,
+        "reprovados": reprovados, "consumidor": consumidor
     }
 
 def calcular_auditoria_real(df):
-    """Calcula a performance técnica ignorando posições vazias da bancada."""
-    total_pos = 0
-    total_ensaiadas = 0
-    total_aprovadas = 0
-    total_reprovadas = 0
-    reprov_exatidao = 0
-    reprov_registrador = 0
-    reprov_mv = 0
-    reprov_consumidor = 0
+    t_pos, t_ens, t_apr, t_rep, r_exat, r_reg, r_mv, r_cons = 0, 0, 0, 0, 0, 0, 0, 0
 
     for _, row in df.iterrows():
         medidores = processar_ensaio(row)
         for m in medidores:
-            total_pos += 1
+            t_pos += 1
             if m['status'] != "Não Ligou / Não Ensaido":
-                total_ensaiadas += 1
+                t_ens += 1
                 if m['status'] == "APROVADO":
-                    total_aprovadas += 1
+                    t_apr += 1
                 else:
-                    total_reprovadas += 1
-                    if "Exatidão" in m['motivo']: reprov_exatidao += 1
-                    if "Registrador" in m['motivo']: reprov_registrador += 1
-                    if "Mostrador/MV" in m['motivo']: reprov_mv += 1
-                    if m['status'] == "CONTRA O CONSUMIDOR": reprov_consumidor += 1
+                    t_rep += 1
+                    # Contagem para o gráfico de motivos
+                    if "Exatidão" in m['motivo']: r_exat += 1
+                    if "Registrador" in m['motivo']: r_reg += 1
+                    if "Mostrador/MV" in m['motivo']: r_mv += 1
+                    if m['status'] == "CONTRA O CONSUMIDOR": r_cons += 1
 
-    taxa = (total_aprovadas / total_ensaiadas * 100) if total_ensaiadas > 0 else 0
-    
+    taxa = (t_apr / t_ens * 100) if t_ens > 0 else 0
     return {
-        "total_posicoes": total_pos,
-        "total_ensaiadas": total_ensaiadas,
-        "total_aprovadas": total_aprovadas,
-        "total_reprovadas": total_reprovadas,
-        "taxa_aprovacao": taxa,
-        "reprov_exatidao": reprov_exatidao,
-        "reprov_registrador": reprov_registrador,
-        "reprov_mv": reprov_mv,
-        "reprov_consumidor": reprov_consumidor
+        "total_posicoes": t_pos, "total_ensaiadas": t_ens,
+        "total_aprovadas": t_apr, "total_reprovadas": t_rep,
+        "taxa_aprovacao": taxa, "reprov_exatidao": r_exat,
+        "reprov_registrador": r_reg, "reprov_mv": r_mv,
+        "reprov_consumidor": r_cons
     }
 
 # =======================================================================
