@@ -741,6 +741,10 @@ def pagina_visao_mensal(df_completo):
     ''', unsafe_allow_html=True)
 
     st.markdown("## 📊 Visão Mensal e Performance")
+
+    st.markdown("---")
+    st.markdown("## 🔎 Auditoria Técnica Real dos Ensaios")
+    auditoria_real_ensaios(df_mes)
     
     # ==============================
     # PREPARAÇÃO DOS DADOS
