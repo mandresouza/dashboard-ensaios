@@ -457,12 +457,12 @@ def calcular_auditoria_real(df):
     }
 
 # =======================================================================
-# [BLOCO 05] - COMPONENTES VISUAIS (VERSÃO REESTRUTURADA)
+# [BLOCO 05] - COMPONENTES VISUAIS (FONTE PADRONIZADA)
 # =======================================================================
 import textwrap
 
 def renderizar_card(medidor):
-    """Renderiza o card individual interpretando o HTML corretamente."""
+    """Renderiza o card individual com fontes padronizadas entre Exatidão e Registrador."""
     status_cor = {
         "APROVADO": "#dcfce7", 
         "REPROVADO": "#fee2e2", 
@@ -471,33 +471,35 @@ def renderizar_card(medidor):
     }
     cor = status_cor.get(medidor['status'], "#f3f4f6")
     
-    # Criamos o HTML usando uma estrutura limpa e sem recuos que quebram o markdown
+    # HTML do Card com fontes ajustadas (14px para dados e 12px para títulos internos)
     html_conteudo = f"""
     <div style="background:{cor}; border-radius:12px; padding:16px; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left: 6px solid rgba(0,0,0,0.1); display: flex; flex-direction: column; min-height: 350px;">
         <div style="font-size:18px; font-weight:700; border-bottom:2px solid rgba(0,0,0,0.15); margin-bottom:12px; padding-bottom: 8px;">🔢 Posição {medidor['pos']}</div>
-        <p style="margin:0 0 12px 0;"><b>Série:</b> {medidor['serie']}</p>
+        <p style="margin:0 0 12px 0; font-size: 14px;"><b>Série:</b> {medidor['serie']}</p>
+        
         <div style="background: rgba(255,255,255,0.4); padding: 10px; border-radius: 8px; margin-bottom:10px;">
             <b style="display: block; margin-bottom: 5px; font-size: 12px;">🎯 Exatidão (±{medidor['limite']}%)</b>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 14px;">
                 <span><b>CN:</b> {medidor['cn']}%</span><span><b>CP:</b> {medidor['cp']}%</span>
                 <span><b>CI:</b> {medidor['ci']}%</span><span><b>MV:</b> {medidor['mv']}</span>
             </div>
         </div>
+
         <div style="background: rgba(255,255,255,0.4); padding: 10px; border-radius: 8px; border: 1px dashed rgba(0,0,0,0.1);">
             <b style="display: block; margin-bottom: 5px; font-size: 12px;">📑 Registrador (kWh)</b>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 14px;">
                 <span><b>Ini:</b> {medidor['reg_inicio']}</span>
                 <span><b>Fim:</b> {medidor['reg_fim']}</span>
                 <span style="grid-column: span 2; margin-top:2px;"><b>Dif:</b> {medidor['reg_erro']}</span>
             </div>
         </div>
+
         <div style="margin-top: auto; padding-top: 15px;">
             <div style="padding:10px; border-radius:8px; font-weight:800; font-size: 14px; text-align:center; background: rgba(0,0,0,0.08);">{medidor['status']}</div>
             <div style="margin-top:8px; font-size:11px; text-align:center; color: #444;">{medidor['detalhe']}</div>
         </div>
     </div>
     """
-    # O segredo: usamos textwrap para limpar qualquer indentação que faça o Streamlit achar que é código
     st.markdown(textwrap.dedent(html_conteudo), unsafe_allow_html=True)
 
 def renderizar_resumo(stats):
