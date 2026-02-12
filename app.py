@@ -778,8 +778,7 @@ def pagina_visao_mensal(df_completo):
 
     st.markdown("---")
     st.markdown("## 🔎 Auditoria Técnica Real dos Ensaios")
-    dados = calcular_auditoria_real(df_completo)
-    st.markdown("## 🔎 Auditoria Técnica Real dos Ensaios")
+    dados = calcular_auditoria_real(df_completo)    
 
     c1, c2, c3, c4 = st.columns(4)
     
