@@ -218,9 +218,7 @@ def to_excel(df):
     processed_data = output.getvalue()
     return processed_data
 
-# =======================================================================
 # [BLOCO 04] - PROCESSAMENTO TÉCNICO (CORRIGIDO - REGRA MV REAL)
-# =======================================================================
 
 def processar_ensaio(row, classe_banc20=None):
     medidores = []
@@ -273,14 +271,16 @@ def processar_ensaio(row, classe_banc20=None):
                 erro_registrador = False
                 incremento_maior = False
 
-            # ================= REGRA REAL MV =================
+            # =====================================================
+            # REGRA REAL MV POR BANCADA (CORREÇÃO PRINCIPAL)
+            # =====================================================
             mv = str(texto(row.get(f"P{pos}_MV"))).strip().upper()
 
             if bancada == 'BANC_10_POS':
                 mv_reprovado = (mv != "+")
-            else:
+            else:  # BANC_20_POS
                 mv_reprovado = (mv != "OK")
-            # =================================================
+            # =====================================================
 
             pontos_contra = sum([
                 sum(1 for v in [v_cn, v_cp, v_ci] if v is not None and v > 0 and abs(v) > limite) >= 1,
@@ -317,75 +317,6 @@ def processar_ensaio(row, classe_banc20=None):
         })
 
     return medidores
-
-
-# =======================================================================
-# [BLOCO 04B] - CÁLCULO DA AUDITORIA REAL (SEM EXIBIÇÃO VISUAL)
-# =======================================================================
-
-def calcular_auditoria_real(df_filtrado):
-
-    total_posicoes = 0
-    total_ensaiadas = 0
-    total_aprovadas = 0
-    total_reprovadas = 0
-    total_nao_ensaiadas = 0
-
-    reprov_exatidao = 0
-    reprov_registrador = 0
-    reprov_mv = 0
-    reprov_consumidor = 0   
-
-    df_filtrado
-    
-    for _, row in df_filtrado.iterrows():
-        medidores = processar_ensaio(row)
-
-        for m in medidores:
-            total_posicoes += 1
-
-            tem_resultado = any([
-                m["cn"] not in [None, "", "None"],
-                m["cp"] not in [None, "", "None"],
-                m["ci"] not in [None, "", "None"]
-            ])
-
-            if not tem_resultado:
-                total_nao_ensaiadas += 1
-                continue
-
-            total_ensaiadas += 1
-
-            if m["status"] == "APROVADO":
-                total_aprovadas += 1
-            else:
-                total_reprovadas += 1
-
-                motivo = str(m.get("motivo", "")).upper()
-
-                if "EXATID" in motivo:
-                    reprov_exatidao += 1
-                if "REGISTRADOR" in motivo:
-                    reprov_registrador += 1
-                if "MOSTRADOR" in motivo or "MV" in motivo:
-                    reprov_mv += 1
-                if "CONTRA" in motivo:
-                    reprov_consumidor += 1
-
-    taxa_aprov = (total_aprovadas / total_ensaiadas * 100) if total_ensaiadas else 0
-
-    return {
-        "total_posicoes": total_posicoes,
-        "total_ensaiadas": total_ensaiadas,
-        "total_aprovadas": total_aprovadas,
-        "total_reprovadas": total_reprovadas,
-        "total_nao_ensaiadas": total_nao_ensaiadas,
-        "taxa_aprovacao": taxa_aprov,
-        "reprov_exatidao": reprov_exatidao,
-        "reprov_registrador": reprov_registrador,
-        "reprov_mv": reprov_mv,
-        "reprov_consumidor": reprov_consumidor
-    }   
     
 # [BLOCO 05] - COMPONENTES VISUAIS (ORIGINAL)
 def renderizar_card(medidor):
