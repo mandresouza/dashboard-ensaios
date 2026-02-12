@@ -427,11 +427,11 @@ def calcular_auditoria_real(df_filtrado):
     }
 
 # =======================================================================
-# [BLOCO 05] - COMPONENTES VISUAIS (ORIGINAL)
+# [BLOCO 05] - COMPONENTES VISUAIS (ATUALIZADO COM REGISTRADOR)
 # =======================================================================
 
 def renderizar_card(medidor):
-    """Renderiza o card individual de cada medidor com cores dinâmicas por status."""
+    """Renderiza o card individual com Exatidão e Registrador."""
     status_cor = {
         "APROVADO": "#dcfce7", 
         "REPROVADO": "#fee2e2", 
@@ -440,6 +440,15 @@ def renderizar_card(medidor):
     }
     cor = status_cor.get(medidor['status'], "#f3f4f6")
     
+    # Cálculo da diferença do registrador para exibição
+    # Tentamos converter para numérico para garantir que a conta apareça no card
+    try:
+        reg_ini = float(medidor.get('reg_inicio', 0)) if medidor.get('reg_inicio') not in [None, "-", ""] else None
+        reg_fim = float(medidor.get('reg_fim', 0)) if medidor.get('reg_fim') not in [None, "-", ""] else None
+        reg_erro = round(reg_fim - reg_ini, 4) if (reg_ini is not None and reg_fim is not None) else "-"
+    except:
+        reg_erro = "-"
+
     st.markdown(f"""
         <div style="background:{cor}; border-radius:12px; padding:16px; font-size:14px; 
                     box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left: 6px solid rgba(0,0,0,0.1); 
@@ -448,111 +457,63 @@ def renderizar_card(medidor):
                 <div style="font-size:18px; font-weight:700; border-bottom:2px solid rgba(0,0,0,0.15); 
                             margin-bottom:12px; padding-bottom: 8px;">🔢 Posição {medidor['pos']}</div>
                 <p style="margin:0 0 12px 0;"><b>Série:</b> {medidor['serie']}</p>
-                <div style="background: rgba(0,0,0,0.05); padding: 10px; border-radius: 8px; margin-bottom:12px;">
-                    <b style="display: block; margin-bottom: 8px;">Exatidão (±{medidor['limite']}%)</b>
+                
+                <div style="background: rgba(0,0,0,0.05); padding: 10px; border-radius: 8px; margin-bottom:10px;">
+                    <b style="display: block; margin-bottom: 5px; font-size: 12px;">Exatidão (±{medidor['limite']}%)</b>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px;">
                         <span><b>CN:</b> {medidor['cn']}%</span><span><b>CP:</b> {medidor['cp']}%</span>
                         <span><b>CI:</b> {medidor['ci']}%</span><span><b>MV:</b> {medidor['mv']}</span>
                     </div>
                 </div>
+
+                <div style="background: rgba(0,0,0,0.03); padding: 10px; border-radius: 8px; border: 1px dashed rgba(0,0,0,0.1);">
+                    <b style="display: block; margin-bottom: 5px; font-size: 12px;">📑 Registrador (kWh)</b>
+                    <div style="display: grid; grid-template-columns: 1fr; gap: 2px; font-size: 11px;">
+                        <span><b>Início:</b> {medidor.get('reg_inicio', '-')}</span>
+                        <span><b>Fim:</b> {medidor.get('reg_fim', '-')}</span>
+                        <span style="color: {'red' if reg_erro != 1 and reg_erro != '-' else 'black'}; font-weight: bold;">
+                            <b>Erro:</b> {reg_erro}
+                        </span>
+                    </div>
+                </div>
+
             </div>
             <div>
                 <div style="padding:10px; margin-top: 16px; border-radius:8px; font-weight:800; 
                             font-size: 15px; text-align:center; background: rgba(0,0,0,0.08);">{medidor['status']}</div>
-                <div style="margin-top:8px; font-size:12px; text-align:center;">{medidor['detalhe']}</div>
+                <div style="margin-top:8px; font-size:11px; text-align:center; line-height: 1.2;">{medidor['detalhe']}</div>
             </div>
         </div>
     """, unsafe_allow_html=True)
 
 def renderizar_resumo(stats):
-    """Renderiza as métricas de resumo no topo da página usando CSS customizado."""
-    st.markdown("""
-        <style>
-            .metric-card{background-color:#FFFFFF; padding:20px; border-radius:12px; 
-                         box-shadow:0 4px 6px rgba(0,0,0,0.05); text-align:center;}
-            .metric-value{font-size:32px; font-weight:700;}
-            .metric-label{font-size:16px; color:#64748b;}
-        </style>
-    """, unsafe_allow_html=True)
-    
+    st.markdown("""<style>.metric-card{{background-color:#FFFFFF;padding:20px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.05);text-align:center;}}.metric-value{{font-size:32px;font-weight:700;}}.metric-label{{font-size:16px;color:#64748b;}}</style>""", unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#1e293b;">{stats["total"]}</div><div class="metric-label">Total Ensaiados</div></div>', unsafe_allow_html=True)
-    with col2:
-        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#16a34a;">{stats["aprovados"]}</div><div class="metric-label">Aprovados</div></div>', unsafe_allow_html=True)
-    with col3:
-        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#dc2626;">{stats["reprovados"]}</div><div class="metric-label">Reprovados</div></div>', unsafe_allow_html=True)
-    with col4:
-        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#7c3aed;">{stats["consumidor"]}</div><div class="metric-label">Contra Consumidor</div></div>', unsafe_allow_html=True)
+    with col1: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#1e293b;">{stats["total"]}</div><div class="metric-label">Total Ensaiados</div></div>', unsafe_allow_html=True)
+    with col2: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#16a34a;">{stats["aprovados"]}</div><div class="metric-label">Aprovados</div></div>', unsafe_allow_html=True)
+    with col3: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#dc2626;">{stats["reprovados"]}</div><div class="metric-label">Reprovados</div></div>', unsafe_allow_html=True)
+    with col4: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#7c3aed;">{stats["consumidor"]}</div><div class="metric-label">Contra Consumidor</div></div>', unsafe_allow_html=True)
 
 def renderizar_cabecalho_ensaio(n_ensaio, bancada, temperatura):
-    """Cria uma barra de informações compacta para identificar o ensaio atual."""
-    st.markdown(f"""
-        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 15px; 
-                    border-radius: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-weight: bold; font-size: 1.1em;">📋 Ensaio #{n_ensaio}</span>
-            <span style="color: #475569;"><strong>Bancada:</strong> {bancada.replace('_', ' ')}</span>
-            <span style="color: #475569;">🌡️ {temperatura}</span>
-        </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f"""<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 15px; border-radius: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;"><span style="font-weight: bold; font-size: 1.1em;">📋 Ensaio #{n_ensaio}</span><span style="color: #475569;"><strong>Bancada:</strong> {bancada.replace('_', ' ')}</span><span style="color: #475569;">🌡️ {temperatura}</span></div>""", unsafe_allow_html=True)
 
 def renderizar_grafico_reprovacoes(medidores):
-    """Gera um gráfico horizontal com os motivos das reprovações."""
     motivos = [m['motivo'] for m in medidores if m['status'] == 'REPROVADO']
-    if not motivos:
-        return
-        
+    if not motivos: return
     contagem = {}
     for m in motivos:
-        partes = [p.strip() for p in m.split('/')]
-        for parte in partes:
-            if parte != "Nenhum":
-                contagem[parte] = contagem.get(parte, 0) + 1
-                
+        for parte in [p.strip() for p in m.split('/')]:
+            if parte != "Nenhum": contagem[parte] = contagem.get(parte, 0) + 1
     df_motivos = pd.DataFrame(list(contagem.items()), columns=['Motivo', 'Quantidade']).sort_values('Quantidade', ascending=True)
-    
-    fig = px.bar(df_motivos, x='Quantidade', y='Motivo', orientation='h', 
-                 title='<b>Principais Motivos de Reprovação</b>', text='Quantidade',
-                 color_discrete_sequence=px.colors.qualitative.Pastel)
-    
-    fig.update_layout(yaxis_title=None, xaxis_title="Número de Medidores", showlegend=False, 
-                      margin=dict(l=10, r=10, t=40, b=10), height=250)
+    fig = px.bar(df_motivos, x='Quantidade', y='Motivo', orientation='h', title='<b>Principais Motivos de Reprovação</b>', text='Quantidade', color_discrete_sequence=px.colors.qualitative.Pastel)
+    fig.update_layout(yaxis_title=None, xaxis_title="Número de Medidores", showlegend=False, margin=dict(l=10, r=10, t=40, b=10), height=250)
     fig.update_traces(textposition='outside')
     st.plotly_chart(fig, use_container_width=True)
 
 def renderizar_botao_scroll_topo():
-    """Adiciona um botão flutuante para voltar ao topo da página via JavaScript."""
-    scroll_button_html = """
-    <style>
-        #scrollTopBtn {
-            display: none; position: fixed; bottom: 20px; right: 30px; z-index: 99; 
-            border: none; outline: none; background-color: #555; color: white; 
-            cursor: pointer; padding: 15px; border-radius: 10px; font-size: 18px; opacity: 0.7;
-        }
-        #scrollTopBtn:hover { background-color: #f44336; opacity: 1; }
-    </style>
-    
-    <button onclick="topFunction()" id="scrollTopBtn" title="Voltar ao topo"><b>^</b></button>
-    
-    <script>
-        var mybutton = document.getElementById("scrollTopBtn");
-        window.onscroll = function() {scrollFunction()};
-        
-        function scrollFunction() {
-            if (document.body.scrollTop > 100 || document.documentElement.scrollTop > 100) {
-                mybutton.style.display = "block";
-            } else {
-                mybutton.style.display = "none";
-            }
-        }
-        
-        function topFunction() {
-            document.body.scrollTop = 0;
-            document.documentElement.scrollTop = 0;
-        }
-    </script>
-    """
+    scroll_button_html = """<style>#scrollTopBtn {display: none; position: fixed; bottom: 20px; right: 30px; z-index: 99; border: none; outline: none; background-color: #555; color: white; cursor: pointer; padding: 15px; border-radius: 10px; font-size: 18px; opacity: 0.7;}#scrollTopBtn:hover {background-color: #f44336; opacity: 1;}</style><button onclick="topFunction()" id="scrollTopBtn" title="Voltar ao topo"><b>^</b></button><script>var mybutton = document.getElementById("scrollTopBtn");window.onscroll = function() {scrollFunction()};function scrollFunction() {if (document.body.scrollTop > 100 || document.documentElement.scrollTop > 100) {mybutton.style.display = "block";} else {mybutton.style.display = "none";}}function topFunction() {document.body.scrollTop = 0;document.documentElement.scrollTop = 0;}</script>"""
     st.components.v1.html(scroll_button_html, height=0)
+
 # =======================================================================
 
 # =========================================================
