@@ -261,15 +261,40 @@ def to_excel(df):
     return processed_data
 
 # =======================================================================
-# [BLOCO 04] - PROCESSAMENTO TÉCNICO (INCLUINDO DADOS DO REGISTRADOR)
+# [BLOCO 04] - PROCESSAMENTO TÉCNICO (VERSÃO INTEGRAL)
 # =======================================================================
 
+def valor_num(valor):
+    """Converte valores da planilha para float, tratando vírgulas e erros."""
+    if pd.isna(valor) or valor == "" or str(valor).strip() in ["-", "None"]:
+        return None
+    try:
+        if isinstance(valor, str):
+            valor = valor.replace(',', '.')
+        return float(valor)
+    except:
+        return None
+
+def texto(valor):
+    """Trata strings para exibição, removendo decimais desnecessários de números de série."""
+    if pd.isna(valor) or str(valor).strip() in ["-", "None"]:
+        return "-"
+    val_str = str(valor).strip()
+    if val_str.endswith('.0'):
+        return val_str[:-2]
+    return val_str
+
 def processar_ensaio(row, classe_banc20=None):
+    """
+    Processa uma linha da planilha e transforma nos dados dos medidores individuais.
+    Inclui lógica de Registrador, Mostrador e Exatidão.
+    """
     medidores = []
     bancada = row.get('Bancada_Nome')
     tamanho_bancada = 20 if bancada == 'BANC_20_POS' else 10
-    classe = str(row.get("Classe", "")).upper()
     
+    # Definição de Classe e Limite
+    classe = str(row.get("Classe", "")).upper()
     if not classe and bancada == 'BANC_20_POS' and classe_banc20:
         classe = classe_banc20
     if not classe:
@@ -284,36 +309,40 @@ def processar_ensaio(row, classe_banc20=None):
         ci = row.get(f"P{pos}_CI")
         mv = row.get(f"P{pos}_MV")
         
-        # Coleta de dados do Registrador para o Card
-        reg_ini_val = row.get(f"P{pos}_REG_Inicio")
-        reg_fim_val = row.get(f"P{pos}_REG_Fim")
+        # Coleta de dados do Registrador
+        r_ini_val = row.get(f"P{pos}_REG_Inicio")
+        r_fim_val = row.get(f"P{pos}_REG_Fim")
         
+        # Se não houver dados de erro, considera não ensaiado
         if pd.isna(cn) and pd.isna(cp) and pd.isna(ci):
             status = "Não Ligou / Não Ensaido"
             detalhe = ""
             motivo = "N/A"
             erros_pontuais = []
+            reg_diff = "-"
         else:
             status = "APROVADO"
             detalhe = ""
             motivo = "Nenhum"
             erros_pontuais = []
             
+            # Conversão numérica para cálculos
             v_cn = valor_num(cn)
             v_cp = valor_num(cp)
             v_ci = valor_num(ci)
+            v_reg_ini = valor_num(r_ini_val)
+            v_reg_fim = valor_num(r_fim_val)
             
+            # 1. Avaliação de Exatidão
             if v_cn is not None and abs(v_cn) > limite: erros_pontuais.append('CN')
             if v_cp is not None and abs(v_cp) > limite: erros_pontuais.append('CP')
             if v_ci is not None and abs(v_ci) > limite: erros_pontuais.append('CI')
-            
             erro_exatidao = len(erros_pontuais) > 0
             
-            v_reg_ini = valor_num(reg_ini_val)
-            v_reg_fim = valor_num(reg_fim_val)
-            
+            # 2. Avaliação de Registrador
             if v_reg_ini is not None and v_reg_fim is not None:
                 reg_diff = round(v_reg_fim - v_reg_ini, 4)
+                # Reprova se a diferença for diferente de 1.0 (ex: 1.0001 ou 0.999)
                 erro_registrador = (reg_diff != 1)
                 incremento_maior = (reg_diff > 1)
             else:
@@ -321,18 +350,25 @@ def processar_ensaio(row, classe_banc20=None):
                 erro_registrador = False
                 incremento_maior = False
 
+            # 3. Avaliação de Mostrador (MV)
             mv_str = str(texto(mv)).strip().upper()
-            mv_reprovado = (mv_str != "+") if bancada == 'BANC_10_POS' else (mv_str != "OK")
+            if bancada == 'BANC_10_POS':
+                mv_reprovado = (mv_str != "+")
+            else:
+                mv_reprovado = (mv_str != "OK")
 
-            pontos_contra = sum([
-                sum(1 for v in [v_cn, v_cp, v_ci] if v is not None and v > 0 and abs(v) > limite) >= 1,
-                mv_reprovado,
-                incremento_maior
-            ])
+            # 4. Lógica de Contra o Consumidor (2 ou mais critérios de erro positivo)
+            # Verifica se houve erro positivo de exatidão em algum ponto
+            erro_positivo_exatidao = any(v > 0 and abs(v) > limite for v in [v_cn, v_cp, v_ci] if v is not None)
+            
+            pontos_reprovação_grave = 0
+            if erro_positivo_exatidao: pontos_reprovação_grave += 1
+            if mv_reprovado: pontos_reprovação_grave += 1
+            if incremento_maior: pontos_reprovação_grave += 1
 
-            if pontos_contra >= 2:
+            if pontos_reprovação_grave >= 2:
                 status = "CONTRA O CONSUMIDOR"
-                detalhe = "⚠️ Medição a mais"
+                detalhe = "⚠️ Medição a mais (Grave)"
                 motivo = "Contra Consumidor"
             elif erro_exatidao or erro_registrador or mv_reprovado:
                 status = "REPROVADO"
@@ -343,88 +379,229 @@ def processar_ensaio(row, classe_banc20=None):
                 motivo = " / ".join(m_list)
                 detalhe = "⚠️ Verifique este medidor"
 
+        # Adiciona o medidor processado à lista
         medidores.append({
-            "pos": pos, "serie": serie,
-            "cn": texto(cn), "cp": texto(cp), "ci": texto(ci), "mv": texto(mv),
-            "reg_inicio": texto(reg_ini_val), 
-            "reg_fim": texto(reg_fim_val),
-            "reg_erro": reg_diff if 'reg_diff' in locals() else "-",
-            "status": status, "detalhe": detalhe, "motivo": motivo,
-            "limite": limite, "erros_pontuais": erros_pontuais
+            "pos": pos,
+            "serie": serie,
+            "cn": texto(cn),
+            "cp": texto(cp),
+            "ci": texto(ci),
+            "mv": texto(mv),
+            "reg_inicio": texto(r_ini_val),
+            "reg_fim": texto(r_fim_val),
+            "reg_erro": reg_diff,
+            "status": status,
+            "detalhe": detalhe,
+            "motivo": motivo,
+            "limite": limite,
+            "erros_pontuais": erros_pontuais
         })
+        
     return medidores
 
 # =======================================================================
-# [BLOCO 05] - COMPONENTES VISUAIS (VERSÃO LIMPA E ALINHADA)
+# [BLOCO 04B] - FUNÇÕES DE AUDITORIA E ESTATÍSTICA
+# =======================================================================
+
+def calcular_estatisticas(medidores):
+    """Gera o dicionário de totais para o resumo da página."""
+    total = len(medidores)
+    aprovados = sum(1 for m in medidores if m['status'] == 'APROVADO')
+    reprovados = sum(1 for m in medidores if m['status'] == 'REPROVADO')
+    consumidor = sum(1 for m in medidores if m['status'] == 'CONTRA O CONSUMIDOR')
+    return {
+        "total": total,
+        "aprovados": aprovados,
+        "reprovados": reprovados,
+        "consumidor": consumidor
+    }
+
+def calcular_auditoria_real(df):
+    """Calcula a performance técnica ignorando posições vazias da bancada."""
+    total_pos = 0
+    total_ensaiadas = 0
+    total_aprovadas = 0
+    total_reprovadas = 0
+    reprov_exatidao = 0
+    reprov_registrador = 0
+    reprov_mv = 0
+    reprov_consumidor = 0
+
+    for _, row in df.iterrows():
+        medidores = processar_ensaio(row)
+        for m in medidores:
+            total_pos += 1
+            if m['status'] != "Não Ligou / Não Ensaido":
+                total_ensaiadas += 1
+                if m['status'] == "APROVADO":
+                    total_aprovadas += 1
+                else:
+                    total_reprovadas += 1
+                    if "Exatidão" in m['motivo']: reprov_exatidao += 1
+                    if "Registrador" in m['motivo']: reprov_registrador += 1
+                    if "Mostrador/MV" in m['motivo']: reprov_mv += 1
+                    if m['status'] == "CONTRA O CONSUMIDOR": reprov_consumidor += 1
+
+    taxa = (total_aprovadas / total_ensaiadas * 100) if total_ensaiadas > 0 else 0
+    
+    return {
+        "total_posicoes": total_pos,
+        "total_ensaiadas": total_ensaiadas,
+        "total_aprovadas": total_aprovadas,
+        "total_reprovadas": total_reprovadas,
+        "taxa_aprovacao": taxa,
+        "reprov_exatidao": reprov_exatidao,
+        "reprov_registrador": reprov_registrador,
+        "reprov_mv": reprov_mv,
+        "reprov_consumidor": reprov_consumidor
+    }
+
+# =======================================================================
+# [BLOCO 05] - COMPONENTES VISUAIS (COMPLETO E INTEGRADO)
 # =======================================================================
 
 def renderizar_card(medidor):
+    """Renderiza o card individual com Exatidão e Registrador."""
     status_cor = {
-        "APROVADO": "#dcfce7", "REPROVADO": "#fee2e2", 
-        "CONTRA O CONSUMIDOR": "#ede9fe", "Não Ligou / Não Ensaido": "#e5e7eb"
+        "APROVADO": "#dcfce7", 
+        "REPROVADO": "#fee2e2", 
+        "CONTRA O CONSUMIDOR": "#ede9fe", 
+        "Não Ligou / Não Ensaido": "#e5e7eb"
     }
     cor = status_cor.get(medidor['status'], "#f3f4f6")
     
-    st.markdown(f"""
-        <div style="background:{cor}; border-radius:12px; padding:16px; font-size:14px; 
-                    box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left: 6px solid rgba(0,0,0,0.1); 
-                    display: flex; flex-direction: column; justify-content: space-between; min-height: 320px;">
-            <div>
-                <div style="font-size:18px; font-weight:700; border-bottom:2px solid rgba(0,0,0,0.15); 
-                            margin-bottom:12px; padding-bottom: 8px;">🔢 Posição {medidor['pos']}</div>
-                <p style="margin:0 0 12px 0;"><b>Série:</b> {medidor['serie']}</p>
-                
-                <div style="background: rgba(0,0,0,0.05); padding: 10px; border-radius: 8px; margin-bottom:10px;">
-                    <b style="display: block; margin-bottom: 5px; font-size: 12px;">Exatidão (±{medidor['limite']}%)</b>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px;">
-                        <span><b>CN:</b> {medidor['cn']}%</span><span><b>CP:</b> {medidor['cp']}%</span>
-                        <span><b>CI:</b> {medidor['ci']}%</span><span><b>MV:</b> {medidor['mv']}</span>
-                    </div>
+    # HTML do Card - Construído como string única para evitar erro de interpretação
+    html_card = f"""
+    <div style="background:{cor}; border-radius:12px; padding:16px; font-size:14px; 
+                box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left: 6px solid rgba(0,0,0,0.1); 
+                display: flex; flex-direction: column; justify-content: space-between; min-height: 350px;">
+        <div>
+            <div style="font-size:18px; font-weight:700; border-bottom:2px solid rgba(0,0,0,0.15); 
+                        margin-bottom:12px; padding-bottom: 8px;">🔢 Posição {medidor['pos']}</div>
+            <p style="margin:0 0 12px 0;"><b>Série:</b> {medidor['serie']}</p>
+            
+            <div style="background: rgba(255,255,255,0.4); padding: 10px; border-radius: 8px; margin-bottom:10px;">
+                <b style="display: block; margin-bottom: 5px; font-size: 12px;">🎯 Exatidão (±{medidor['limite']}%)</b>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+                    <span><b>CN:</b> {medidor['cn']}%</span><span><b>CP:</b> {medidor['cp']}%</span>
+                    <span><b>CI:</b> {medidor['ci']}%</span><span><b>MV:</b> {medidor['mv']}</span>
                 </div>
+            </div>
 
-                <div style="background: rgba(0,0,0,0.03); padding: 10px; border-radius: 8px; border: 1px dashed rgba(0,0,0,0.1);">
-                    <b style="display: block; margin-bottom: 5px; font-size: 12px;">📑 Registrador (kWh)</b>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px;">
-                        <span><b>Ini:</b> {medidor['reg_inicio']}</span>
-                        <span><b>Fim:</b> {medidor['reg_fim']}</span>
-                        <span style="grid-column: span 2; margin-top:2px;"><b>Erro:</b> {medidor['reg_erro']}</span>
-                    </div>
+            <div style="background: rgba(255,255,255,0.4); padding: 10px; border-radius: 8px; border: 1px dashed rgba(0,0,0,0.1);">
+                <b style="display: block; margin-bottom: 5px; font-size: 12px;">📑 Registrador (kWh)</b>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px;">
+                    <span><b>Ini:</b> {medidor['reg_inicio']}</span>
+                    <span><b>Fim:</b> {medidor['reg_fim']}</span>
+                    <span style="grid-column: span 2; margin-top:2px;"><b>Dif:</b> {medidor['reg_erro']}</span>
                 </div>
             </div>
-            <div>
-                <div style="padding:10px; margin-top: 16px; border-radius:8px; font-weight:800; 
-                            font-size: 14px; text-align:center; background: rgba(0,0,0,0.08);">{medidor['status']}</div>
-                <div style="margin-top:8px; font-size:11px; text-align:center;">{medidor['detalhe']}</div>
-            </div>
+        </div>
+
+        <div>
+            <div style="padding:10px; margin-top: 16px; border-radius:8px; font-weight:800; 
+                        font-size: 14px; text-align:center; background: rgba(0,0,0,0.08);">{medidor['status']}</div>
+            <div style="margin-top:8px; font-size:11px; text-align:center; color: #444;">{medidor['detalhe']}</div>
+        </div>
+    </div>
+    """
+    st.markdown(html_card, unsafe_allow_html=True)
+
+def renderizar_resumo(stats):
+    """Renderiza os KPIs no topo da página."""
+    st.markdown("""
+        <style>
+        .metric-card {
+            background-color: #FFFFFF;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            text-align: center;
+        }
+        .metric-value { font-size: 32px; font-weight: 700; }
+        .metric-label { font-size: 16px; color: #64748b; }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#1e293b;">{stats["total"]}</div><div class="metric-label">Total Ensaiados</div></div>', unsafe_allow_html=True)
+    with col2:
+        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#16a34a;">{stats["aprovados"]}</div><div class="metric-label">Aprovados</div></div>', unsafe_allow_html=True)
+    with col3:
+        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#dc2626;">{stats["reprovados"]}</div><div class="metric-label">Reprovados</div></div>', unsafe_allow_html=True)
+    with col4:
+        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#7c3aed;">{stats["consumidor"]}</div><div class="metric-label">Contra Consumidor</div></div>', unsafe_allow_html=True)
+
+def renderizar_cabecalho_ensaio(n_ensaio, bancada, temperatura):
+    """Cria a barra de título de cada ensaio."""
+    st.markdown(f"""
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 15px; border-radius: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight: bold; font-size: 1.1em;">📋 Ensaio #{n_ensaio}</span>
+            <span style="color: #475569;"><strong>Bancada:</strong> {bancada.replace('_', ' ')}</span>
+            <span style="color: #475569;">🌡️ {temperatura}</span>
         </div>
     """, unsafe_allow_html=True)
 
-def renderizar_resumo(stats):
-    st.markdown("""<style>.metric-card{background-color:#FFFFFF;padding:20px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.05);text-align:center;}.metric-value{font-size:32px;font-weight:700;}.metric-label{font-size:16px;color:#64748b;}</style>""", unsafe_allow_html=True)
-    col1, col2, col3, col4 = st.columns(4)
-    with col1: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#1e293b;">{stats["total"]}</div><div class="metric-label">Total Ensaiados</div></div>', unsafe_allow_html=True)
-    with col2: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#16a34a;">{stats["aprovados"]}</div><div class="metric-label">Aprovados</div></div>', unsafe_allow_html=True)
-    with col3: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#dc2626;">{stats["reprovados"]}</div><div class="metric-label">Reprovados</div></div>', unsafe_allow_html=True)
-    with col4: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#7c3aed;">{stats["consumidor"]}</div><div class="metric-label">Contra Consumidor</div></div>', unsafe_allow_html=True)
-
-def renderizar_cabecalho_ensaio(n_ensaio, bancada, temperatura):
-    st.markdown(f"""<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 15px; border-radius: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;"><span style="font-weight: bold; font-size: 1.1em;">📋 Ensaio #{n_ensaio}</span><span style="color: #475569;"><strong>Bancada:</strong> {bancada.replace('_', ' ')}</span><span style="color: #475569;">🌡️ {temperatura}</span></div>""", unsafe_allow_html=True)
-
 def renderizar_grafico_reprovacoes(medidores):
-    motivos = [m['motivo'] for m in medidores if m['status'] == 'REPROVADO']
-    if not motivos: return
+    """Gera o gráfico horizontal de motivos de reprovação."""
+    motivos = [m['motivo'] for m in medidores if m['status'] == 'REPROVADO' or m['status'] == 'CONTRA O CONSUMIDOR']
+    if not motivos:
+        return
+        
     contagem = {}
     for m in motivos:
-        for parte in [p.strip() for p in m.split('/')]:
-            if parte != "Nenhum": contagem[parte] = contagem.get(parte, 0) + 1
+        partes = [p.strip() for p in m.split('/')]
+        for parte in partes:
+            if parte != "Nenhum" and parte != "N/A":
+                contagem[parte] = contagem.get(parte, 0) + 1
+                
+    if not contagem:
+        return
+
     df_motivos = pd.DataFrame(list(contagem.items()), columns=['Motivo', 'Quantidade']).sort_values('Quantidade', ascending=True)
-    fig = px.bar(df_motivos, x='Quantidade', y='Motivo', orientation='h', title='<b>Principais Motivos de Reprovação</b>', text='Quantidade', color_discrete_sequence=px.colors.qualitative.Pastel)
-    fig.update_layout(yaxis_title=None, xaxis_title="Número de Medidores", showlegend=False, margin=dict(l=10, r=10, t=40, b=10), height=250)
+    
+    fig = px.bar(
+        df_motivos, x='Quantidade', y='Motivo', orientation='h',
+        title='<b>Principais Motivos de Reprovação</b>',
+        text='Quantidade',
+        color_discrete_sequence=px.colors.qualitative.Pastel
+    )
+    fig.update_layout(
+        yaxis_title=None, xaxis_title="Número de Medidores",
+        showlegend=False, margin=dict(l=10, r=10, t=40, b=10), height=250
+    )
     fig.update_traces(textposition='outside')
     st.plotly_chart(fig, use_container_width=True)
 
 def renderizar_botao_scroll_topo():
-    scroll_button_html = """<style>#scrollTopBtn {display: none; position: fixed; bottom: 20px; right: 30px; z-index: 99; border: none; outline: none; background-color: #555; color: white; cursor: pointer; padding: 15px; border-radius: 10px; font-size: 18px; opacity: 0.7;}#scrollTopBtn:hover {background-color: #f44336; opacity: 1;}</style><button onclick="topFunction()" id="scrollTopBtn" title="Voltar ao topo"><b>^</b></button><script>var mybutton = document.getElementById("scrollTopBtn");window.onscroll = function() {scrollFunction()};function scrollFunction() {if (document.body.scrollTop > 100 || document.documentElement.scrollTop > 100) {mybutton.style.display = "block";} else {mybutton.style.display = "none";}}function topFunction() {document.body.scrollTop = 0;document.documentElement.scrollTop = 0;}</script>"""
+    """Adiciona o script e o botão para voltar ao topo da página."""
+    scroll_button_html = """
+    <style>
+    #scrollTopBtn {
+        display: none; position: fixed; bottom: 20px; right: 30px; z-index: 99; 
+        border: none; outline: none; background-color: #555; color: white; 
+        cursor: pointer; padding: 15px; border-radius: 10px; font-size: 18px; opacity: 0.7;
+    }
+    #scrollTopBtn:hover { background-color: #f44336; opacity: 1; }
+    </style>
+    <button onclick="topFunction()" id="scrollTopBtn" title="Voltar ao topo"><b>^</b></button>
+    <script>
+    var mybutton = document.getElementById("scrollTopBtn");
+    window.onscroll = function() {scrollFunction()};
+    function scrollFunction() {
+      if (document.body.scrollTop > 100 || document.documentElement.scrollTop > 100) {
+        mybutton.style.display = "block";
+      } else {
+        mybutton.style.display = "none";
+      }
+    }
+    function topFunction() {
+      document.body.scrollTop = 0;
+      document.documentElement.scrollTop = 0;
+    }
+    </script>
+    """
     st.components.v1.html(scroll_button_html, height=0)
 
 # =========================================================
