@@ -416,26 +416,26 @@ def pagina_visao_diaria(df_completo):
     # --- BOTÃO VOLTAR AO TOPO ---
     st.markdown('''
         <style>
-        .stApp { scroll-behavior: smooth; }
-        #scroll-to-top {
-            position: fixed;
-            bottom: 20px;
-            right: 30px;
-            z-index: 99;
-            border: none;
-            outline: none;
-            background-color: #555;
-            color: white;
-            cursor: pointer;
-            padding: 15px;
-            border-radius: 10px;
-            font-size: 18px;
-            opacity: 0.7;
-        }
-        #scroll-to-top:hover {
-            background-color: #f44336;
-            opacity: 1;
-        }
+            .stApp { scroll-behavior: smooth; }
+            #scroll-to-top {
+                position: fixed;
+                bottom: 20px;
+                right: 30px;
+                z-index: 99;
+                border: none;
+                outline: none;
+                background-color: #555;
+                color: white;
+                cursor: pointer;
+                padding: 15px;
+                border-radius: 10px;
+                font-size: 18px;
+                opacity: 0.7;
+            }
+            #scroll-to-top:hover {
+                background-color: #f44336;
+                opacity: 1;
+            }
         </style>
         <a id="top"></a>
         <a href="#top" id="scroll-to-top"><b>^</b></a>
@@ -446,7 +446,6 @@ def pagina_visao_diaria(df_completo):
     # =====================================================
     # BUSCA POR SÉRIE
     # =====================================================
-
     if "search_key" not in st.session_state:
         st.session_state.search_key = 0
 
@@ -470,17 +469,9 @@ def pagina_visao_diaria(df_completo):
         resultados = []
 
         for _, ensaio_row in df_completo.iterrows():
-
             colunas_serie = [c for c in ensaio_row.index if "_Série" in str(c)]
-
-            if any(
-                termo_busca in str(ensaio_row[col]).lower()
-                for col in colunas_serie
-                if pd.notna(ensaio_row[col])
-            ):
-
+            if any(termo_busca in str(ensaio_row[col]).lower() for col in colunas_serie if pd.notna(ensaio_row[col])):
                 medidores = processar_ensaio(ensaio_row)
-
                 for m in medidores:
                     if termo_busca in m['serie'].lower():
                         resultados.append({
@@ -490,19 +481,11 @@ def pagina_visao_diaria(df_completo):
                         })
 
         if resultados:
-
             st.success(f"{len(resultados)} registro(s) encontrado(s).")
 
-            for res in sorted(
-                resultados,
-                key=lambda x: datetime.strptime(x['data'], '%d/%m/%y'),
-                reverse=True
-            ):
-                with st.expander(
-                    f"{res['data']} | {res['bancada']} | {res['dados']['status']}"
-                ):
+            for res in sorted(resultados, key=lambda x: datetime.strptime(x['data'], '%d/%m/%y'), reverse=True):
+                with st.expander(f"{res['data']} | {res['bancada']} | {res['dados']['status']}"):
                     renderizar_card(res['dados'])
-
         else:
             st.warning("Nenhum registro encontrado.")
 
@@ -511,7 +494,6 @@ def pagina_visao_diaria(df_completo):
     # =====================================================
     # FILTROS DO DIA
     # =====================================================
-
     if "filtro_data" not in st.session_state:
         st.session_state.filtro_data = (datetime.now() - pd.Timedelta(hours=3)).date()
 
@@ -531,19 +513,12 @@ def pagina_visao_diaria(df_completo):
     )
 
     bancadas = df_completo['Bancada_Nome'].unique().tolist()
-
     st.session_state.filtro_bancada = st.sidebar.selectbox(
         "Bancada",
         ['Todas'] + bancadas
     )
 
-    status_options = [
-        "APROVADO",
-        "REPROVADO",
-        "CONTRA O CONSUMIDOR",
-        "Não Ligou / Não Ensaido"
-    ]
-
+    status_options = ["APROVADO", "REPROVADO", "CONTRA O CONSUMIDOR", "Não Ligou / Não Ensaido"]
     st.session_state.filtro_status = st.sidebar.multiselect(
         "Filtrar Status",
         status_options,
@@ -562,15 +537,10 @@ def pagina_visao_diaria(df_completo):
     # =====================================================
     # FILTRA DATA
     # =====================================================
-
-    df_filtrado = df_completo[
-        df_completo['Data_dt'].dt.date == st.session_state.filtro_data
-    ]
+    df_filtrado = df_completo[df_completo['Data_dt'].dt.date == st.session_state.filtro_data]
 
     if st.session_state.filtro_bancada != "Todas":
-        df_filtrado = df_filtrado[
-            df_filtrado['Bancada_Nome'] == st.session_state.filtro_bancada
-        ]
+        df_filtrado = df_filtrado[df_filtrado['Bancada_Nome'] == st.session_state.filtro_bancada]
 
     if df_filtrado.empty:
         st.info("Nenhum ensaio neste dia.")
@@ -579,27 +549,15 @@ def pagina_visao_diaria(df_completo):
     # =====================================================
     # PROCESSA MEDIDORES
     # =====================================================
-
     ensaios = []
 
     for _, row in df_filtrado.iterrows():
-
         medidores = processar_ensaio(row)
+
         medidores_filtrados = []
-
         for m in medidores:
-
-            status_ok = (
-                not st.session_state.filtro_status
-                or m['status'] in st.session_state.filtro_status
-            )
-
-            irr_ok = (
-                not st.session_state.filtro_irregularidade
-                or any(i in m['motivo']
-                       for i in st.session_state.filtro_irregularidade)
-            )
-
+            status_ok = not st.session_state.filtro_status or m['status'] in st.session_state.filtro_status
+            irr_ok = not st.session_state.filtro_irregularidade or any(i in m['motivo'] for i in st.session_state.filtro_irregularidade)
             if status_ok and irr_ok:
                 medidores_filtrados.append(m)
 
@@ -620,15 +578,13 @@ def pagina_visao_diaria(df_completo):
     # =====================================================
     # RESUMO
     # =====================================================
-
     stats = calcular_estatisticas(todos)
     renderizar_resumo(stats)
 
     # =====================================================
     # GRÁFICOS E EXPORTAÇÃO
     # =====================================================
-
-    col1, col2 = st.columns([3, 1])
+    col1, col2 = st.columns([3,1])
 
     with col1:
         renderizar_grafico_reprovacoes(todos)
@@ -648,12 +604,10 @@ def pagina_visao_diaria(df_completo):
     # =====================================================
     # DETALHES
     # =====================================================
-
     st.markdown("---")
     st.subheader("📋 Detalhes dos Ensaios")
 
     for ensaio in ensaios:
-
         renderizar_cabecalho_ensaio(
             ensaio["n_ensaio"],
             ensaio["bancada"],
@@ -661,11 +615,8 @@ def pagina_visao_diaria(df_completo):
         )
 
         cols_n = 5
-
         for i in range(0, len(ensaio["medidores"]), cols_n):
-
             cols = st.columns(cols_n)
-
             for j, m in enumerate(ensaio["medidores"][i:i+cols_n]):
                 with cols[j]:
                     renderizar_card(m)
