@@ -218,7 +218,9 @@ def to_excel(df):
     processed_data = output.getvalue()
     return processed_data
 
+# =======================================================================
 # [BLOCO 04] - PROCESSAMENTO TÉCNICO (CORRIGIDO - REGRA MV REAL)
+# =======================================================================
 
 def processar_ensaio(row, classe_banc20=None):
     medidores = []
@@ -271,16 +273,14 @@ def processar_ensaio(row, classe_banc20=None):
                 erro_registrador = False
                 incremento_maior = False
 
-            # =====================================================
-            # REGRA REAL MV POR BANCADA (CORREÇÃO PRINCIPAL)
-            # =====================================================
+            # ================= REGRA REAL MV =================
             mv = str(texto(row.get(f"P{pos}_MV"))).strip().upper()
 
             if bancada == 'BANC_10_POS':
                 mv_reprovado = (mv != "+")
-            else:  # BANC_20_POS
+            else:
                 mv_reprovado = (mv != "OK")
-            # =====================================================
+            # =================================================
 
             pontos_contra = sum([
                 sum(1 for v in [v_cn, v_cp, v_ci] if v is not None and v > 0 and abs(v) > limite) >= 1,
@@ -318,12 +318,12 @@ def processar_ensaio(row, classe_banc20=None):
 
     return medidores
 
+
 # =======================================================================
-# [BLOCO NOVO] - AUDITORIA TÉCNICA REAL DOS ENSAIOS
+# [BLOCO 04B] - CÁLCULO DA AUDITORIA REAL (SEM EXIBIÇÃO VISUAL)
 # =======================================================================
 
-def auditoria_real_ensaios(df_filtrado):
-    st.markdown("## 🔎 Auditoria Real dos Ensaios")
+def calcular_auditoria_real(df_filtrado):
 
     total_posicoes = 0
     total_ensaiadas = 0
@@ -372,38 +372,18 @@ def auditoria_real_ensaios(df_filtrado):
 
     taxa_aprov = (total_aprovadas / total_ensaiadas * 100) if total_ensaiadas else 0
 
-    # =========================
-    # PAINEL VISUAL
-    # =========================
-    c1, c2, c3, c4 = st.columns(4)
-
-    c1.metric("Posições Totais", total_posicoes)
-    c2.metric("Realmente Ensaiadas", total_ensaiadas)
-    c3.metric("Aprovadas Reais", total_aprovadas)
-    c4.metric("Reprovadas Reais", total_reprovadas)
-
-    st.markdown("### 📊 Taxa Real de Aprovação")
-    st.metric("Aprovação Técnica (%)", f"{taxa_aprov:.2f}%")
-
-    st.markdown("### ⚠️ Reprovação por Motivo Técnico")
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Erro de Exatidão", reprov_exatidao)
-    c2.metric("Registrador", reprov_registrador)
-    c3.metric("Mostrador / MV", reprov_mv)
-    c4.metric("Contra Consumidor", reprov_consumidor)
-
-    # =========================
-    # VALIDAÇÃO MATEMÁTICA
-    # =========================
-    esperado = total_aprovadas + total_reprovadas + total_nao_ensaiadas
-
-    if esperado != total_posicoes:
-        st.error("🚨 INCONSISTÊNCIA MATEMÁTICA DETECTADA")
-        st.write("Total posições:", total_posicoes)
-        st.write("Soma calculada:", esperado)
-    else:
-        st.success("✔ Consistência matemática validada")
+    return {
+        "total_posicoes": total_posicoes,
+        "total_ensaiadas": total_ensaiadas,
+        "total_aprovadas": total_aprovadas,
+        "total_reprovadas": total_reprovadas,
+        "total_nao_ensaiadas": total_nao_ensaiadas,
+        "taxa_aprovacao": taxa_aprov,
+        "reprov_exatidao": reprov_exatidao,
+        "reprov_registrador": reprov_registrador,
+        "reprov_mv": reprov_mv,
+        "reprov_consumidor": reprov_consumidor
+    }
     
 # [BLOCO 05] - COMPONENTES VISUAIS (ORIGINAL)
 def renderizar_card(medidor):
