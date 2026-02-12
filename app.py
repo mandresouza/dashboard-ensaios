@@ -778,7 +778,25 @@ def pagina_visao_mensal(df_completo):
 
     st.markdown("---")
     st.markdown("## 🔎 Auditoria Técnica Real dos Ensaios")
-    auditoria_real_ensaios(df_completo)
+    dados = calcular_auditoria_real(df_completo)
+    st.markdown("## 🔎 Auditoria Técnica Real dos Ensaios")
+
+    c1, c2, c3, c4 = st.columns(4)
+    
+    c1.metric("Posições Totais", dados["total_posicoes"])
+    c2.metric("Realmente Ensaiadas", dados["total_ensaiadas"])
+    c3.metric("Aprovadas Reais", dados["total_aprovadas"])
+    c4.metric("Reprovadas Reais", dados["total_reprovadas"])
+    
+    st.metric("Aprovação Técnica (%)", f'{dados["taxa_aprovacao"]:.2f}%')
+    
+    st.markdown("### ⚠️ Reprovação por Motivo")
+    
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Erro de Exatidão", dados["reprov_exatidao"])
+    c2.metric("Registrador", dados["reprov_registrador"])
+    c3.metric("Mostrador / MV", dados["reprov_mv"])
+    c4.metric("Contra Consumidor", dados["reprov_consumidor"])
     
     # ==============================
     # PREPARAÇÃO DOS DADOS
