@@ -261,7 +261,7 @@ def to_excel(df):
     return processed_data
 
 # =======================================================================
-# [BLOCO 04] - PROCESSAMENTO TÉCNICO (VALIDAÇÃO REAL: FINAL - INICIAL = 1)
+# [BLOCO 04] - PROCESSAMENTO TÉCNICO (VERSÃO FINAL CONSOLIDADA)
 # =======================================================================
 
 def valor_num(valor):
@@ -286,8 +286,8 @@ def texto(valor):
 
 def processar_ensaio(row, classe_banc20=None):
     """
-    Processa a linha validando a regra real: 
-    Se (REG_FIM - REG_INICIO) == 1, o registrador está APROVADO.
+    Processa a linha com regra de aprovação restrita:
+    Registrador só aprova se a diferença for 0 ou 0.01.
     """
     medidores = []
     bancada = row.get('Bancada_Nome')
@@ -323,7 +323,7 @@ def processar_ensaio(row, classe_banc20=None):
         if v_cp is not None and abs(v_cp) > limite: erros_pontuais.append('CP')
         if v_ci is not None and abs(v_ci) > limite: erros_pontuais.append('CI')
 
-        # 2. TRATAMENTO DE VAZIOS (Somente se tudo estiver em branco)
+        # 2. TRATAMENTO DE VAZIOS (Se exatidão e registros iniciais sumirem)
         if v_cn is None and v_cp is None and v_ci is None and v_reg_ini is None:
             medidores.append({
                 "pos": pos, "serie": serie, "cn": "-", "cp": "-", "ci": "-", "mv": "-",
@@ -346,25 +346,25 @@ def processar_ensaio(row, classe_banc20=None):
         else:
             if mv_str != "OK": mv_reprovado = True; erros_list.append("Mostrador/MV")
 
-        # --- VALIDAÇÃO DO REGISTRADOR (REGRA REAL DO FIM - INICIO) ---
-        reg_diff = "-"
+        # --- VALIDAÇÃO DO REGISTRADOR (APENAS 0 E 0.01 APROVAM) ---
+        reg_diff_val = "-"
         incremento_maior = False
         
         if v_reg_ini is not None and v_reg_fim is not None:
-            # A CONTA QUE VALIDA TUDO:
             resultado_conta = round(v_reg_fim - v_reg_ini, 4)
-            reg_diff = resultado_conta
+            reg_diff_val = resultado_conta
             
-            if resultado_conta == 1.0:
-                # SE DEU 1, ESTÁ CERTO! Não adiciona erro de registrador.
+            # REGRAS DO REGISTRADOR:
+            if resultado_conta in [0.0, 0.01]:
+                # APROVADO: se for 0 ou 0.01, não adiciona erro
                 pass 
             else:
-                # SE NÃO DEU 1, ESTÁ ERRADO!
+                # REPROVADO: qualquer outro valor (inclusive 1.0 ou 3001)
                 erros_list.append("Registrador")
                 if resultado_conta > 1.0: 
                     incremento_maior = True
         else:
-            # Se um dos campos do registrador faltar, reprova por dado incompleto
+            # Se não registrou, reprova por Registrador
             erros_list.append("Registrador")
 
         # --- LÓGICA FINAL DE STATUS ---
@@ -387,7 +387,7 @@ def processar_ensaio(row, classe_banc20=None):
             "pos": pos, "serie": serie,
             "cn": texto(cn), "cp": texto(cp), "ci": texto(ci), "mv": mv_str,
             "reg_inicio": texto(r_ini_val), "reg_fim": texto(r_fim_val),
-            "reg_erro": reg_diff, "status": status, "detalhe": detalhe,
+            "reg_erro": reg_diff_val, "status": status, "detalhe": detalhe,
             "motivo": motivo, "limite": limite,
             "erros_pontuais": erros_pontuais
         })
