@@ -923,7 +923,7 @@ def pagina_visao_mensal(df_completo):
     # =====================================================
     evolucao = {}
     
-    for _, row in df_filtrado.iterrows():
+    for _, row in df_mes.iterrows():
     
         data = row["Data_dt"].date()
     
