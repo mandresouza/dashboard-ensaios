@@ -261,7 +261,7 @@ def to_excel(df):
     return processed_data
 
 # =======================================================================
-# [BLOCO 04] - PROCESSAMENTO TÉCNICO (VERSÃO FINAL CONSOLIDADA)
+# [BLOCO 04] - PROCESSAMENTO TÉCNICO (VERSÃO FINAL CONSOLIDADA - REVISADA)
 # =======================================================================
 
 def valor_num(valor):
@@ -286,8 +286,8 @@ def texto(valor):
 
 def processar_ensaio(row, classe_banc20=None):
     """
-    Processa a linha com regra de aprovação restrita:
-    Registrador só aprova se a diferença for 0 ou 0.01.
+    Processa a linha com regra de aprovação flexível:
+    Registrador aprova se a diferença for 1.0 (padrão), 0 ou 0.01.
     """
     medidores = []
     bancada = row.get('Bancada_Nome')
@@ -323,7 +323,7 @@ def processar_ensaio(row, classe_banc20=None):
         if v_cp is not None and abs(v_cp) > limite: erros_pontuais.append('CP')
         if v_ci is not None and abs(v_ci) > limite: erros_pontuais.append('CI')
 
-        # 2. TRATAMENTO DE VAZIOS (Se exatidão e registros iniciais sumirem)
+        # 2. TRATAMENTO DE VAZIOS
         if v_cn is None and v_cp is None and v_ci is None and v_reg_ini is None:
             medidores.append({
                 "pos": pos, "serie": serie, "cn": "-", "cp": "-", "ci": "-", "mv": "-",
@@ -346,7 +346,7 @@ def processar_ensaio(row, classe_banc20=None):
         else:
             if mv_str != "OK": mv_reprovado = True; erros_list.append("Mostrador/MV")
 
-        # --- VALIDAÇÃO DO REGISTRADOR (APENAS 0 E 0.01 APROVAM) ---
+        # --- VALIDAÇÃO DO REGISTRADOR (REGRA CORRIGIDA) ---
         reg_diff_val = "-"
         incremento_maior = False
         
@@ -354,17 +354,15 @@ def processar_ensaio(row, classe_banc20=None):
             resultado_conta = round(v_reg_fim - v_reg_ini, 4)
             reg_diff_val = resultado_conta
             
-            # REGRAS DO REGISTRADOR:
-            if resultado_conta in [0.0, 0.01]:
-                # APROVADO: se for 0 ou 0.01, não adiciona erro
+            # APROVA se for 1.0 (Normal), 0 (Parado) ou 0.01 (Mínimo)
+            if resultado_conta in [1.0, 0.0, 0.01]:
                 pass 
             else:
-                # REPROVADO: qualquer outro valor (inclusive 1.0 ou 3001)
+                # REPROVA se for qualquer outra coisa (como o 3001)
                 erros_list.append("Registrador")
                 if resultado_conta > 1.0: 
                     incremento_maior = True
         else:
-            # Se não registrou, reprova por Registrador
             erros_list.append("Registrador")
 
         # --- LÓGICA FINAL DE STATUS ---
