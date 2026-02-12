@@ -916,6 +916,37 @@ def pagina_visao_mensal(df_completo):
         )
         st.plotly_chart(fig_bar, use_container_width=True)
 
+    # =====================================================
+    # CALCULAR QUANTIDADE REAL DE MEDIDORES POR DIA
+    # =====================================================
+    evolucao = {}
+    
+    for _, row in df_filtrado.iterrows():
+    
+        data = row["Data_dt"].date()
+    
+        medidores = processar_ensaio(row)
+    
+        # conta apenas medidores que realmente tiveram resultado
+        qtd_real = 0
+        for m in medidores:
+            tem_resultado = any([
+                m["cn"] not in [None, "", "None"],
+                m["cp"] not in [None, "", "None"],
+                m["ci"] not in [None, "", "None"]
+            ])
+            if tem_resultado:
+                qtd_real += 1
+    
+        evolucao[data] = evolucao.get(data, 0) + qtd_real
+    
+    
+    # transforma em dataframe para o gráfico
+    df_evolucao = pd.DataFrame({
+        "Data": list(evolucao.keys()),
+        "Medidores": list(evolucao.values())
+    }).sort_values("Data")
+
     # ==============================
     # TENDÊNCIA DA TAXA
     # ==============================
