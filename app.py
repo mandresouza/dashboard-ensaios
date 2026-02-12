@@ -677,58 +677,7 @@ def pagina_visao_diaria(df_completo):
     # RESUMO
     # =====================================================
     stats = calcular_estatisticas(todos)
-    renderizar_resumo(stats)
-
-    # =====================================================
-    # 🔎 AUDITORIA TÉCNICA REAL (APENAS UMA)
-    # =====================================================
-    try:
-        if 'auditoria_real_ensaios' in globals():
-            st.markdown("---")
-            st.subheader("🧪 Auditoria Técnica Real dos Ensaios")
-            auditoria_real_ensaios(df_filtrado)
-    except Exception as e:
-        st.warning(f"Erro na auditoria: {e}")
-
-    # =====================================================
-    # GRÁFICOS E EXPORTAÇÃO
-    # =====================================================
-    col1, col2 = st.columns([3,1])
-
-    with col1:
-        renderizar_grafico_reprovacoes(todos)
-
-    with col2:
-        pdf_bytes = gerar_pdf_relatorio(
-            ensaios=ensaios,
-            data=st.session_state.filtro_data.strftime('%d/%m/%Y'),
-            stats=stats
-        )
-        st.download_button("📥 PDF", pdf_bytes, file_name="relatorio.pdf")
-
-        df_export = pd.DataFrame(todos)
-        excel_bytes = to_excel(df_export)
-        st.download_button("📥 Excel", excel_bytes, file_name="dados.xlsx")
-
-    # =====================================================
-    # DETALHES
-    # =====================================================
-    st.markdown("---")
-    st.subheader("📋 Detalhes dos Ensaios")
-
-    for ensaio in ensaios:
-        renderizar_cabecalho_ensaio(
-            ensaio["n_ensaio"],
-            ensaio["bancada"],
-            ensaio["temperatura"]
-        )
-
-        cols_n = 5
-        for i in range(0, len(ensaio["medidores"]), cols_n):
-            cols = st.columns(cols_n)
-            for j, m in enumerate(ensaio["medidores"][i:i+cols_n]):
-                with cols[j]:
-                    renderizar_card(m)
+    renderizar_resumo(stats)    
             
 # =========================================================
 # [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO FINAL LIMPA)
