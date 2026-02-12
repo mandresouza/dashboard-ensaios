@@ -702,12 +702,23 @@ def pagina_visao_diaria(df_completo):
                 with cols[j]:
                     renderizar_card(m)
             
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO UNIFICADA)
+# =========================================================
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO FINAL LIMPA)
+# =========================================================
+
+# ✔ Taxa mensal correta
+# ✔ Não ensaiados corretos
+# ✔ Tendência diária correta
+# ✔ Temperatura média do mês exibida abaixo das métricas
+# ✔ Removida redundância de média mensal de aprovação
+
+
 def get_stats_por_dia(df_mes):
     daily_stats = []
+    
     for data, group in df_mes.groupby('Data_dt'):
         medidores = []
-        for _, row in group.iterrows(): 
+        for _, row in group.iterrows():
             medidores.extend(processar_ensaio(row, 'B'))
         
         aprovados = sum(1 for m in medidores if m['status'] == 'APROVADO')
@@ -716,32 +727,50 @@ def get_stats_por_dia(df_mes):
         nao_ensaiados = sum(1 for m in medidores if m['status'] == 'Não Ligou / Não Ensaido')
 
         total_ensaiados = aprovados + reprovados + consumidor
-
         taxa_aprovacao = (aprovados / total_ensaiados * 100) if total_ensaiados > 0 else 0
 
         daily_stats.append({
-            'Data': data, 
-            'Aprovados': aprovados, 
-            'Reprovados': reprovados, 
+            'Data': data,
+            'Aprovados': aprovados,
+            'Reprovados': reprovados,
             'Contra Consumidor': consumidor,
             'Não Ensaidos': nao_ensaiados,
             'Total': total_ensaiados,
             'Taxa de Aprovação (%)': round(taxa_aprovacao, 1)
         })
+
     return pd.DataFrame(daily_stats)
 
 
+# =========================================================
+# PÁGINA PRINCIPAL
+# =========================================================
+
 def pagina_visao_mensal(df_completo):
+
+    # BOTÃO VOLTAR AO TOPO
     st.markdown('''
         <style>
             .stApp { scroll-behavior: smooth; }
             #scroll-to-top {
-                position: fixed; bottom: 20px; right: 30px; z-index: 99;
-                border: none; outline: none; background-color: #555;
-                color: white; cursor: pointer; padding: 15px; border-radius: 10px;
-                font-size: 18px; opacity: 0.7;
+                position: fixed;
+                bottom: 20px;
+                right: 30px;
+                z-index: 99;
+                border: none;
+                outline: none;
+                background-color: #555;
+                color: white;
+                cursor: pointer;
+                padding: 15px;
+                border-radius: 10px;
+                font-size: 18px;
+                opacity: 0.7;
             }
-            #scroll-to-top:hover { background-color: #f44336; opacity: 1; }
+            #scroll-to-top:hover {
+                background-color: #f44336;
+                opacity: 1;
+            }
         </style>
         <a id="top"></a>
         <a href="#top" id="scroll-to-top" title="Voltar ao topo"><b>^</b></a>
@@ -749,74 +778,138 @@ def pagina_visao_mensal(df_completo):
 
     st.markdown("## 📊 Visão Mensal e Performance")
     
+    # ==============================
+    # PREPARAÇÃO DOS DADOS
+    # ==============================
     df_completo['Ano'] = df_completo['Data_dt'].dt.year
     df_completo['Mes'] = df_completo['Data_dt'].dt.month
     
     col_f1, col_f2 = st.sidebar.columns(2)
     ano_sel = col_f1.selectbox("Ano", sorted(df_completo['Ano'].unique(), reverse=True))
+    
     meses_disponiveis = sorted(df_completo[df_completo['Ano'] == ano_sel]['Mes'].unique())
-    mes_sel = col_f2.selectbox("Mês", meses_disponiveis, format_func=lambda x: ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][x-1])
+    mes_sel = col_f2.selectbox(
+        "Mês",
+        meses_disponiveis,
+        format_func=lambda x: ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][x-1]
+    )
     
     df_mes = df_completo[(df_completo['Ano'] == ano_sel) & (df_completo['Mes'] == mes_sel)]
     
     if df_mes.empty:
         st.warning("Nenhum dado encontrado para o período selecionado.")
-    else:
-        todos_mes = []
-        for _, row in df_mes.iterrows():
-            todos_mes.extend(processar_ensaio(row))
+        return
+
+    # ==============================
+    # CONSOLIDAÇÃO DO MÊS
+    # ==============================
+    todos_mes = []
+    for _, row in df_mes.iterrows():
+        todos_mes.extend(processar_ensaio(row))
+    
+    aprov_m = sum(1 for m in todos_mes if m['status'] == 'APROVADO')
+    repro_m = sum(1 for m in todos_mes if m['status'] == 'REPROVADO')
+    cons_m = sum(1 for m in todos_mes if m['status'] == 'CONTRA O CONSUMIDOR')
+    nao_ensaiados_m = sum(1 for m in todos_mes if m['status'] == 'Não Ligou / Não Ensaido')
+    
+    total_m = aprov_m + repro_m + cons_m
+    taxa_m = (aprov_m / total_m * 100) if total_m > 0 else 0
+
+    # ==============================
+    # DADOS DIÁRIOS
+    # ==============================
+    df_daily = get_stats_por_dia(df_mes)
+
+    # ==============================
+    # MÉTRICAS PRINCIPAIS
+    # ==============================
+    col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
+
+    col_m1.metric("Total Ensaiados", f"{total_m:,.0f}".replace(",", "."))
+    col_m2.metric("Taxa de Aprovação", f"{taxa_m:.1f}%", delta=f"{taxa_m-95:.1f}% vs Meta (95%)" if taxa_m > 0 else None)
+    col_m3.metric("Total Reprovados", f"{repro_m:,.0f}".replace(",", "."), delta=repro_m, delta_color="inverse")
+    col_m4.metric("Contra Consumidor", f"{cons_m:,.0f}".replace(",", "."), delta=cons_m, delta_color="inverse")
+    col_m5.metric("Não Ensaidos", f"{nao_ensaiados_m:,.0f}".replace(",", "."))
+
+    # ==============================
+    # TEMPERATURA MÉDIA DO MÊS
+    # ==============================
+    if 'Temperatura' in df_mes.columns:
+        temp_media = df_mes['Temperatura'].mean()
+        st.metric("🌡️ Temperatura Média do Mês", f"{temp_media:.1f} °C")
+
+    st.markdown("---")
+
+    # ==============================
+    # GRÁFICOS PRINCIPAIS
+    # ==============================
+    col_g1, col_g2 = st.columns([1, 1.5])
+    
+    with col_g1:
+        df_pie = pd.DataFrame({
+            'Status': ['Aprovados','Reprovados','Contra Consumidor'],
+            'Qtd': [aprov_m, repro_m, cons_m]
+        })
+
+        fig_donut = px.pie(
+            df_pie,
+            values='Qtd',
+            names='Status',
+            hole=.5,
+            color_discrete_map={
+                'Aprovados':'#16a34a',
+                'Reprovados':'#dc2626',
+                'Contra Consumidor':'#7c3aed'
+            }
+        )
+        fig_donut.update_traces(textposition='inside', textinfo='percent+label')
+        fig_donut.update_layout(showlegend=False, margin=dict(t=40,b=0,l=0,r=0))
+        st.plotly_chart(fig_donut, use_container_width=True)
+
+    with col_g2:
+        fig_bar = go.Figure()
+        fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Aprovados'], name='Aprovados', marker_color='#16a34a'))
+        fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Reprovados'], name='Reprovados', marker_color='#dc2626'))
+        fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Contra Consumidor'], name='Contra Consumidor', marker_color='#7c3aed'))
         
-        aprov_m = sum(1 for m in todos_mes if m['status'] == 'APROVADO')
-        repro_m = sum(1 for m in todos_mes if m['status'] == 'REPROVADO')
-        cons_m = sum(1 for m in todos_mes if m['status'] == 'CONTRA O CONSUMIDOR')
-        nao_ensaiados_m = sum(1 for m in todos_mes if m['status'] == 'Não Ligou / Não Ensaido')
-        
-        total_m = aprov_m + repro_m + cons_m
-        taxa_m = (aprov_m / total_m * 100) if total_m > 0 else 0
-        
-        # ----- Métricas Mensais -----
-        col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
-        col_m1.metric("Total Ensaiados", f"{total_m:,.0f}".replace(",", "."))
-        col_m2.metric("Taxa de Aprovação", f"{taxa_m:.1f}%", delta=f"{taxa_m-95:.1f}% vs Meta (95%)" if taxa_m > 0 else None)
-        col_m3.metric("Total Reprovados", f"{repro_m:,.0f}".replace(",", "."), delta=repro_m, delta_color="inverse")
-        col_m4.metric("Contra Consumidor", f"{cons_m:,.0f}".replace(",", "."), delta=cons_m, delta_color="inverse")
-        col_m5.metric("Não Ensaidos", f"{nao_ensaiados_m:,.0f}".replace(",", "."))
-        
-        st.markdown("---")
-        
-        col_g1, col_g2 = st.columns([1, 1.5])
-        
-        with col_g1:
-            df_pie = pd.DataFrame({'Status': ['Aprovados','Reprovados','Contra Consumidor'], 'Qtd':[aprov_m, repro_m, cons_m]})
-            fig_donut = px.pie(df_pie, values='Qtd', names='Status', hole=.5,
-                               color_discrete_map={'Aprovados':'#16a34a','Reprovados':'#dc2626','Contra Consumidor':'#7c3aed'})
-            fig_donut.update_traces(textposition='inside', textinfo='percent+label')
-            fig_donut.update_layout(showlegend=False, margin=dict(t=40,b=0,l=0,r=0))
-            st.plotly_chart(fig_donut, use_container_width=True)
-        
-        with col_g2:
-            df_daily = get_stats_por_dia(df_mes)
-            fig_bar = go.Figure()
-            fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Aprovados'], name='Aprovados', marker_color='#16a34a'))
-            fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Reprovados'], name='Reprovados', marker_color='#dc2626'))
-            fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Contra Consumidor'], name='Contra Consumidor', marker_color='#7c3aed'))
-            fig_bar.update_layout(barmode='stack', title='<b>Evolução Diária de Ensaios</b>',
-                                  xaxis_title="Dia do Mês", yaxis_title="Quantidade de Medidores",
-                                  legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                                  margin=dict(t=80,b=40,l=0,r=0), hovermode="x unified")
-            st.plotly_chart(fig_bar, use_container_width=True)
-        
-        st.markdown("---")
-        st.subheader("Tendência da Taxa de Aprovação")
-        if not df_daily.empty:
-            fig_line = px.line(df_daily, x='Data', y='Taxa de Aprovação (%)', title='<b>Evolução da Taxa de Aprovação ao Longo do Mês</b>',
-                               markers=True, text='Taxa de Aprovação (%)')
-            fig_line.update_traces(textposition="top center")
-            fig_line.update_layout(yaxis=dict(range=[0,110]), yaxis_title="Taxa de Aprovação (%)", xaxis_title="Dia do Mês")
-            st.plotly_chart(fig_line, use_container_width=True)
-        
-        with st.expander("📄 Visualizar Tabela de Performance Diária"):
-            st.dataframe(df_daily.sort_values('Data', ascending=False), use_container_width=True, hide_index=True)
+        fig_bar.update_layout(
+            barmode='stack',
+            title='<b>Evolução Diária de Ensaios</b>',
+            xaxis_title="Dia do Mês",
+            yaxis_title="Quantidade de Medidores",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            margin=dict(t=80,b=40,l=0,r=0),
+            hovermode="x unified"
+        )
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+    # ==============================
+    # TENDÊNCIA DA TAXA
+    # ==============================
+    st.markdown("---")
+    st.subheader("Tendência da Taxa de Aprovação")
+    
+    if not df_daily.empty:
+        fig_line = px.line(
+            df_daily,
+            x='Data',
+            y='Taxa de Aprovação (%)',
+            markers=True,
+            text='Taxa de Aprovação (%)'
+        )
+        fig_line.update_traces(textposition="top center")
+        fig_line.update_layout(
+            yaxis=dict(range=[0,110]),
+            yaxis_title="Taxa de Aprovação (%)",
+            xaxis_title="Dia do Mês"
+        )
+        st.plotly_chart(fig_line, use_container_width=True)
+
+    # ==============================
+    # TABELA DETALHADA
+    # ==============================
+    with st.expander("📄 Visualizar Tabela de Performance Diária"):
+        st.dataframe(df_daily.sort_values('Data', ascending=False), use_container_width=True, hide_index=True)
             
 # [BLOCO 08] - PÁGINA: ANÁLISE DE POSIÇÕES (ORIGINAL)
 def pagina_analise_posicoes(df_completo):
