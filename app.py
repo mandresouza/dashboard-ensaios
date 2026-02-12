@@ -457,11 +457,12 @@ def calcular_auditoria_real(df):
     }
 
 # =======================================================================
-# [BLOCO 05] - COMPONENTES VISUAIS (COMPLETO E INTEGRADO)
+# [BLOCO 05] - COMPONENTES VISUAIS (VERSÃO REESTRUTURADA)
 # =======================================================================
+import textwrap
 
 def renderizar_card(medidor):
-    """Renderiza o card individual com Exatidão e Registrador."""
+    """Renderiza o card individual interpretando o HTML corretamente."""
     status_cor = {
         "APROVADO": "#dcfce7", 
         "REPROVADO": "#fee2e2", 
@@ -470,68 +471,49 @@ def renderizar_card(medidor):
     }
     cor = status_cor.get(medidor['status'], "#f3f4f6")
     
-    # HTML do Card - Construído como string única para evitar erro de interpretação
-    html_card = f"""
-    <div style="background:{cor}; border-radius:12px; padding:16px; font-size:14px; 
-                box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left: 6px solid rgba(0,0,0,0.1); 
-                display: flex; flex-direction: column; justify-content: space-between; min-height: 350px;">
-        <div>
-            <div style="font-size:18px; font-weight:700; border-bottom:2px solid rgba(0,0,0,0.15); 
-                        margin-bottom:12px; padding-bottom: 8px;">🔢 Posição {medidor['pos']}</div>
-            <p style="margin:0 0 12px 0;"><b>Série:</b> {medidor['serie']}</p>
-            
-            <div style="background: rgba(255,255,255,0.4); padding: 10px; border-radius: 8px; margin-bottom:10px;">
-                <b style="display: block; margin-bottom: 5px; font-size: 12px;">🎯 Exatidão (±{medidor['limite']}%)</b>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
-                    <span><b>CN:</b> {medidor['cn']}%</span><span><b>CP:</b> {medidor['cp']}%</span>
-                    <span><b>CI:</b> {medidor['ci']}%</span><span><b>MV:</b> {medidor['mv']}</span>
-                </div>
-            </div>
-
-            <div style="background: rgba(255,255,255,0.4); padding: 10px; border-radius: 8px; border: 1px dashed rgba(0,0,0,0.1);">
-                <b style="display: block; margin-bottom: 5px; font-size: 12px;">📑 Registrador (kWh)</b>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px;">
-                    <span><b>Ini:</b> {medidor['reg_inicio']}</span>
-                    <span><b>Fim:</b> {medidor['reg_fim']}</span>
-                    <span style="grid-column: span 2; margin-top:2px;"><b>Dif:</b> {medidor['reg_erro']}</span>
-                </div>
+    # Criamos o HTML usando uma estrutura limpa e sem recuos que quebram o markdown
+    html_conteudo = f"""
+    <div style="background:{cor}; border-radius:12px; padding:16px; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left: 6px solid rgba(0,0,0,0.1); display: flex; flex-direction: column; min-height: 350px;">
+        <div style="font-size:18px; font-weight:700; border-bottom:2px solid rgba(0,0,0,0.15); margin-bottom:12px; padding-bottom: 8px;">🔢 Posição {medidor['pos']}</div>
+        <p style="margin:0 0 12px 0;"><b>Série:</b> {medidor['serie']}</p>
+        <div style="background: rgba(255,255,255,0.4); padding: 10px; border-radius: 8px; margin-bottom:10px;">
+            <b style="display: block; margin-bottom: 5px; font-size: 12px;">🎯 Exatidão (±{medidor['limite']}%)</b>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+                <span><b>CN:</b> {medidor['cn']}%</span><span><b>CP:</b> {medidor['cp']}%</span>
+                <span><b>CI:</b> {medidor['ci']}%</span><span><b>MV:</b> {medidor['mv']}</span>
             </div>
         </div>
-
-        <div>
-            <div style="padding:10px; margin-top: 16px; border-radius:8px; font-weight:800; 
-                        font-size: 14px; text-align:center; background: rgba(0,0,0,0.08);">{medidor['status']}</div>
+        <div style="background: rgba(255,255,255,0.4); padding: 10px; border-radius: 8px; border: 1px dashed rgba(0,0,0,0.1);">
+            <b style="display: block; margin-bottom: 5px; font-size: 12px;">📑 Registrador (kWh)</b>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px;">
+                <span><b>Ini:</b> {medidor['reg_inicio']}</span>
+                <span><b>Fim:</b> {medidor['reg_fim']}</span>
+                <span style="grid-column: span 2; margin-top:2px;"><b>Dif:</b> {medidor['reg_erro']}</span>
+            </div>
+        </div>
+        <div style="margin-top: auto; padding-top: 15px;">
+            <div style="padding:10px; border-radius:8px; font-weight:800; font-size: 14px; text-align:center; background: rgba(0,0,0,0.08);">{medidor['status']}</div>
             <div style="margin-top:8px; font-size:11px; text-align:center; color: #444;">{medidor['detalhe']}</div>
         </div>
     </div>
     """
-    st.markdown(html_card, unsafe_allow_html=True)
+    # O segredo: usamos textwrap para limpar qualquer indentação que faça o Streamlit achar que é código
+    st.markdown(textwrap.dedent(html_conteudo), unsafe_allow_html=True)
 
 def renderizar_resumo(stats):
     """Renderiza os KPIs no topo da página."""
     st.markdown("""
         <style>
-        .metric-card {
-            background-color: #FFFFFF;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            text-align: center;
-        }
+        .metric-card { background-color: #FFFFFF; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center; }
         .metric-value { font-size: 32px; font-weight: 700; }
         .metric-label { font-size: 16px; color: #64748b; }
         </style>
     """, unsafe_allow_html=True)
-    
     col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#1e293b;">{stats["total"]}</div><div class="metric-label">Total Ensaiados</div></div>', unsafe_allow_html=True)
-    with col2:
-        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#16a34a;">{stats["aprovados"]}</div><div class="metric-label">Aprovados</div></div>', unsafe_allow_html=True)
-    with col3:
-        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#dc2626;">{stats["reprovados"]}</div><div class="metric-label">Reprovados</div></div>', unsafe_allow_html=True)
-    with col4:
-        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#7c3aed;">{stats["consumidor"]}</div><div class="metric-label">Contra Consumidor</div></div>', unsafe_allow_html=True)
+    with col1: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#1e293b;">{stats["total"]}</div><div class="metric-label">Total</div></div>', unsafe_allow_html=True)
+    with col2: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#16a34a;">{stats["aprovados"]}</div><div class="metric-label">Aprovados</div></div>', unsafe_allow_html=True)
+    with col3: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#dc2626;">{stats["reprovados"]}</div><div class="metric-label">Reprovados</div></div>', unsafe_allow_html=True)
+    with col4: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#7c3aed;">{stats["consumidor"]}</div><div class="metric-label">Consumidor</div></div>', unsafe_allow_html=True)
 
 def renderizar_cabecalho_ensaio(n_ensaio, bancada, temperatura):
     """Cria a barra de título de cada ensaio."""
@@ -545,64 +527,29 @@ def renderizar_cabecalho_ensaio(n_ensaio, bancada, temperatura):
 
 def renderizar_grafico_reprovacoes(medidores):
     """Gera o gráfico horizontal de motivos de reprovação."""
-    motivos = [m['motivo'] for m in medidores if m['status'] == 'REPROVADO' or m['status'] == 'CONTRA O CONSUMIDOR']
-    if not motivos:
-        return
-        
+    motivos = [m['motivo'] for m in medidores if m['status'] in ['REPROVADO', 'CONTRA O CONSUMIDOR']]
+    if not motivos: return
     contagem = {}
     for m in motivos:
-        partes = [p.strip() for p in m.split('/')]
-        for parte in partes:
-            if parte != "Nenhum" and parte != "N/A":
-                contagem[parte] = contagem.get(parte, 0) + 1
-                
-    if not contagem:
-        return
-
+        for parte in [p.strip() for p in m.split('/')]:
+            if parte not in ["Nenhum", "N/A"]: contagem[parte] = contagem.get(parte, 0) + 1
+    if not contagem: return
     df_motivos = pd.DataFrame(list(contagem.items()), columns=['Motivo', 'Quantidade']).sort_values('Quantidade', ascending=True)
-    
-    fig = px.bar(
-        df_motivos, x='Quantidade', y='Motivo', orientation='h',
-        title='<b>Principais Motivos de Reprovação</b>',
-        text='Quantidade',
-        color_discrete_sequence=px.colors.qualitative.Pastel
-    )
-    fig.update_layout(
-        yaxis_title=None, xaxis_title="Número de Medidores",
-        showlegend=False, margin=dict(l=10, r=10, t=40, b=10), height=250
-    )
-    fig.update_traces(textposition='outside')
+    fig = px.bar(df_motivos, x='Quantidade', y='Motivo', orientation='h', title='<b>Motivos de Reprovação</b>', text='Quantidade', color_discrete_sequence=px.colors.qualitative.Pastel)
+    fig.update_layout(yaxis_title=None, xaxis_title=None, showlegend=False, margin=dict(l=10, r=10, t=40, b=10), height=250)
     st.plotly_chart(fig, use_container_width=True)
 
 def renderizar_botao_scroll_topo():
-    """Adiciona o script e o botão para voltar ao topo da página."""
-    scroll_button_html = """
-    <style>
-    #scrollTopBtn {
-        display: none; position: fixed; bottom: 20px; right: 30px; z-index: 99; 
-        border: none; outline: none; background-color: #555; color: white; 
-        cursor: pointer; padding: 15px; border-radius: 10px; font-size: 18px; opacity: 0.7;
-    }
-    #scrollTopBtn:hover { background-color: #f44336; opacity: 1; }
-    </style>
-    <button onclick="topFunction()" id="scrollTopBtn" title="Voltar ao topo"><b>^</b></button>
+    """Script para o botão de voltar ao topo."""
+    st.components.v1.html("""
+    <style>#scrollTopBtn {display: none; position: fixed; bottom: 20px; right: 30px; z-index: 99; border: none; outline: none; background-color: #555; color: white; cursor: pointer; padding: 15px; border-radius: 10px; font-size: 18px; opacity: 0.7;} #scrollTopBtn:hover {background-color: #f44336; opacity: 1;}</style>
+    <button onclick="topFunction()" id="scrollTopBtn"><b>^</b></button>
     <script>
-    var mybutton = document.getElementById("scrollTopBtn");
-    window.onscroll = function() {scrollFunction()};
-    function scrollFunction() {
-      if (document.body.scrollTop > 100 || document.documentElement.scrollTop > 100) {
-        mybutton.style.display = "block";
-      } else {
-        mybutton.style.display = "none";
-      }
-    }
-    function topFunction() {
-      document.body.scrollTop = 0;
-      document.documentElement.scrollTop = 0;
-    }
+    var btn = document.getElementById("scrollTopBtn");
+    window.onscroll = function() {if (document.body.scrollTop > 100 || document.documentElement.scrollTop > 100) {btn.style.display = "block";} else {btn.style.display = "none";}};
+    function topFunction() {document.body.scrollTop = 0; document.documentElement.scrollTop = 0;}
     </script>
-    """
-    st.components.v1.html(scroll_button_html, height=0)
+    """, height=0)
 
 # =========================================================
 # [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (RESTAURADO - SEM AUDITORIA)
