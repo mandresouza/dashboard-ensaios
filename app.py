@@ -324,11 +324,10 @@ def processar_ensaio(row, classe_banc20=None):
         if v_ci is not None and abs(v_ci) > limite: erros_pontuais.append('CI')
 
         # --- TRATAMENTO DE VAZIOS (MELHORADO) ---
-        # Se exatidão está vazia OU os registradores estão vazios, considera "Não Ensaidado"
         if (v_cn is None and v_cp is None and v_ci is None) or (v_reg_ini is None or v_reg_fim is None):
             medidores.append({
                 "pos": pos, "serie": serie, "cn": "-", "cp": "-", "ci": "-", "mv": "-",
-                "reg_inicio": "-", "reg_fim": "-", "reg_erro": "-",
+                "reg_inicio": "-", "reg_fim": "-", "reg_erro": "DADO AUSENTE",
                 "status": "Não Ligou / Não Ensaido", "detalhe": "", "motivo": "N/A", 
                 "limite": limite, "erros_pontuais": []
             })
@@ -352,12 +351,22 @@ def processar_ensaio(row, classe_banc20=None):
                 mv_reprovado = True
                 erros_list.append("Mostrador/MV")
 
-        # 3. Validação de Registrador (Regra: Fim - Inicio deve ser EXATAMENTE 1.0)
-        reg_diff = round(v_reg_fim - v_reg_ini, 4)
+        # 3. Validação de Registrador (AJUSTADO PARA ELIMINAR O 3001 VISUALMENTE)
+        calculo_reg = round(v_reg_fim - v_reg_ini, 4)
+        reg_diff_exibicao = "-"
         incremento_maior = False
-        if reg_diff != 1.0:
+        
+        if calculo_reg != 1.0:
             erros_list.append("Registrador")
-            if reg_diff > 1.0: incremento_maior = True
+            if calculo_reg > 1.0: incremento_maior = True
+            
+            # TRAVA: Se o erro for absurdo (tipo o 3001), mostramos texto, não o número
+            if abs(calculo_reg) > 2.0:
+                reg_diff_exibicao = "ERRO DE LEITURA"
+            else:
+                reg_diff_exibicao = calculo_reg
+        else:
+            reg_diff_exibicao = 1.0
 
         # 4. Lógica Contra Consumidor (Exatidão Positiva + (Registrador Alto OU MV Errado))
         erro_pos_exat = any(v is not None and v > limite for v in [v_cn, v_cp, v_ci])
@@ -379,7 +388,7 @@ def processar_ensaio(row, classe_banc20=None):
             "pos": pos, "serie": serie,
             "cn": texto(cn), "cp": texto(cp), "ci": texto(ci), "mv": mv_str,
             "reg_inicio": texto(r_ini_val), "reg_fim": texto(r_fim_val),
-            "reg_erro": reg_diff, "status": status, "detalhe": detalhe,
+            "reg_erro": reg_diff_exibicao, "status": status, "detalhe": detalhe,
             "motivo": motivo, "limite": limite,
             "erros_pontuais": erros_pontuais
         })
