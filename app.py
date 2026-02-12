@@ -457,12 +457,11 @@ def calcular_auditoria_real(df):
     }
 
 # =======================================================================
-# [BLOCO 05] - COMPONENTES VISUAIS (FONTE PADRONIZADA)
+# [BLOCO 05] - COMPONENTES VISUAIS (INTEGRAL COM REGISTRADOR)
 # =======================================================================
-import textwrap
 
 def renderizar_card(medidor):
-    """Renderiza o card individual com fontes padronizadas entre Exatidão e Registrador."""
+    """Renderiza o card individual de cada medidor com cores dinâmicas por status."""
     status_cor = {
         "APROVADO": "#dcfce7", 
         "REPROVADO": "#fee2e2", 
@@ -471,56 +470,66 @@ def renderizar_card(medidor):
     }
     cor = status_cor.get(medidor['status'], "#f3f4f6")
     
-    # HTML do Card com fontes ajustadas (14px para dados e 12px para títulos internos)
-    html_conteudo = f"""
-    <div style="background:{cor}; border-radius:12px; padding:16px; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left: 6px solid rgba(0,0,0,0.1); display: flex; flex-direction: column; min-height: 350px;">
-        <div style="font-size:18px; font-weight:700; border-bottom:2px solid rgba(0,0,0,0.15); margin-bottom:12px; padding-bottom: 8px;">🔢 Posição {medidor['pos']}</div>
-        <p style="margin:0 0 12px 0; font-size: 14px;"><b>Série:</b> {medidor['serie']}</p>
-        
-        <div style="background: rgba(255,255,255,0.4); padding: 10px; border-radius: 8px; margin-bottom:10px;">
-            <b style="display: block; margin-bottom: 5px; font-size: 12px;">🎯 Exatidão (±{medidor['limite']}%)</b>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 14px;">
-                <span><b>CN:</b> {medidor['cn']}%</span><span><b>CP:</b> {medidor['cp']}%</span>
-                <span><b>CI:</b> {medidor['ci']}%</span><span><b>MV:</b> {medidor['mv']}</span>
-            </div>
-        </div>
+    # A técnica abaixo remove espaços à esquerda que causam o erro de exibir o código como texto
+    conteudo_html = f"""
+<div style="background:{cor}; border-radius:12px; padding:16px; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left: 6px solid rgba(0,0,0,0.1); display: flex; flex-direction: column; justify-content: space-between; min-height: 380px;">
+<div>
+<div style="font-size:18px; font-weight:700; border-bottom:2px solid rgba(0,0,0,0.15); margin-bottom:12px; padding-bottom: 8px;">🔢 Posição {medidor['pos']}</div>
+<p style="margin:0 0 12px 0;"><b>Série:</b> {medidor['serie']}</p>
 
-        <div style="background: rgba(255,255,255,0.4); padding: 10px; border-radius: 8px; border: 1px dashed rgba(0,0,0,0.1);">
-            <b style="display: block; margin-bottom: 5px; font-size: 12px;">📑 Registrador (kWh)</b>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 14px;">
-                <span><b>Ini:</b> {medidor['reg_inicio']}</span>
-                <span><b>Fim:</b> {medidor['reg_fim']}</span>
-                <span style="grid-column: span 2; margin-top:2px;"><b>Dif:</b> {medidor['reg_erro']}</span>
-            </div>
-        </div>
+<div style="background: rgba(0,0,0,0.05); padding: 10px; border-radius: 8px; margin-bottom:12px;">
+<b style="display: block; margin-bottom: 8px;">Exatidão (±{medidor['limite']}%)</b>
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px;">
+<span><b>CN:</b> {medidor['cn']}%</span><span><b>CP:</b> {medidor['cp']}%</span>
+<span><b>CI:</b> {medidor['ci']}%</span><span><b>MV:</b> {medidor['mv']}</span>
+</div>
+</div>
 
-        <div style="margin-top: auto; padding-top: 15px;">
-            <div style="padding:10px; border-radius:8px; font-weight:800; font-size: 14px; text-align:center; background: rgba(0,0,0,0.08);">{medidor['status']}</div>
-            <div style="margin-top:8px; font-size:11px; text-align:center; color: #444;">{medidor['detalhe']}</div>
-        </div>
-    </div>
-    """
-    st.markdown(textwrap.dedent(html_conteudo), unsafe_allow_html=True)
+<div style="background: rgba(0,0,0,0.03); padding: 10px; border-radius: 8px; border: 1px dashed rgba(0,0,0,0.1); margin-bottom:12px;">
+<b style="display: block; margin-bottom: 8px; font-size: 12px;">📑 Registrador (kWh)</b>
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 14px;">
+<span><b>Início:</b> {medidor['reg_inicio']}</span>
+<span><b>Fim:</b> {medidor['reg_fim']}</span>
+<span style="grid-column: span 2; font-weight: bold; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 4px;">Erro: {medidor['reg_erro']}</span>
+</div>
+</div>
+
+</div>
+<div>
+<div style="padding:10px; margin-top: 16px; border-radius:8px; font-weight:800; font-size: 15px; text-align:center; background: rgba(0,0,0,0.08);">{medidor['status']}</div>
+<div style="margin-top:8px; font-size:12px; text-align:center;">{medidor['detalhe']}</div>
+</div>
+</div>
+""".strip()
+    
+    st.markdown(conteudo_html, unsafe_allow_html=True)
 
 def renderizar_resumo(stats):
-    """Renderiza os KPIs no topo da página."""
+    """Renderiza as métricas de resumo no topo da página usando CSS customizado."""
     st.markdown("""
         <style>
-        .metric-card { background-color: #FFFFFF; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center; }
-        .metric-value { font-size: 32px; font-weight: 700; }
-        .metric-label { font-size: 16px; color: #64748b; }
+            .metric-card{background-color:#FFFFFF; padding:20px; border-radius:12px; 
+                         box-shadow:0 4px 6px rgba(0,0,0,0.05); text-align:center;}
+            .metric-value{font-size:32px; font-weight:700;}
+            .metric-label{font-size:16px; color:#64748b;}
         </style>
     """, unsafe_allow_html=True)
+    
     col1, col2, col3, col4 = st.columns(4)
-    with col1: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#1e293b;">{stats["total"]}</div><div class="metric-label">Total</div></div>', unsafe_allow_html=True)
-    with col2: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#16a34a;">{stats["aprovados"]}</div><div class="metric-label">Aprovados</div></div>', unsafe_allow_html=True)
-    with col3: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#dc2626;">{stats["reprovados"]}</div><div class="metric-label">Reprovados</div></div>', unsafe_allow_html=True)
-    with col4: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#7c3aed;">{stats["consumidor"]}</div><div class="metric-label">Consumidor</div></div>', unsafe_allow_html=True)
+    with col1:
+        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#1e293b;">{stats["total"]}</div><div class="metric-label">Total Ensaiados</div></div>', unsafe_allow_html=True)
+    with col2:
+        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#16a34a;">{stats["aprovados"]}</div><div class="metric-label">Aprovados</div></div>', unsafe_allow_html=True)
+    with col3:
+        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#dc2626;">{stats["reprovados"]}</div><div class="metric-label">Reprovados</div></div>', unsafe_allow_html=True)
+    with col4:
+        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#7c3aed;">{stats["consumidor"]}</div><div class="metric-label">Contra Consumidor</div></div>', unsafe_allow_html=True)
 
 def renderizar_cabecalho_ensaio(n_ensaio, bancada, temperatura):
-    """Cria a barra de título de cada ensaio."""
+    """Cria uma barra de informações compacta para identificar o ensaio atual."""
     st.markdown(f"""
-        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 15px; border-radius: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 15px; 
+                    border-radius: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
             <span style="font-weight: bold; font-size: 1.1em;">📋 Ensaio #{n_ensaio}</span>
             <span style="color: #475569;"><strong>Bancada:</strong> {bancada.replace('_', ' ')}</span>
             <span style="color: #475569;">🌡️ {temperatura}</span>
@@ -528,30 +537,62 @@ def renderizar_cabecalho_ensaio(n_ensaio, bancada, temperatura):
     """, unsafe_allow_html=True)
 
 def renderizar_grafico_reprovacoes(medidores):
-    """Gera o gráfico horizontal de motivos de reprovação."""
-    motivos = [m['motivo'] for m in medidores if m['status'] in ['REPROVADO', 'CONTRA O CONSUMIDOR']]
-    if not motivos: return
+    """Gera um gráfico horizontal com os motivos das reprovações."""
+    motivos = [m['motivo'] for m in medidores if m['status'] == 'REPROVADO']
+    if not motivos:
+        return
+        
     contagem = {}
     for m in motivos:
-        for parte in [p.strip() for p in m.split('/')]:
-            if parte not in ["Nenhum", "N/A"]: contagem[parte] = contagem.get(parte, 0) + 1
-    if not contagem: return
+        partes = [p.strip() for p in m.split('/')]
+        for parte in partes:
+            if parte != "Nenhum":
+                contagem[parte] = contagem.get(parte, 0) + 1
+                
     df_motivos = pd.DataFrame(list(contagem.items()), columns=['Motivo', 'Quantidade']).sort_values('Quantidade', ascending=True)
-    fig = px.bar(df_motivos, x='Quantidade', y='Motivo', orientation='h', title='<b>Motivos de Reprovação</b>', text='Quantidade', color_discrete_sequence=px.colors.qualitative.Pastel)
-    fig.update_layout(yaxis_title=None, xaxis_title=None, showlegend=False, margin=dict(l=10, r=10, t=40, b=10), height=250)
+    
+    fig = px.bar(df_motivos, x='Quantidade', y='Motivo', orientation='h', 
+                 title='<b>Principais Motivos de Reprovação</b>', text='Quantidade',
+                 color_discrete_sequence=px.colors.qualitative.Pastel)
+    
+    fig.update_layout(yaxis_title=None, xaxis_title="Número de Medidores", showlegend=False, 
+                      margin=dict(l=10, r=10, t=40, b=10), height=250)
+    fig.update_traces(textposition='outside')
     st.plotly_chart(fig, use_container_width=True)
 
 def renderizar_botao_scroll_topo():
-    """Script para o botão de voltar ao topo."""
-    st.components.v1.html("""
-    <style>#scrollTopBtn {display: none; position: fixed; bottom: 20px; right: 30px; z-index: 99; border: none; outline: none; background-color: #555; color: white; cursor: pointer; padding: 15px; border-radius: 10px; font-size: 18px; opacity: 0.7;} #scrollTopBtn:hover {background-color: #f44336; opacity: 1;}</style>
-    <button onclick="topFunction()" id="scrollTopBtn"><b>^</b></button>
+    """Adiciona um botão flutuante para voltar ao topo da página via JavaScript."""
+    scroll_button_html = """
+    <style>
+        #scrollTopBtn {
+            display: none; position: fixed; bottom: 20px; right: 30px; z-index: 99; 
+            border: none; outline: none; background-color: #555; color: white; 
+            cursor: pointer; padding: 15px; border-radius: 10px; font-size: 18px; opacity: 0.7;
+        }
+        #scrollTopBtn:hover { background-color: #f44336; opacity: 1; }
+    </style>
+    
+    <button onclick="topFunction()" id="scrollTopBtn" title="Voltar ao topo"><b>^</b></button>
+    
     <script>
-    var btn = document.getElementById("scrollTopBtn");
-    window.onscroll = function() {if (document.body.scrollTop > 100 || document.documentElement.scrollTop > 100) {btn.style.display = "block";} else {btn.style.display = "none";}};
-    function topFunction() {document.body.scrollTop = 0; document.documentElement.scrollTop = 0;}
+        var mybutton = document.getElementById("scrollTopBtn");
+        window.onscroll = function() {scrollFunction()};
+        
+        function scrollFunction() {
+            if (document.body.scrollTop > 100 || document.documentElement.scrollTop > 100) {
+                mybutton.style.display = "block";
+            } else {
+                mybutton.style.display = "none";
+            }
+        }
+        
+        function topFunction() {
+            document.body.scrollTop = 0;
+            document.documentElement.scrollTop = 0;
+        }
     </script>
-    """, height=0)
+    """
+    st.components.v1.html(scroll_button_html, height=0)
 
 # =========================================================
 # [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (RESTAURADO - SEM AUDITORIA)
