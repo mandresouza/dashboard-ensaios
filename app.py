@@ -334,9 +334,7 @@ def calcular_auditoria_real(df_filtrado):
     reprov_exatidao = 0
     reprov_registrador = 0
     reprov_mv = 0
-    reprov_consumidor = 0
-
-    df_filtrado = df_mes.copy()
+    reprov_consumidor = 0    
     
     for _, row in df_filtrado.iterrows():
         medidores = processar_ensaio(row)
