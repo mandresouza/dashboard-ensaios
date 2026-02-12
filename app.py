@@ -317,6 +317,93 @@ def processar_ensaio(row, classe_banc20=None):
         })
 
     return medidores
+
+# =======================================================================
+# [BLOCO NOVO] - AUDITORIA TÉCNICA REAL DOS ENSAIOS
+# =======================================================================
+
+def auditoria_real_ensaios(df_filtrado):
+    st.markdown("## 🔎 Auditoria Real dos Ensaios")
+
+    total_posicoes = 0
+    total_ensaiadas = 0
+    total_aprovadas = 0
+    total_reprovadas = 0
+    total_nao_ensaiadas = 0
+
+    reprov_exatidao = 0
+    reprov_registrador = 0
+    reprov_mv = 0
+    reprov_consumidor = 0
+
+    for _, row in df_filtrado.iterrows():
+        medidores = processar_ensaio(row)
+
+        for m in medidores:
+            total_posicoes += 1
+
+            tem_resultado = any([
+                m["cn"] not in [None, "", "None"],
+                m["cp"] not in [None, "", "None"],
+                m["ci"] not in [None, "", "None"]
+            ])
+
+            if not tem_resultado:
+                total_nao_ensaiadas += 1
+                continue
+
+            total_ensaiadas += 1
+
+            if m["status"] == "APROVADO":
+                total_aprovadas += 1
+            else:
+                total_reprovadas += 1
+
+                motivo = str(m.get("motivo", "")).upper()
+
+                if "EXATID" in motivo:
+                    reprov_exatidao += 1
+                if "REGISTRADOR" in motivo:
+                    reprov_registrador += 1
+                if "MOSTRADOR" in motivo or "MV" in motivo:
+                    reprov_mv += 1
+                if "CONTRA" in motivo:
+                    reprov_consumidor += 1
+
+    taxa_aprov = (total_aprovadas / total_ensaiadas * 100) if total_ensaiadas else 0
+
+    # =========================
+    # PAINEL VISUAL
+    # =========================
+    c1, c2, c3, c4 = st.columns(4)
+
+    c1.metric("Posições Totais", total_posicoes)
+    c2.metric("Realmente Ensaiadas", total_ensaiadas)
+    c3.metric("Aprovadas Reais", total_aprovadas)
+    c4.metric("Reprovadas Reais", total_reprovadas)
+
+    st.markdown("### 📊 Taxa Real de Aprovação")
+    st.metric("Aprovação Técnica (%)", f"{taxa_aprov:.2f}%")
+
+    st.markdown("### ⚠️ Reprovação por Motivo Técnico")
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Erro de Exatidão", reprov_exatidao)
+    c2.metric("Registrador", reprov_registrador)
+    c3.metric("Mostrador / MV", reprov_mv)
+    c4.metric("Contra Consumidor", reprov_consumidor)
+
+    # =========================
+    # VALIDAÇÃO MATEMÁTICA
+    # =========================
+    esperado = total_aprovadas + total_reprovadas + total_nao_ensaiadas
+
+    if esperado != total_posicoes:
+        st.error("🚨 INCONSISTÊNCIA MATEMÁTICA DETECTADA")
+        st.write("Total posições:", total_posicoes)
+        st.write("Soma calculada:", esperado)
+    else:
+        st.success("✔ Consistência matemática validada")
     
 # [BLOCO 05] - COMPONENTES VISUAIS (ORIGINAL)
 def renderizar_card(medidor):
