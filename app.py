@@ -950,7 +950,10 @@ def pagina_visao_mensal(df_completo):
             yaxis_title="Taxa de Aprovação (%)",
             xaxis_title="Dia do Mês"
         )
-        st.plotly_chart(fig_line, use_container_width=True)   
+        st.plotly_chart(fig_line, use_container_width=True)
+
+        with st.expander("📄 Ver consolidado diário"):
+            st.dataframe(df_daily, use_container_width=True)
             
 # [BLOCO 08] - PÁGINA: ANÁLISE DE POSIÇÕES (ORIGINAL)
 def pagina_analise_posicoes(df_completo):
