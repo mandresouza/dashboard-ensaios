@@ -507,7 +507,7 @@ def renderizar_botao_scroll_topo():
     st.components.v1.html(scroll_button_html, height=0)
 
 # =========================================================
-# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (COM AUDITORIA TÉCNICA REAL)
+# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (RESTAURADO - SEM AUDITORIA)
 # =========================================================
 
 def pagina_visao_diaria(df_completo):
@@ -679,17 +679,6 @@ def pagina_visao_diaria(df_completo):
     # =====================================================
     stats = calcular_estatisticas(todos)
     renderizar_resumo(stats)
-
-    # =====================================================
-    # 🔎 AUDITORIA TÉCNICA REAL (APENAS UMA)
-    # =====================================================
-    try:
-        if 'auditoria_real_ensaios' in globals():
-            st.markdown("---")
-            st.subheader("🧪 Auditoria Técnica Real dos Ensaios")
-            auditoria_real_ensaios(df_filtrado)
-    except Exception as e:
-        st.warning(f"Erro na auditoria: {e}")
 
     # =====================================================
     # GRÁFICOS E EXPORTAÇÃO
