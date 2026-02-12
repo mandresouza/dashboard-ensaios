@@ -948,7 +948,7 @@ def pagina_visao_mensal(df_completo):
         )
         st.plotly_chart(fig_line, use_container_width=True)
 
-    # =====================================================
+   # =====================================================
     # AUDITORIA DETALHADA PARA CONFERÊNCIA DO USUÁRIO
     # =====================================================
     st.markdown("---")
@@ -976,7 +976,7 @@ def pagina_visao_mensal(df_completo):
             for _, r in df_dia_f.iterrows():
                 medidores_auditoria.extend(processar_ensaio(r))
             
-            # Criar DataFrame de auditoria
+            # Criar DataFrame de auditoria - COLUNA MV INCLUÍDA
             df_auditoria = pd.DataFrame([{
                 "Pos": m['pos'],
                 "Série": m['serie'],
@@ -984,6 +984,7 @@ def pagina_visao_mensal(df_completo):
                 "CN": m['cn'],
                 "CP": m['cp'],
                 "CI": m['ci'],
+                "MV": m['mv'],  # <-- INCLUÍDO AQUI
                 "Reg": m['reg_erro'],
                 "Motivo": m['motivo']
             } for m in medidores_auditoria])
