@@ -261,7 +261,7 @@ def to_excel(df):
     return processed_data
 
 # =======================================================================
-# [BLOCO 04] - PROCESSAMENTO TÉCNICO (VERSÃO FINAL CONSOLIDADA - REVISADA)
+# [BLOCO 04] - PROCESSAMENTO TÉCNICO (VERSÃO FINAL COM REGRA 0 -> 0.01)
 # =======================================================================
 
 def valor_num(valor):
@@ -287,7 +287,9 @@ def texto(valor):
 def processar_ensaio(row, classe_banc20=None):
     """
     Processa a linha com regra de aprovação flexível:
-    Registrador aprova se a diferença for 1.0 (padrão), 0 ou 0.01.
+    1. Se Diferença == 0, o sistema substitui por 0.01 e APROVA.
+    2. Se Diferença == 1.0 ou 0.01 original, APROVA.
+    3. Qualquer outro valor (ex: 3001) REPROVA.
     """
     medidores = []
     bancada = row.get('Bancada_Nome')
@@ -299,7 +301,7 @@ def processar_ensaio(row, classe_banc20=None):
     if not classe:
         classe = 'B'
         
-    limite = 4.0 if "ELETROMEC" in classe else LIMITES_CLASSE.get(classe.replace("ELETROMEC", "").strip(), 1.3)
+    limite = 4.0 if "ELETROMEC" in classe else 1.3
 
     for pos in range(1, tamanho_bancada + 1):
         serie = texto(row.get(f"P{pos}_Série"))
@@ -346,19 +348,24 @@ def processar_ensaio(row, classe_banc20=None):
         else:
             if mv_str != "OK": mv_reprovado = True; erros_list.append("Mostrador/MV")
 
-        # --- VALIDAÇÃO DO REGISTRADOR (REGRA CORRIGIDA) ---
+        # --- VALIDAÇÃO DO REGISTRADOR (REGRA 0 -> 0.01) ---
         reg_diff_val = "-"
         incremento_maior = False
         
         if v_reg_ini is not None and v_reg_fim is not None:
             resultado_conta = round(v_reg_fim - v_reg_ini, 4)
+            
+            # AQUI ESTÁ A MÁGICA:
+            if resultado_conta == 0.0:
+                resultado_conta = 0.01 # Substitui 0 por 0.01
+            
             reg_diff_val = resultado_conta
             
-            # APROVA se for 1.0 (Normal), 0 (Parado) ou 0.01 (Mínimo)
-            if resultado_conta in [1.0, 0.0, 0.01]:
+            # APROVA se for 1.0 ou 0.01 (já substituído)
+            if resultado_conta in [1.0, 0.01]:
                 pass 
             else:
-                # REPROVA se for qualquer outra coisa (como o 3001)
+                # REPROVA se for qualquer outra coisa (3001, etc)
                 erros_list.append("Registrador")
                 if resultado_conta > 1.0: 
                     incremento_maior = True
@@ -392,17 +399,14 @@ def processar_ensaio(row, classe_banc20=None):
         
     return medidores
 
-# --- MANTENDO SEU BLOCO 04B ORIGINAL PARA ESTATÍSTICAS ---
+# --- FUNÇÕES DE ESTATÍSTICAS ---
 
 def calcular_estatisticas(medidores):
     total = len(medidores)
     aprovados = sum(1 for m in medidores if m['status'] == 'APROVADO')
     reprovados = sum(1 for m in medidores if m['status'] == 'REPROVADO')
     consumidor = sum(1 for m in medidores if m['status'] == 'CONTRA O CONSUMIDOR')
-    return {
-        "total": total, "aprovados": aprovados,
-        "reprovados": reprovados, "consumidor": consumidor
-    }
+    return {"total": total, "aprovados": aprovados, "reprovados": reprovados, "consumidor": consumidor}
 
 def calcular_auditoria_real(df):
     t_pos, t_ens, t_apr, t_rep, r_exat, r_reg, r_mv, r_cons = 0, 0, 0, 0, 0, 0, 0, 0
@@ -412,8 +416,7 @@ def calcular_auditoria_real(df):
             t_pos += 1
             if m['status'] != "Não Ligou / Não Ensaido":
                 t_ens += 1
-                if m['status'] == "APROVADO":
-                    t_apr += 1
+                if m['status'] == "APROVADO": t_apr += 1
                 else:
                     t_rep += 1
                     if "Exatidão" in m['motivo']: r_exat += 1
@@ -428,7 +431,7 @@ def calcular_auditoria_real(df):
         "reprov_registrador": r_reg, "reprov_mv": r_mv,
         "reprov_consumidor": r_cons
     }
-
+    
 # =======================================================================
 # [BLOCO 05] - COMPONENTES VISUAIS (INTEGRAL COM REGISTRADOR)
 # =======================================================================
