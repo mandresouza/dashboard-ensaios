@@ -161,6 +161,113 @@ def processar_metrologia_isolada(row, df_mestra=None, classe_banc20=None):
         })
 
     return medidores
+
+# =======================================================================
+# [BLOCO 02] - CARREGAMENTO DE DADOS (VERSÃO ROBUSTA GOOGLE SHEETS)
+# =======================================================================
+
+@st.cache_data(ttl=600)
+def carregar_dados():
+    try:
+        sheet_id = "1QxZ7bCSBClsmXLG1JOrFKNkMWZMK3P5Sp4LP81HV3Rs"
+
+        abas = {
+            "BANC_10_POS": f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=BANC_10_POS",
+            "BANC_20_POS": f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=BANC_20_POS"
+        }
+
+        dfs = []
+
+        for nome_aba, url in abas.items():
+            try:
+                df_temp = pd.read_csv(url)
+                df_temp["Bancada_Nome"] = nome_aba
+                dfs.append(df_temp)
+            except Exception as e:
+                st.warning(f"Erro ao carregar aba {nome_aba}: {e}")
+
+        if not dfs:
+            return pd.DataFrame()
+
+        df_completo = pd.concat(dfs, ignore_index=True)
+
+        # Conversão segura de data
+        df_completo["Data_dt"] = pd.to_datetime(
+            df_completo["Data"],
+            errors="coerce",
+            dayfirst=True
+        )
+
+        df_completo = df_completo.dropna(subset=["Data_dt"])
+
+        df_completo["Data"] = df_completo["Data_dt"].dt.strftime("%d/%m/%y")
+
+        return df_completo
+
+    except Exception as e:
+        st.error(f"ERRO AO ACESSAR GOOGLE SHEETS: {e}")
+        return pd.DataFrame()
+
+# =======================================================================
+# [BLOCO 03] - FUNÇÕES AUXILIARES
+# =======================================================================
+
+def valor_num(v):
+    """
+    Converte valores percentuais ou numéricos
+    tratando vírgula como decimal.
+    """
+    try:
+        if pd.isna(v) or v in ["", "-", None]:
+            return None
+        return float(str(v).replace("%", "").replace(",", "."))
+    except (ValueError, TypeError):
+        return None
+
+
+def texto(v):
+    """
+    Garante retorno de texto válido.
+    """
+    if pd.isna(v) or v is None:
+        return "-"
+    return str(v)
+
+
+def calcular_estatisticas(todos_medidores):
+    """
+    Calcula estatísticas gerais dos medidores processados.
+    """
+    total = len(todos_medidores)
+
+    aprovados = sum(1 for m in todos_medidores if m.get('status') == 'APROVADO')
+    reprovados = sum(1 for m in todos_medidores if m.get('status') == 'REPROVADO')
+    consumidor = sum(1 for m in todos_medidores if m.get('status') == 'CONTRA O CONSUMIDOR')
+    nao_ensaiado = sum(1 for m in todos_medidores if m.get('status') == 'Não Ligou / Não Ensaido')
+
+    return {
+        "total": total,
+        "aprovados": aprovados,
+        "reprovados": reprovados,
+        "consumidor": consumidor,
+        "nao_ensaiado": nao_ensaiado
+    }
+
+
+def to_excel(df):
+    """
+    Converte DataFrame para arquivo Excel em memória.
+    """
+    from io import BytesIO
+
+    output = BytesIO()
+
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Relatorio')
+
+    processed_data = output.getvalue()
+    return processed_data
+
 # =======================================================================
 # [BLOCO 04] - PROCESSAMENTO TÉCNICO (CORRIGIDO - REGRA MV REAL)
 # =======================================================================
