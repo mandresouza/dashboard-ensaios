@@ -27,7 +27,7 @@ st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
 # =======================================================================
-# [BLOCO INTEGRAL] - METROLOGIA AVANÇADA + GERADOR DE LAUDO PDF (CORRIGIDO)
+# [BLOCO INTEGRAL] - METROLOGIA AVANÇADA + LAUDO TÉCNICO IPEM/INMETRO
 # =======================================================================
 
 import plotly.graph_objects as go
@@ -37,7 +37,6 @@ import numpy as np
 import re
 from datetime import datetime
 from fpdf import FPDF
-import base64
 
 # --- CONSTANTES EXCLUSIVAS DO BLOCO DE METROLOGIA ---
 MAPA_BANCADA_SERIE = {
@@ -132,30 +131,78 @@ def processar_metrologia_isolada(row, df_mestra=None):
         })
     return medidores
 
-def gerar_pdf_metrologia(df_resumo, mes_txt):
-    pdf = FPDF()
+class PDF_LAUDO(FPDF):
+    def header(self):
+        # Moldura decorativa lateral
+        self.set_fill_color(0, 51, 102) # Azul Marinho IPEM
+        self.rect(0, 0, 8, 297, 'F')
+        self.set_font('Arial', 'B', 14)
+        self.set_text_color(0, 51, 102)
+        self.cell(10) # Offset da moldura
+        self.cell(180, 10, 'LABORATORIO DE ENSAIOS E METROLOGIA LEGAL', 0, 1, 'L')
+        self.set_font('Arial', '', 10)
+        self.cell(10)
+        self.cell(180, 5, 'Sistema Integrado de Monitoramento de Bancadas de Calibracao', 0, 1, 'L')
+        self.ln(10)
+
+    def footer(self):
+        self.set_y(-25)
+        self.set_font('Arial', 'I', 8)
+        self.set_text_color(128)
+        self.cell(0, 10, f'Pagina {self.page_no()} | Laudo de Controle Interno - IPEM/INMETRO', 0, 0, 'C')
+
+def gerar_pdf_profissional(df_resumo, mes_txt):
+    pdf = PDF_LAUDO()
     pdf.add_page()
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(190, 10, f"Laudo de Estabilidade Metrologica - {mes_txt}", 0, 1, 'C')
-    pdf.ln(10)
     
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(190, 10, "Resumo de Precisao por Bancada:", 0, 1, 'L')
+    # Titulo do Relatorio
+    pdf.set_font('Arial', 'B', 16)
+    pdf.set_text_color(0)
+    pdf.cell(10)
+    pdf.cell(180, 10, f'RELATORIO MENSAL DE ESTABILIDADE: {mes_txt.upper()}', 0, 1, 'C')
+    pdf.ln(5)
+
+    # Contexto Metrologico
+    pdf.set_font('Arial', '', 10)
+    pdf.cell(10)
+    intro = "Este documento apresenta os resultados estatisticos do monitoramento das bancadas de ensaio, " \
+            "analisando erros sistematicos e repetibilidade em cargas Nominais, Lineares e Indutivas."
+    pdf.multi_cell(180, 5, intro)
+    pdf.ln(8)
+
+    # Tabela de Resultados
+    pdf.set_font('Arial', 'B', 10)
+    pdf.set_fill_color(240, 240, 240)
+    pdf.cell(10)
+    # Header da Tabela
+    col_w = [55, 30, 30, 30, 35]
+    headers = ['Bancada', 'Erro Med.(%)', 'Desvio Pad.', 'Max. Erro', 'Status']
+    for i, h in enumerate(headers):
+        pdf.cell(col_w[i], 10, h, 1, 0, 'C', 1)
+    pdf.ln()
+
+    # Linhas da Tabela
+    pdf.set_font('Arial', '', 9)
+    for banc, row in df_resumo.iterrows():
+        pdf.cell(10)
+        pdf.cell(col_w[0], 8, str(banc)[:25], 1, 0, 'L')
+        pdf.cell(col_w[1], 8, f"{row['cn']:.4f}", 1, 0, 'C')
+        pdf.cell(col_w[2], 8, f"{row['cn_std']:.4f}", 1, 0, 'C')
+        pdf.cell(col_w[3], 8, f"{abs(row['cn'])+row['cn_std']:.4f}", 1, 0, 'C')
+        
+        status_txt = "CONFORME" if row['cn_std'] < 0.2 else "ANALISAR"
+        pdf.cell(col_w[4], 8, status_txt, 1, 1, 'C')
+
+    # Campo de Assinatura
+    pdf.ln(20)
+    pdf.cell(10)
+    pdf.line(60, pdf.get_y(), 150, pdf.get_y())
+    pdf.ln(2)
+    pdf.cell(190, 5, 'Departamento de Metrologia Legal - Responsavel Tecnico', 0, 1, 'C')
     
-    pdf.set_font("Arial", '', 10)
-    for index, row in df_resumo.iterrows():
-        txt = f"Bancada: {index} | Erro Medio CN: {row['cn']:.4f}% | Desvio Padrao: {row['cn_std']:.4f}"
-        pdf.cell(190, 8, txt, 1, 1)
-    
-    pdf.ln(10)
-    pdf.set_font("Arial", 'I', 8)
-    pdf.cell(190, 10, f"Relatorio gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 0, 'R')
-    
-    # AJUSTE PARA CORRIGIR O ATRIBUTE ERROR:
+    # Retorno binario
     pdf_bytes = pdf.output(dest='S')
-    if isinstance(pdf_bytes, str):
-        return pdf_bytes.encode('latin-1')
-    return bytes(pdf_bytes)
+    return bytes(pdf_bytes) if not isinstance(pdf_bytes, str) else pdf_bytes.encode('latin-1')
 
 def pagina_metrologia_avancada(df_completo):
     st.markdown("<style>.main > div { max-width: 100% !important; }</style>", unsafe_allow_html=True)
@@ -184,8 +231,8 @@ def pagina_metrologia_avancada(df_completo):
 
     with tabs[0]:
         c1, c2 = st.columns(2)
-        b_sel = c1.selectbox("Selecione a Bancada", sorted(df_met['Bancada'].unique()), key="banc_c")
-        p_sel = c2.slider("Posição", 1, 20, 1, key="pos_c")
+        b_sel = c1.selectbox("Selecione a Bancada", sorted(df_met['Bancada'].unique()), key="b_sel")
+        p_sel = c2.slider("Posição", 1, 20, 1, key="p_sel")
         df_chart = df_met[(df_met['Bancada'] == b_sel) & (df_met['pos'] == p_sel)].copy()
         if not df_chart.empty:
             df_chart['Erro_Medio'] = df_chart.apply(lambda r: np.mean([x for x in [r['cn'], r['cp'], r['ci']] if x is not None]), axis=1)
@@ -222,17 +269,22 @@ def pagina_metrologia_avancada(df_completo):
             
             df_resumo = df_disp.groupby('Bancada').agg({'cn': ['mean', 'std'], 'cp': ['mean', 'std'], 'ci': ['mean', 'std']})
             df_resumo.columns = ['cn', 'cn_std', 'cp', 'cp_std', 'ci', 'ci_std']
-            st.dataframe(df_resumo.round(4), use_container_width=True)
             
-            # BLOCO DE EXPORTAÇÃO
-            try:
-                pdf_data = gerar_pdf_metrologia(df_resumo, f"{meses_n[mes_sel-1]} {ano_sel}")
-                st.download_button(label="📥 Baixar Laudo de Estabilidade (PDF)", 
-                                   data=pdf_data, 
-                                   file_name=f"Laudo_Metrologia_{meses_n[mes_sel-1]}.pdf", 
-                                   mime="application/pdf")
-            except Exception as e:
-                st.error(f"Erro ao gerar PDF: {e}")
+            # BLOCO DE EXPORTAÇÃO PROFISSIONAL
+            st.markdown("---")
+            c_pdf1, c_pdf2 = st.columns([3, 1])
+            with c_pdf1:
+                st.write("### 📜 Exportação de Relatório Técnico")
+                st.write("Gere o laudo de conformidade metrológica com padrão IPEM/INMETRO.")
+            with c_pdf2:
+                try:
+                    pdf_final = gerar_pdf_profissional(df_resumo, f"{meses_n[mes_sel-1]} / {ano_sel}")
+                    st.download_button(label="📄 Gerar Laudo PDF", 
+                                       data=pdf_final, 
+                                       file_name=f"Laudo_Metrologia_IPEM_{mes_sel}.pdf", 
+                                       mime="application/pdf")
+                except Exception as e:
+                    st.error(f"Erro: {e}")
 
 # =======================================================================
 # [FIM DO BLOCO ISOLADO]
