@@ -27,7 +27,7 @@ st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
 # =======================================================================
-# [BLOCO ISOLADO] - METROLOGIA AVANÇADA (VERSÃO FINAL - RESGATE DISPERSÃO RTM)
+# [BLOCO ISOLADO] - METROLOGIA AVANÇADA (VERSÃO FINAL - GRÁFICO AMPLIADO)
 # =======================================================================
 
 # --- CONSTANTES EXCLUSIVAS DO BLOCO DE METROLOGIA ---
@@ -187,7 +187,6 @@ def pagina_metrologia_avancada(df_completo):
         
         df_disp = df_met.dropna(subset=['cn', eixo_y]).copy()
         if not df_disp.empty:
-            # Jittering para visualização pericial
             df_disp['cn_j'] = df_disp['cn'] + np.random.uniform(-0.015, 0.015, len(df_disp))
             df_disp[f'{eixo_y}_j'] = df_disp[eixo_y] + np.random.uniform(-0.015, 0.015, len(df_disp))
 
@@ -198,21 +197,19 @@ def pagina_metrologia_avancada(df_completo):
                 labels={'cn_j': 'Erro Carga Nominal (%)', f'{eixo_y}_j': f'Erro Carga {eixo_y.upper()} (%)'}
             )
             
-            # --- AS MUDANÇAS DOS TRACEJADOS VERMELHOS (QUADRANTE RTM) ---
+            # Tracejados Vermelhos RTM
             lim_ref = df_disp['limite_rtm'].mean()
-            
-            # Moldura Externa (Tracejado Vermelho)
             fig_scat.add_shape(type="rect", x0=-lim_ref, y0=-lim_ref, x1=lim_ref, y1=lim_ref, 
-                               line=dict(color="#e74c3c", width=2, dash="dash"), name="Limite RTM")
+                               line=dict(color="#e74c3c", width=2, dash="dash"))
             
-            # Eixos Centrais (Preto Sólido)
+            # Eixos Centrais e Grade
             fig_scat.update_xaxes(zeroline=True, zerolinecolor='black', zerolinewidth=1, gridcolor='lightgray', range=[-5, 5])
             fig_scat.update_yaxes(zeroline=True, zerolinecolor='black', zerolinewidth=1, gridcolor='lightgray', range=[-5, 5])
             
-            fig_scat.update_layout(height=700, template="plotly_dark")
+            # ALTURA AMPLIADA PARA 900
+            fig_scat.update_layout(height=900, template="plotly_dark")
             st.plotly_chart(fig_scat, use_container_width=True)
             
-            # Resumo estatístico para o fiscal
             st.markdown("##### 📝 Resumo de Precisão por Bancada")
             st.dataframe(df_disp.groupby('Bancada').agg({'cn': ['mean', 'std'], eixo_y: ['mean', 'std']}).round(4), use_container_width=True)
 
