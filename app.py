@@ -746,7 +746,7 @@ def pagina_visao_diaria(df_completo):
                     renderizar_card(m)
 
 # =========================================================
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL (CORREÇÃO CIRÚRGICA DE CHAVES)
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL (SOLUÇÃO DEFINITIVA)
 # =========================================================
 
 def get_stats_por_dia(df_mes):
@@ -782,6 +782,24 @@ def get_stats_por_dia(df_mes):
         })
     return pd.DataFrame(daily_stats)
 
+def extrair_valor_reg(dicionario_medidor, tipo):
+    """
+    Busca cirúrgica: varre as chaves do dicionário procurando termos específicos.
+    tipo: 'inic', 'fim' ou 'erro'
+    """
+    for k, v in dicionario_medidor.items():
+        key_upper = str(k).upper()
+        if tipo == 'inic':
+            if 'REG' in key_upper and ('INIC' in key_upper or 'INIÇ' in key_upper):
+                return v
+        elif tipo == 'fim':
+            if 'REG' in key_upper and 'FIM' in key_upper:
+                return v
+        elif tipo == 'erro':
+            if 'REG' in key_upper and ('ERRO' in key_upper or '%' in key_upper):
+                return v
+    return '-'
+
 def pagina_visao_mensal(df_completo):
     # --- CSS PARA IDENTIDADE VISUAL ---
     st.markdown('''
@@ -816,7 +834,7 @@ def pagina_visao_mensal(df_completo):
     if df_mes.empty: return
 
     # =====================================================
-    # PROCESSAMENTO E ALINHAMENTO DE DADOS (CARD vs TABELA)
+    # PROCESSAMENTO E ALINHAMENTO DE DADOS
     # =====================================================
     lista_consumidor_fidedigna = []
     for _, row in df_mes.iterrows():
@@ -852,11 +870,6 @@ def pagina_visao_mensal(df_completo):
         with st.expander(f"🚨 DETALHAMENTO TÉCNICO: {total_c_consumidor} ITENS CONFIRMADOS", expanded=False):
             dados_tabela = []
             for m in lista_consumidor_fidedigna:
-                # MAPEAMENTO EXTREMO PARA INÍCIO
-                reg_ini = m.get('P1_REG_Inicio') or m.get('P1_REG_Início') or m.get('reg_inicial') or m.get('reg_inic') or m.get('Início') or m.get('Inicio') or '-'
-                reg_fim = m.get('P1_REG_Fim') or m.get('reg_final') or m.get('reg_fim') or m.get('Fim') or '-'
-                reg_err = m.get('P1_REG_Erro') or m.get('reg_erro') or m.get('reg_%') or m.get('Erro %') or '-'
-                
                 dados_tabela.append({
                     "Data": m.get('data_ensaio', 'N/A'), 
                     "Bancada": m.get('bancada_ensaio', 'N/A'), 
@@ -866,9 +879,9 @@ def pagina_visao_mensal(df_completo):
                     "Erro CP": m.get('cp', '-'), 
                     "Erro CI": m.get('ci', '-'),
                     "M.V": m.get('mv', '-'), 
-                    "Reg Inic": reg_ini, 
-                    "Reg Fim": reg_fim,
-                    "Reg %": reg_err, 
+                    "Reg Inic": extrair_valor_reg(m, 'inic'), 
+                    "Reg Fim": extrair_valor_reg(m, 'fim'),
+                    "Reg %": extrair_valor_reg(m, 'erro'), 
                     "Motivo": m.get('motivo', 'N/A')
                 })
             st.dataframe(pd.DataFrame(dados_tabela).style.applymap(lambda x: 'color: #7c3aed; font-weight: bold' if isinstance(x, str) and '+' in x else ''), use_container_width=True, hide_index=True)
@@ -912,7 +925,7 @@ def pagina_visao_mensal(df_completo):
     st.markdown("---")
     with st.expander("🔍 PAINEL DE AUDITORIA COMPLETO", expanded=False):
         datas_disponiveis = df_daily['Data'].dt.strftime('%d/%m/%Y').unique()
-        dia_auditoria_str = st.selectbox("Selecione o dia para conferência detalhada:", datas_disponiveis, key="sel_audit_mensal_final_v7")
+        dia_auditoria_str = st.selectbox("Selecione o dia para conferência detalhada:", datas_disponiveis, key="sel_audit_mensal_final_v8")
         
         if dia_auditoria_str:
             data_f = pd.to_datetime(dia_auditoria_str, format='%d/%m/%Y')
@@ -924,11 +937,6 @@ def pagina_visao_mensal(df_completo):
             if meds_aud:
                 df_final_data = []
                 for m in meds_aud:
-                    # MAPEAMENTO EXTREMO AQUI TAMBÉM
-                    r_ini = m.get('P1_REG_Inicio') or m.get('P1_REG_Início') or m.get('reg_inicial') or m.get('reg_inic') or m.get('Início') or m.get('Inicio') or '-'
-                    r_fim = m.get('P1_REG_Fim') or m.get('reg_final') or m.get('reg_fim') or m.get('Fim') or '-'
-                    r_err = m.get('P1_REG_Erro') or m.get('reg_erro') or m.get('reg_%') or m.get('Erro %') or '-'
-                    
                     df_final_data.append({ 
                         "Pos": m.get('pos', '-'), 
                         "Série": m.get('serie', '-'), 
@@ -937,9 +945,9 @@ def pagina_visao_mensal(df_completo):
                         "CP": m.get('cp', '-'), 
                         "CI": m.get('ci', '-'), 
                         "MV": m.get('mv', '-'), 
-                        "Reg Inic": r_ini, 
-                        "Reg Fim": r_fim, 
-                        "Reg %": r_err, 
+                        "Reg Inic": extrair_valor_reg(m, 'inic'), 
+                        "Reg Fim": extrair_valor_reg(m, 'fim'), 
+                        "Reg %": extrair_valor_reg(m, 'erro'), 
                         "Motivo": m.get('motivo', '-') 
                     })
                 
