@@ -27,7 +27,7 @@ st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
 # =======================================================================
-# [BLOCO INTEGRAL] - METROLOGIA AVANÇADA + GERADOR DE LAUDO PDF
+# [BLOCO INTEGRAL] - METROLOGIA AVANÇADA + GERADOR DE LAUDO PDF (CORRIGIDO)
 # =======================================================================
 
 import plotly.graph_objects as go
@@ -151,7 +151,11 @@ def gerar_pdf_metrologia(df_resumo, mes_txt):
     pdf.set_font("Arial", 'I', 8)
     pdf.cell(190, 10, f"Relatorio gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 0, 'R')
     
-    return pdf.output(dest='S').encode('latin-1')
+    # AJUSTE PARA CORRIGIR O ATRIBUTE ERROR:
+    pdf_bytes = pdf.output(dest='S')
+    if isinstance(pdf_bytes, str):
+        return pdf_bytes.encode('latin-1')
+    return bytes(pdf_bytes)
 
 def pagina_metrologia_avancada(df_completo):
     st.markdown("<style>.main > div { max-width: 100% !important; }</style>", unsafe_allow_html=True)
@@ -178,7 +182,6 @@ def pagina_metrologia_avancada(df_completo):
     df_met = pd.DataFrame(todos_meds)
     tabs = st.tabs(["📈 Estabilidade da Bancada", "⚠️ Alertas Guardband", "📊 Dispersão Total (CN, CP, CI)"])
 
-    # --- ABA 1 E 2 PERMANECEM IGUAIS ---
     with tabs[0]:
         c1, c2 = st.columns(2)
         b_sel = c1.selectbox("Selecione a Bancada", sorted(df_met['Bancada'].unique()), key="banc_c")
@@ -194,7 +197,6 @@ def pagina_metrologia_avancada(df_completo):
     with tabs[1]:
         st.dataframe(df_met[df_met['status'] == 'ZONA CRÍTICA'], use_container_width=True)
 
-    # --- ABA 3: DISPERSÃO + NOVO BOTÃO PDF ---
     with tabs[2]:
         st.markdown("#### ⚖️ Cruzamento Dinâmico de Erros (CN, CP, CI)")
         tipo_grafico = st.radio("Selecione o Cruzamento:", ["CN vs CP (Comportamento Linear)", "CN vs CI (Comportamento Indutivo)"], horizontal=True)
@@ -218,16 +220,19 @@ def pagina_metrologia_avancada(df_completo):
             fig_scat.update_layout(height=550, template="plotly_white", margin=dict(l=0, r=0, t=20, b=40), autosize=True)
             st.plotly_chart(fig_scat, use_container_width=True)
             
-            # --- TABELA DE RESUMO E BOTÃO DE EXPORTAÇÃO ---
             df_resumo = df_disp.groupby('Bancada').agg({'cn': ['mean', 'std'], 'cp': ['mean', 'std'], 'ci': ['mean', 'std']})
             df_resumo.columns = ['cn', 'cn_std', 'cp', 'cp_std', 'ci', 'ci_std']
             st.dataframe(df_resumo.round(4), use_container_width=True)
             
-            pdf_data = gerar_pdf_metrologia(df_resumo, f"{meses_n[mes_sel-1]} {ano_sel}")
-            st.download_button(label="📥 Baixar Laudo de Estabilidade (PDF)", 
-                               data=pdf_data, 
-                               file_name=f"Laudo_Metrologia_{meses_n[mes_sel-1]}.pdf", 
-                               mime="application/pdf")
+            # BLOCO DE EXPORTAÇÃO
+            try:
+                pdf_data = gerar_pdf_metrologia(df_resumo, f"{meses_n[mes_sel-1]} {ano_sel}")
+                st.download_button(label="📥 Baixar Laudo de Estabilidade (PDF)", 
+                                   data=pdf_data, 
+                                   file_name=f"Laudo_Metrologia_{meses_n[mes_sel-1]}.pdf", 
+                                   mime="application/pdf")
+            except Exception as e:
+                st.error(f"Erro ao gerar PDF: {e}")
 
 # =======================================================================
 # [FIM DO BLOCO ISOLADO]
