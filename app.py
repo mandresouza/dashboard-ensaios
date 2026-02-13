@@ -746,7 +746,7 @@ def pagina_visao_diaria(df_completo):
                     renderizar_card(m)
 
 # =========================================================
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO COMPLETA E INTEGRADA)
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO FINALIZADA)
 # =========================================================
 
 def get_stats_por_dia(df_mes):
@@ -805,7 +805,7 @@ def pagina_visao_mensal(df_completo):
         </div>
     ''', unsafe_allow_html=True)
 
-    # FILTROS
+    # FILTROS LATERAIS
     df_completo['Ano'] = df_completo['Data_dt'].dt.year
     df_completo['Mes'] = df_completo['Data_dt'].dt.month
     ano_sel = st.sidebar.selectbox("Ano", sorted(df_completo['Ano'].unique(), reverse=True))
@@ -846,7 +846,7 @@ def pagina_visao_mensal(df_completo):
     with a5: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#16a34a"><span class="val-mensal">{dados_auditoria["taxa_aprovacao"]:.2f}%</span><span class="lab-mensal">Eficiência</span></div>', unsafe_allow_html=True)
 
     # =====================================================
-    # TABELA TÉCNICA
+    # TABELA TÉCNICA (DETALHAMENTO CONTRA CONSUMIDOR)
     # =====================================================
     if total_c_consumidor > 0:
         with st.expander(f"🚨 DETALHAMENTO TÉCNICO: {total_c_consumidor} ITENS CONFIRMADOS", expanded=True):
@@ -857,7 +857,7 @@ def pagina_visao_mensal(df_completo):
                     "Erro CN": m['cn'], "Erro CP": m['cp'], "Erro CI": m['ci'],
                     "M.V": m['mv'], "Reg.": m['reg_erro'], "Motivo": m['motivo']
                 })
-            st.dataframe(pd.DataFrame(dados_tabela).style.applymap(lambda x: 'color: #e53e3e; font-weight: bold' if isinstance(x, str) and '+' in x else ''), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(dados_tabela).style.applymap(lambda x: 'color: #7c3aed; font-weight: bold' if isinstance(x, str) and '+' in x else ''), use_container_width=True, hide_index=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
     m1, m2, m3, m4 = st.columns(4)
@@ -895,13 +895,13 @@ def pagina_visao_mensal(df_completo):
         st.plotly_chart(fig_bar, use_container_width=True)
 
     # =====================================================
-    # PAINEL DE CONFERÊNCIA GERAL (RECUPERADO)
+    # PAINEL DE CONFERÊNCIA GERAL (ABA RECOLHÍVEL COM CORES)
     # =====================================================
     st.markdown("---")
     with st.expander("🔍 PAINEL DE AUDITORIA COMPLETO"):
-        # Seletor de data recuperado
+        # Seletor de data dentro da "aba"
         datas_disponiveis = df_daily['Data'].dt.strftime('%d/%m/%Y').unique()
-        dia_auditoria_str = st.selectbox("Selecione o dia para conferência detalhada:", datas_disponiveis, key="sel_mes_final_v2")
+        dia_auditoria_str = st.selectbox("Selecione o dia para conferência detalhada:", datas_disponiveis, key="sel_audit_mensal")
         
         if dia_auditoria_str:
             data_f = pd.to_datetime(dia_auditoria_str, format='%d/%m/%Y')
@@ -917,7 +917,16 @@ def pagina_visao_mensal(df_completo):
                     "MV": m['mv'], "Reg": m['reg_erro'], "Motivo": m['motivo'] 
                 } for m in meds_aud])
                 
-                st.dataframe(df_final.style.applymap(lambda x: 'background-color: #fed7d7' if x in ['REPROVADO', 'CONTRA O CONSUMIDOR'] else '', subset=['Status']), use_container_width=True, hide_index=True)
+                # Função interna para pintar as células do Status conforme solicitado
+                def color_status(val):
+                    color = 'transparent'
+                    if val == 'APROVADO': color = '#c6f6d5; color: #22543d' # Verde
+                    elif val == 'REPROVADO': color = '#fed7d7; color: #822727' # Vermelho
+                    elif val == 'CONTRA O CONSUMIDOR': color = '#e9d8fd; color: #553c9a' # Roxo
+                    elif val == 'Não Ligou / Não Ensaido': color = '#edf2f7; color: #2d3748' # Cinza
+                    return f'background-color: {color}; font-weight: bold'
+
+                st.dataframe(df_final.style.applymap(color_status, subset=['Status']), use_container_width=True, hide_index=True)
 
 # =======================================================================
 # [BLOCO 08] - PÁGINA: ANÁLISE DE POSIÇÕES (HEATMAP DE REPROVAÇÃO)
