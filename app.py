@@ -746,7 +746,7 @@ def pagina_visao_diaria(df_completo):
                     renderizar_card(m)
 
 # =========================================================
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL (ESTILO FINAL AJUSTADO)
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL (BOTÃO ORIGINAL + TABELAS)
 # =========================================================
 
 def get_stats_por_dia(df_mes):
@@ -797,34 +797,26 @@ def extrair_valor_reg(dicionario_medidor, tipo):
     return '-'
 
 def pagina_visao_mensal(df_completo):
-    # --- BOTÃO VOLTAR AO TOPO (ESTILO IGUAL À FOTO) ---
+    # --- BOTÃO VOLTAR AO TOPO (CSS & HTML ORIGINAL DO SEU BLOCO 6) ---
     st.markdown('''
         <style> 
             .stApp { scroll-behavior: smooth; } 
             #scroll-to-top { 
-                position: fixed; 
-                bottom: 80px; /* Subi para não bater na barra de gerenciar */
-                right: 20px; 
-                z-index: 999999; 
-                border: none; 
-                outline: none; 
-                background-color: #808080; /* Cinza conforme a imagem */
-                color: white !important; 
-                cursor: pointer; 
-                width: 45px; 
-                height: 45px; 
-                border-radius: 12px; /* Arredondado conforme foto */
-                display: flex; 
-                align-items: center; 
-                justify-content: center; 
-                font-size: 22px; 
+                position: fixed; bottom: 20px; right: 30px; z-index: 99; 
+                border: none; outline: none; background-color: #555; 
+                color: white; cursor: pointer; padding: 15px; 
+                border-radius: 10px; font-size: 18px; opacity: 0.7; 
                 text-decoration: none;
-                box-shadow: 0px 4px 10px rgba(0,0,0,0.2);
-                transition: 0.3s;
-                font-weight: bold;
             } 
-            #scroll-to-top:hover { background-color: #1e3a8a; transform: translateY(-5px); } 
-            
+            #scroll-to-top:hover { background-color: #f44336; opacity: 1; } 
+        </style>
+        <a id="top"></a> 
+        <a href="#top" id="scroll-to-top"><b>^</b></a> 
+    ''', unsafe_allow_html=True)
+
+    # --- CABEÇALHO E ESTILOS DE CARDS ---
+    st.markdown('''
+        <style>
             .header-mensal { padding: 10px 0px; border-bottom: 2px solid #1e3a8a; margin-bottom: 25px; }
             .titulo-mensal { color: #1e3a8a; font-size: 28px; font-weight: 800; margin-bottom: 0px; }
             .metric-card-mensal {
@@ -834,12 +826,6 @@ def pagina_visao_mensal(df_completo):
             .val-mensal { font-size: 24px; font-weight: 800; color: #0f172a; display: block; }
             .lab-mensal { font-size: 11px; color: #475569; font-weight: 700; text-transform: uppercase; }
         </style>
-        <a id="top"></a> 
-        <a href="#top" id="scroll-to-top">^</a> 
-    ''', unsafe_allow_html=True)
-
-    # --- CABEÇALHO ---
-    st.markdown('''
         <div class="header-mensal">
             <p class="titulo-mensal">Sistema de Gestão de Ensaios e Auditoria</p>
             <p style="color: #64748b; font-size: 14px; text-transform: uppercase; font-weight: 600;">Laboratório de Ensaios de Medidores de Energia Elétrica - IPEM-AM</p>
@@ -856,9 +842,7 @@ def pagina_visao_mensal(df_completo):
     df_mes = df_completo[(df_completo['Ano'] == ano_sel) & (df_completo['Mes'] == mes_sel)]
     if df_mes.empty: return
 
-    # =====================================================
-    # PROCESSAMENTO DE DADOS
-    # =====================================================
+    # --- PROCESSAMENTO DE DADOS ---
     lista_consumidor_fidedigna = []
     for _, row in df_mes.iterrows():
         medidores_da_linha = processar_ensaio(row)
@@ -877,16 +861,16 @@ def pagina_visao_mensal(df_completo):
     total_c_consumidor = len(lista_consumidor_fidedigna)
     dados_auditoria = calcular_auditoria_real(df_mes)
     
-    # --- CARDS ---
+    # --- EXIBIÇÃO CARDS ---
     st.markdown("### 📊 Indicadores de Performance Mensal")
     a1, a2, a3, a4, a5 = st.columns(5)
-    with a1: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#1e293b"><span class="val-mensal">{dados_auditoria["total_ensaiadas"]}</span><span class="lab-mensal">Ensaios Reais</span></div>', unsafe_allow_html=True)
+    with a1: st.markdown(f'<div class="metric-card-mensal"><span class="val-mensal">{dados_auditoria["total_ensaiadas"]}</span><span class="lab-mensal">Ensaios Reais</span></div>', unsafe_allow_html=True)
     with a2: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#16a34a"><span class="val-mensal">{dados_auditoria["total_aprovadas"]}</span><span class="lab-mensal">Aprovados</span></div>', unsafe_allow_html=True)
     with a3: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#dc2626"><span class="val-mensal">{dados_auditoria["total_reprovadas"]}</span><span class="lab-mensal">Reprovados</span></div>', unsafe_allow_html=True)
     with a4: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#7c3aed"><span class="val-mensal">{total_c_consumidor}</span><span class="lab-mensal">C. Consumidor</span></div>', unsafe_allow_html=True)
     with a5: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#16a34a"><span class="val-mensal">{dados_auditoria["taxa_aprovacao"]:.2f}%</span><span class="lab-mensal">Eficiência</span></div>', unsafe_allow_html=True)
 
-    # --- TABELA DE CONTRA CONSUMIDOR ---
+    # --- TABELA CONTRA CONSUMIDOR ---
     if total_c_consumidor > 0:
         with st.expander(f"🚨 DETALHAMENTO TÉCNICO: {total_c_consumidor} ITENS CONFIRMADOS", expanded=False):
             dados_tabela = []
@@ -905,7 +889,7 @@ def pagina_visao_mensal(df_completo):
                     "Reg %": extrair_valor_reg(m, 'erro'), 
                     "Motivo": m.get('motivo', 'N/A')
                 })
-            st.dataframe(pd.DataFrame(dados_tabela).style.applymap(lambda x: 'color: #7c3aed; font-weight: bold' if isinstance(x, str) and '+' in x else ''), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(dados_tabela), use_container_width=True, hide_index=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
     m1, m2, m3, m4 = st.columns(4)
@@ -914,30 +898,12 @@ def pagina_visao_mensal(df_completo):
     m3.error(f"📺 Mostrador/MV: **{dados_auditoria['reprov_mv']}**")
     m4.success(f"📋 Posições Totais: **{dados_auditoria['total_posicoes']}**")
 
-    # --- GRÁFICOS ---
-    df_daily = get_stats_por_dia(df_mes)
-    st.markdown("---")
-    col_g1, col_g2 = st.columns([1, 1.5])
-    with col_g1:
-        fig_donut = px.pie(values=[dados_auditoria["total_aprovadas"], dados_auditoria["total_reprovadas"], total_c_consumidor], 
-                           names=['Aprovados','Reprovados','C. Consumidor'], hole=.5,
-                           color_discrete_map={'Aprovados':'#16a34a', 'Reprovados':'#dc2626', 'C. Consumidor':'#7c3aed'})
-        fig_donut.update_layout(showlegend=False, height=250, margin=dict(t=0,b=0,l=0,r=0))
-        st.plotly_chart(fig_donut, use_container_width=True)
-
-    with col_g2:
-        fig_bar = go.Figure()
-        for col, color in zip(['Aprovados','Reprovados','Contra Consumidor'], ['#16a34a','#dc2626','#7c3aed']):
-            if col in df_daily.columns:
-                fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily[col], name=col, marker_color=color))
-        fig_bar.update_layout(barmode='stack', height=250, margin=dict(t=20,b=0,l=0,r=0))
-        st.plotly_chart(fig_bar, use_container_width=True)
-
     # --- PAINEL DE AUDITORIA COMPLETO ---
     st.markdown("---")
+    df_daily = get_stats_por_dia(df_mes)
     with st.expander("🔍 PAINEL DE AUDITORIA COMPLETO", expanded=False):
         datas_disponiveis = df_daily['Data'].dt.strftime('%d/%m/%Y').unique()
-        dia_auditoria_str = st.selectbox("Selecione o dia para conferência detalhada:", datas_disponiveis, key="sel_audit_mensal_final_Vfinal")
+        dia_auditoria_str = st.selectbox("Selecione o dia para conferência:", datas_disponiveis, key="sel_audit_mensal_final")
         if dia_auditoria_str:
             data_f = pd.to_datetime(dia_auditoria_str, format='%d/%m/%Y')
             meds_aud = []
@@ -953,11 +919,7 @@ def pagina_visao_mensal(df_completo):
                     "Reg %": extrair_valor_reg(m, 'erro'), 
                     "Motivo": m.get('motivo', '-') 
                 } for m in meds_aud])
-                
-                def color_status(val):
-                    color = '#c6f6d5' if val == 'APROVADO' else '#fed7d7' if val == 'REPROVADO' else '#e9d8fd' if val == 'CONTRA O CONSUMIDOR' else 'transparent'
-                    return f'background-color: {color}'
-                st.dataframe(df_f.style.applymap(color_status, subset=['Status']), use_container_width=True, hide_index=True)
+                st.dataframe(df_f, use_container_width=True, hide_index=True)
                 
 # =======================================================================
 # [BLOCO 08] - PÁGINA: ANÁLISE DE POSIÇÕES (HEATMAP DE REPROVAÇÃO)
