@@ -435,7 +435,7 @@ def calcular_auditoria_real(df):
     }
     
 # =======================================================================
-# [BLOCO 05] - COMPONENTES VISUAIS (VERSÃO FINAL - CARDS ALINHADOS)
+# [BLOCO 05] - COMPONENTES VISUAIS (CORRIGIDO - SEM ERRO DE PLOTLY)
 # =======================================================================
 
 def renderizar_card(medidor):
@@ -448,7 +448,7 @@ def renderizar_card(medidor):
     }
     cor = status_cor.get(medidor['status'], "#f3f4f6")
     
-    # Altura travada em 400px para garantir que todos fiquem iguais na linha
+    # Altura travada em 400px para garantir alinhamento na linha
     conteudo_html = f"""
 <div style="background:{cor}; border-radius:12px; padding:16px; font-size:14px; 
             box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left: 6px solid rgba(0,0,0,0.1); 
@@ -485,9 +485,6 @@ def renderizar_card(medidor):
                     text-align:center; background: rgba(0,0,0,0.1); color: rgba(0,0,0,0.7);">
             {medidor['status']}
         </div>
-        <div style="margin-top:8px; font-size:11px; text-align:center; color: #666; height: 15px;">
-            {medidor['detalhe'] if medidor['detalhe'] else ""}
-        </div>
     </div>
 </div>
 """.strip()
@@ -508,7 +505,6 @@ def renderizar_resumo(stats):
         </style>
     """, unsafe_allow_html=True)
     
-    # Criando 5 colunas com gap entre a primeira e as outras
     c1, gap, c2, c3, c4 = st.columns([1, 0.25, 1, 1, 1])
     
     with c1:
@@ -519,17 +515,6 @@ def renderizar_resumo(stats):
         st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#dc2626;">{stats["reprovados"]}</div><div class="metric-label">Reprovados</div></div>', unsafe_allow_html=True)
     with c4:
         st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#7c3aed;">{stats["consumidor"]}</div><div class="metric-label">Contra Consumidor</div></div>', unsafe_allow_html=True)
-
-def renderizar_cabecalho_ensaio(n_ensaio, bancada, temperatura):
-    st.markdown(f"""
-        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 12px 20px; 
-                    border-radius: 12px; margin-bottom: 20px; display: flex; 
-                    justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-            <span style="font-weight: 800; font-size: 1.2em; color: #1e293b;">📋 Ensaio #{n_ensaio}</span>
-            <span style="color: #475569; font-size: 0.95em;"><b>Bancada:</b> {bancada.replace('_', ' ')}</span>
-            <span style="color: #475569; font-size: 0.95em;">🌡️ <b>Temp:</b> {temperatura}</span>
-        </div>
-    """, unsafe_allow_html=True)
 
 def renderizar_grafico_reprovacoes(medidores):
     import pandas as pd
@@ -552,11 +537,25 @@ def renderizar_grafico_reprovacoes(medidores):
                  title='<b>Motivos de Reprovação</b>', text='Qtd',
                  color_discrete_sequence=['#94a3b8'])
     
+    # CORREÇÃO AQUI: Propriedade correta é marker_line_width ou direto no update_traces
     fig.update_layout(yaxis_title=None, xaxis_title=None, showlegend=False, 
                       margin=dict(l=10, r=10, t=40, b=10), height=250,
                       plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
-    fig.update_traces(textposition='outside', marker_border_width=0)
+    
+    # Removido marker_border_width que causava o erro
+    fig.update_traces(textposition='outside') 
     st.plotly_chart(fig, use_container_width=True)
+
+def renderizar_cabecalho_ensaio(n_ensaio, bancada, temperatura):
+    st.markdown(f"""
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 12px 20px; 
+                    border-radius: 12px; margin-bottom: 20px; display: flex; 
+                    justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+            <span style="font-weight: 800; font-size: 1.2em; color: #1e293b;">📋 Ensaio #{n_ensaio}</span>
+            <span style="color: #475569; font-size: 0.95em;"><b>Bancada:</b> {bancada.replace('_', ' ')}</span>
+            <span style="color: #475569; font-size: 0.95em;">🌡️ <b>Temp:</b> {temperatura}</span>
+        </div>
+    """, unsafe_allow_html=True)
 
 def renderizar_botao_scroll_topo():
     scroll_html = """
