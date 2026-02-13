@@ -746,7 +746,7 @@ def pagina_visao_diaria(df_completo):
                     renderizar_card(m)
 
 # =========================================================
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO AUDITORIA TÉCNICA)
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO AUDITORIA RIGOROSA)
 # =========================================================
 
 def get_stats_por_dia(df_mes):
@@ -834,7 +834,7 @@ def pagina_visao_mensal(df_completo):
         st.markdown(f'<div class="metric-card-mensal" style="border-top-color:{cor_taxa}"><span class="val-mensal">{dados_auditoria["taxa_aprovacao"]:.2f}%</span><span class="lab-mensal">Eficiência</span></div>', unsafe_allow_html=True)
 
     # =====================================================
-    # DETALHAMENTO FIDEDIGNO: CONTRA O CONSUMIDOR
+    # DETALHAMENTO FIDEDIGNO: REGRA DE OURO (ERROS POSITIVOS)
     # =====================================================
     if dados_auditoria["reprov_consumidor"] > 0:
         with st.expander(f"🚨 LISTA TÉCNICA: {dados_auditoria['reprov_consumidor']} MEDIDORES CONTRA O CONSUMIDOR", expanded=True):
@@ -842,28 +842,40 @@ def pagina_visao_mensal(df_completo):
             for _, row in df_mes.iterrows():
                 medidores = processar_ensaio(row)
                 for m in medidores:
-                    # Alinhado exatamente com a contagem do Card
                     if m['status'] == 'CONTRA O CONSUMIDOR':
-                        criticos_data.append({
-                            "Data": row['Data'],
-                            "Bancada": row['Bancada_Nome'],
-                            "Série": m['serie'],
-                            "Erro CN": m['cn'],
-                            "Erro CP": m['cp'],
-                            "Erro CI": m['ci'],
-                            "M.V": m['mv'],
-                            "Reg.": m['reg_erro'],
-                            "Motivo": m['motivo']
-                        })
+                        # APLICAÇÃO DA REGRA DE OURO: Bloqueio de valores negativos
+                        try:
+                            # Converte valores para float para validação matemática
+                            # Remove símbolos e troca vírgula por ponto
+                            v_cn = float(str(m['cn']).replace('+', '').replace(',', '.').strip() or 0)
+                            v_cp = float(str(m['cp']).replace('+', '').replace(',', '.').strip() or 0)
+                            v_ci = float(str(m['ci']).replace('+', '').replace(',', '.').strip() or 0)
+
+                            # SÓ ENTRA SE ALGUMA CARGA FOR POSITIVA (MAIOR QUE ZERO)
+                            if v_cn > 0 or v_cp > 0 or v_ci > 0:
+                                criticos_data.append({
+                                    "Data": row['Data'],
+                                    "Bancada": row['Bancada_Nome'],
+                                    "Série": m['serie'],
+                                    "Erro CN": m['cn'],
+                                    "Erro CP": m['cp'],
+                                    "Erro CI": m['ci'],
+                                    "M.V": m['mv'],
+                                    "Reg.": m['reg_erro'],
+                                    "Motivo": m['motivo']
+                                })
+                        except Exception:
+                            continue # Se der erro na conversão, pula para manter a integridade
             
             if criticos_data:
                 df_c = pd.DataFrame(criticos_data)
-                # Estilização para destacar erros positivos
                 st.dataframe(
                     df_c.style.applymap(lambda x: 'color: #e53e3e; font-weight: bold' if isinstance(x, str) and '+' in x else ''), 
                     use_container_width=True, 
                     hide_index=True
                 )
+            else:
+                st.info("ℹ️ Os medidores reprovados neste mês possuem erros negativos (favorecem o consumidor) e foram omitidos desta lista técnica.")
 
     st.markdown("<br>", unsafe_allow_html=True)
     m1, m2, m3, m4 = st.columns(4)
