@@ -581,11 +581,11 @@ def renderizar_botao_scroll_topo():
     st.components.v1.html(scroll_button_html, height=0)
 
 # =========================================================
-# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (VERSÃO COMPLETA E FINAL)
+# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (RESTAURADO - SEM AUDITORIA)
 # =========================================================
 
 def pagina_visao_diaria(df_completo):
-    # --- CSS PARA IDENTIDADE VISUAL DE LABORATÓRIO ---
+    # --- BOTÃO VOLTAR AO TOPO (CSS & HTML) ---
     st.markdown('''
         <style> 
             .stApp { scroll-behavior: smooth; } 
@@ -594,49 +594,14 @@ def pagina_visao_diaria(df_completo):
                 border: none; outline: none; background-color: #555; 
                 color: white; cursor: pointer; padding: 15px; 
                 border-radius: 10px; font-size: 18px; opacity: 0.7; 
-            }
-            .header-laboratorio {
-                padding: 10px 0px;
-                border-bottom: 2px solid #1e3a8a;
-                margin-bottom: 25px;
-            }
-            .titulo-principal {
-                color: #1e3a8a;
-                font-size: 28px;
-                font-weight: 800;
-                margin-bottom: 0px;
-            }
-            .subtitulo-tecnico {
-                color: #64748b;
-                font-size: 14px;
-                font-weight: 400;
-                text-transform: uppercase;
-                letter-spacing: 1px;
-            }
-            .metric-card-clean {
-                background-color: #ffffff;
-                padding: 20px;
-                border-radius: 8px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-                text-align: center;
-                border-top: 5px solid #1e3a8a;
-            }
-            .val-clean { font-size: 32px; font-weight: 800; color: #0f172a; display: block; }
-            .lab-clean { font-size: 12px; color: #475569; font-weight: 700; text-transform: uppercase; }
+            } 
+            #scroll-to-top:hover { background-color: #f44336; opacity: 1; } 
         </style> 
         <a id="top"></a> 
         <a href="#top" id="scroll-to-top"><b>^</b></a> 
     ''', unsafe_allow_html=True)
 
-    # --- CABEÇALHO PROFISSIONAL ---
-    st.markdown('''
-        <div class="header-laboratorio">
-            <p class="titulo-principal">Sistema de Gestão de Ensaios e Auditoria</p>
-            <p class="subtitulo-tecnico">Laboratório de Ensaios de Medidores de Energia Elétrica - Conformidade Técnica</p>
-        </div>
-    ''', unsafe_allow_html=True)
-
-    st.sidebar.header("🔍 Central de Filtros")
+    st.sidebar.header("🔍 Busca e Filtros")
 
     # =====================================================
     # BUSCA POR SÉRIE
@@ -644,125 +609,164 @@ def pagina_visao_diaria(df_completo):
     if "search_key" not in st.session_state:
         st.session_state.search_key = 0
         
-    serie_input = st.sidebar.text_input("Número de Série do Medidor", value="", key=f"busca_{st.session_state.search_key}")
+    serie_input = st.sidebar.text_input(
+        "Pesquisar Número de Série", 
+        value="", 
+        key=f"busca_{st.session_state.search_key}"
+    )
+    
     termo_busca = serie_input.strip().lower()
 
     if termo_busca:
-        if st.sidebar.button("🗑️ Limpar Busca"):
+        if st.sidebar.button("🗑️ Limpar Pesquisa"):
             st.session_state.search_key += 1
             st.rerun()
             
-        st.markdown(f"### 🔍 Rastreabilidade de Ensaio: **{serie_input}**")
+        st.markdown(f"### 🔍 Histórico de Ensaios para a Série: **{serie_input}**")
         resultados = []
+        
         for _, ensaio_row in df_completo.iterrows():
+            # Identifica colunas que contêm o número de série dos medidores
             colunas_serie = [c for c in ensaio_row.index if "_Série" in str(c)]
+            
             if any(termo_busca in str(ensaio_row[col]).lower() for col in colunas_serie if pd.notna(ensaio_row[col])):
                 medidores = processar_ensaio(ensaio_row)
                 for m in medidores:
                     if termo_busca in m['serie'].lower():
-                        resultados.append({"data": ensaio_row['Data'], "bancada": ensaio_row['Bancada_Nome'], "dados": m})
+                        resultados.append({
+                            "data": ensaio_row['Data'],
+                            "bancada": ensaio_row['Bancada_Nome'],
+                            "dados": m
+                        })
+        
         if resultados:
+            st.success(f"{len(resultados)} registro(s) encontrado(s).")
+            # Ordena do mais recente para o mais antigo
             for res in sorted(resultados, key=lambda x: datetime.strptime(x['data'], '%d/%m/%y'), reverse=True):
                 with st.expander(f"{res['data']} | {res['bancada']} | {res['dados']['status']}"):
                     renderizar_card(res['dados'])
+        else:
+            st.warning("Nenhum registro encontrado.")
         return
 
     # =====================================================
-    # FILTROS E PROCESSAMENTO
+    # FILTROS DO DIA
     # =====================================================
-    if "filtro_data" not in st.session_state: 
+    if "filtro_data" not in st.session_state:
         st.session_state.filtro_data = (datetime.now() - pd.Timedelta(hours=3)).date()
-    if "filtro_bancada" not in st.session_state: 
+    if "filtro_bancada" not in st.session_state:
         st.session_state.filtro_bancada = "Todas"
-    
-    st.session_state.filtro_data = st.sidebar.date_input("Data do Ensaio", value=st.session_state.filtro_data, format="DD/MM/YYYY")
-    bancadas = df_completo['Bancada_Nome'].unique().tolist()
-    st.session_state.filtro_bancada = st.sidebar.selectbox("Posto de Ensaio (Bancada)", ['Todas'] + bancadas)
+    if "filtro_status" not in st.session_state:
+        st.session_state.filtro_status = []
+    if "filtro_irregularidade" not in st.session_state:
+        st.session_state.filtro_irregularidade = []
 
+    st.session_state.filtro_data = st.sidebar.date_input(
+        "Data do Ensaio", 
+        value=st.session_state.filtro_data, 
+        format="DD/MM/YYYY"
+    )
+
+    bancadas = df_completo['Bancada_Nome'].unique().tolist()
+    st.session_state.filtro_bancada = st.sidebar.selectbox(
+        "Bancada", 
+        ['Todas'] + bancadas
+    )
+
+    status_options = ["APROVADO", "REPROVADO", "CONTRA O CONSUMIDOR", "Não Ligou / Não Ensaido"]
+    st.session_state.filtro_status = st.sidebar.multiselect(
+        "Filtrar Status", 
+        status_options, 
+        default=st.session_state.filtro_status
+    )
+
+    if "REPROVADO" in st.session_state.filtro_status:
+        st.session_state.filtro_irregularidade = st.sidebar.multiselect(
+            "Filtrar Irregularidade",
+            ["Exatidão", "Registrador", "Mostrador/MV"],
+            default=st.session_state.filtro_irregularidade
+        )
+    else:
+        st.session_state.filtro_irregularidade = []
+
+    # =====================================================
+    # APLICAÇÃO DOS FILTROS
+    # =====================================================
     df_filtrado = df_completo[df_completo['Data_dt'].dt.date == st.session_state.filtro_data]
+    
     if st.session_state.filtro_bancada != "Todas":
         df_filtrado = df_filtrado[df_filtrado['Bancada_Nome'] == st.session_state.filtro_bancada]
 
     if df_filtrado.empty:
-        st.info("Aguardando registros para a data selecionada.")
+        st.info("Nenhum ensaio encontrado para esta data/bancada.")
         return
 
+    # =====================================================
+    # PROCESSAMENTO DOS MEDIDORES FILTRADOS
+    # =====================================================
     ensaios = []
     for _, row in df_filtrado.iterrows():
         medidores = processar_ensaio(row)
-        ensaios.append({
-            "n_ensaio": row.get("N_ENSAIO", "N/A"), 
-            "bancada": row["Bancada_Nome"], 
-            "temperatura": row.get("Temperatura", "--"), 
-            "medidores": medidores
-        })
+        medidores_filtrados = []
+        
+        for m in medidores:
+            status_ok = not st.session_state.filtro_status or m['status'] in st.session_state.filtro_status
+            irr_ok = not st.session_state.filtro_irregularidade or any(i in m['motivo'] for i in st.session_state.filtro_irregularidade)
+            
+            if status_ok and irr_ok:
+                medidores_filtrados.append(m)
+        
+        if medidores_filtrados:
+            ensaios.append({
+                "n_ensaio": row.get("N_ENSAIO", "N/A"),
+                "bancada": row["Bancada_Nome"],
+                "temperatura": row.get("Temperatura", "--"),
+                "medidores": medidores_filtrados
+            })
+
+    if not ensaios:
+        st.info("Nenhum medidor corresponde aos filtros selecionados.")
+        return
 
     todos_os_medidores = [m for e in ensaios for m in e["medidores"]]
+
+    # =====================================================
+    # RENDERIZAÇÃO DE RESUMO E GRÁFICOS
+    # =====================================================
     stats = calcular_estatisticas(todos_os_medidores)
+    renderizar_resumo(stats)
 
-    # --- TRATAMENTO SEGURO DE CONTADORES ---
-    dict_motivos = stats.get("motivos", {})
-    if not isinstance(dict_motivos, dict): dict_motivos = {}
-    
-    # Busca por múltiplas variações de nomes para garantir que não fique zerado
-    exatidao = dict_motivos.get('Exatidão', dict_motivos.get('Erro de Exatidão', 0))
-    registrador = dict_motivos.get('Registrador', dict_motivos.get('Falha Registrador', 0))
-    mostrador = dict_motivos.get('Mostrador/MV', dict_motivos.get('Mostrador / MV', 0))
-    
-    v_total = stats.get("total", 0)
-    v_aprov = stats.get("aprovados", 0)
-    v_repro = stats.get("reprovados", 0)
-    v_cons  = stats.get("contra_consumidor", stats.get("Contra Consumidor", 0))
-    v_taxa  = stats.get("taxa_aprovacao", 0)
-
-    # =====================================================
-    # INDICADORES TÉCNICOS (VISUAL PROFISSIONAL)
-    # =====================================================
-    st.markdown(f"##### 📈 Performance Técnica - Relatório de {st.session_state.filtro_data.strftime('%d/%m/%Y')}")
-    
-    c1, c2, c3, c4, c5 = st.columns(5)
-    with c1:
-        st.markdown(f'<div class="metric-card-clean" style="border-top-color:#1e293b"><span class="val-clean">{v_total}</span><span class="lab-clean">Unidades Ensaiadas</span></div>', unsafe_allow_html=True)
-    with c2:
-        st.markdown(f'<div class="metric-card-clean" style="border-top-color:#16a34a"><span class="val-clean">{v_aprov}</span><span class="lab-clean">Conformes</span></div>', unsafe_allow_html=True)
-    with c3:
-        st.markdown(f'<div class="metric-card-clean" style="border-top-color:#dc2626"><span class="val-clean">{v_repro}</span><span class="lab-clean">Não Conformes</span></div>', unsafe_allow_html=True)
-    with c4:
-        st.markdown(f'<div class="metric-card-clean" style="border-top-color:#7c3aed"><span class="val-clean">{v_cons}</span><span class="lab-clean">Contra Consumidor</span></div>', unsafe_allow_html=True)
-    with c5:
-        cor_status = "#16a34a" if v_taxa >= 90 else "#ea580c"
-        st.markdown(f'<div class="metric-card-clean" style="border-top-color:{cor_status}"><span class="val-clean">{v_taxa:.1f}%</span><span class="lab-clean">Índice de Qualidade</span></div>', unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # Detalhamento de Irregularidades Técnicas
-    d1, d2, d3, d4 = st.columns(4)
-    d1.info(f"⚡ Erro de Exatidão: **{exatidao}**")
-    d2.warning(f"⚙️ Falha Registrador: **{registrador}**")
-    d3.error(f"📺 Mostrador/MV: **{mostrador}**")
-    d4.success(f"📋 Total de Lotes: **{len(ensaios)}**")
-
-    st.markdown("---")
-
-    # =====================================================
-    # GRÁFICOS E EXPORTAÇÃO
-    # =====================================================
-    col_g, col_e = st.columns([3, 1])
-    with col_g:
+    col1, col2 = st.columns([3, 1])
+    with col1:
         renderizar_grafico_reprovacoes(todos_os_medidores)
-    with col_e:
-        st.write("📂 **Documentação**")
-        pdf = gerar_pdf_relatorio(ensaios=ensaios, data=st.session_state.filtro_data.strftime('%d/%m/%Y'), stats=stats)
-        if pdf: st.download_button("📥 Gerar Relatório PDF", pdf, file_name=f"relatorio_auditoria.pdf", use_container_width=True, key="diario_pdf")
-        excel = to_excel(pd.DataFrame(todos_os_medidores))
-        st.download_button("📥 Exportar Dados Excel", excel, file_name=f"dados_auditoria.xlsx", use_container_width=True, key="diario_excel")
+    with col2:
+        # Botões de Exportação
+        pdf_bytes = gerar_pdf_relatorio(
+            ensaios=ensaios,
+            data=st.session_state.filtro_data.strftime('%d/%m/%Y'),
+            stats=stats
+        )
+        if pdf_bytes:
+            st.download_button("📥 Baixar PDF", pdf_bytes, file_name=f"relatorio_{st.session_state.filtro_data}.pdf")
+        
+        df_export = pd.DataFrame(todos_os_medidores)
+        excel_bytes = to_excel(df_export)
+        st.download_button("📥 Baixar Excel", excel_bytes, file_name=f"dados_{st.session_state.filtro_data}.xlsx")
 
     # =====================================================
-    # DETALHES DOS ENSAIOS (Cards dos Medidores)
+    # EXIBIÇÃO DOS DETALHES (CARDS)
     # =====================================================
-    st.subheader("📋 Rastreabilidade de Medidores")
+    st.markdown("---")
+    st.subheader("📋 Detalhes dos Ensaios")
+    
     for ensaio in ensaios:
-        renderizar_cabecalho_ensaio(ensaio["n_ensaio"], ensaio["bancada"], ensaio["temperatura"])
+        renderizar_cabecalho_ensaio(
+            ensaio["n_ensaio"], 
+            ensaio["bancada"], 
+            ensaio["temperatura"]
+        )
+        
+        # Organiza os cards em 5 colunas por linha
         cols_n = 5
         for i in range(0, len(ensaio["medidores"]), cols_n):
             cols = st.columns(cols_n)
@@ -771,7 +775,7 @@ def pagina_visao_diaria(df_completo):
                     renderizar_card(m)
 
 # =========================================================
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO PROFISSIONAL)
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO FINAL AJUSTADA)
 # =========================================================
 
 def get_stats_por_dia(df_mes):
@@ -802,7 +806,7 @@ def get_stats_por_dia(df_mes):
     return pd.DataFrame(daily_stats)
 
 def pagina_visao_mensal(df_completo):
-    # --- CSS PROFISSIONAL DE LABORATÓRIO ---
+    # --- BOTÃO VOLTAR AO TOPO (SUAVIZADO) ---
     st.markdown('''
         <style> 
             .stApp { scroll-behavior: smooth; } 
@@ -811,50 +815,40 @@ def pagina_visao_mensal(df_completo):
                 border: none; outline: none; background-color: #555; 
                 color: white; cursor: pointer; padding: 15px; 
                 border-radius: 10px; font-size: 18px; opacity: 0.7; 
-            }
-            .header-laboratorio {
-                padding: 10px 0px;
-                border-bottom: 3px solid #1e3a8a;
-                margin-bottom: 25px;
-            }
-            .titulo-principal {
-                color: #1e3a8a;
-                font-size: 28px;
-                font-weight: 800;
-                margin-bottom: 0px;
-            }
-            .subtitulo-tecnico {
-                color: #64748b;
-                font-size: 14px;
-                text-transform: uppercase;
-                letter-spacing: 1px;
-            }
-            .metric-card-mensal {
-                background-color: #ffffff;
-                padding: 15px;
-                border-radius: 8px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-                text-align: center;
-                border-top: 5px solid #1e3a8a;
-            }
-            .val-mensal { font-size: 26px; font-weight: 800; color: #0f172a; display: block; }
-            .lab-mensal { font-size: 11px; color: #475569; font-weight: 700; text-transform: uppercase; }
+            } 
+            #scroll-to-top:hover { background-color: #f44336; opacity: 1; } 
         </style> 
         <a id="top"></a> 
-        <a href="#top" id="scroll-to-top"><b>^</b></a> 
+        <a href="#top" id="scroll-to-top" title="Voltar ao topo"><b>^</b></a> 
     ''', unsafe_allow_html=True)
 
-    # --- CABEÇALHO ---
-    st.markdown('''
-        <div class="header-laboratorio">
-            <p class="titulo-principal">Sistema de Gestão de Ensaios e Auditoria</p>
-            <p class="subtitulo-tecnico">Laboratório de Ensaios de Medidores de Energia Elétrica - Visão Mensal e Performance</p>
-        </div>
-    ''', unsafe_allow_html=True)
+    st.markdown("## 📊 Visão Mensal e Performance")
+    st.markdown("---")
 
     # =====================================================
+    # AUDITORIA TÉCNICA (ESSA PARTE É VITAL PARA OUTRAS ABAS)
+    # =====================================================
+    st.markdown("## 🔎 Auditoria Técnica Real dos Ensaios")
+    dados_auditoria = calcular_auditoria_real(df_completo)
+    
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Posições Totais", dados_auditoria["total_posicoes"])
+    c2.metric("Realmente Ensaiadas", dados_auditoria["total_ensaiadas"])
+    c3.metric("Aprovadas Reais", dados_auditoria["total_aprovadas"])
+    c4.metric("Reprovadas Reais", dados_auditoria["total_reprovadas"])
+    
+    st.metric("Aprovação Técnica (%)", f'{dados_auditoria["taxa_aprovacao"]:.2f}%')
+
+    st.markdown("### ⚠️ Reprovação por Motivo")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Erro de Exatidão", dados_auditoria["reprov_exatidao"])
+    m2.metric("Registrador", dados_auditoria["reprov_registrador"])
+    m3.metric("Mostrador / MV", dados_auditoria["reprov_mv"])
+    m4.metric("Contra Consumidor", dados_auditoria["reprov_consumidor"])
+
+    # ==============================
     # PREPARAÇÃO E FILTROS DO MÊS
-    # =====================================================
+    # ==============================
     df_completo['Ano'] = df_completo['Data_dt'].dt.year
     df_completo['Mes'] = df_completo['Data_dt'].dt.month
     
@@ -874,54 +868,66 @@ def pagina_visao_mensal(df_completo):
         st.warning("Nenhum dado encontrado para o período selecionado.")
         return
 
-    # =====================================================
-    # AUDITORIA TÉCNICA (CÁLCULOS VITAIS)
-    # =====================================================
-    dados_auditoria = calcular_auditoria_real(df_mes) # Calculando apenas para o mês selecionado
+    # ==============================
+    # CONSOLIDAÇÃO DOS DADOS MENSAIS
+    # ==============================
+    todos_mes = []
+    for _, row in df_mes.iterrows():
+        todos_mes.extend(processar_ensaio(row))
     
-    st.markdown(f"##### 🔎 Auditoria Técnica do Período")
+    aprov_m = sum(1 for m in todos_mes if m['status'] == 'APROVADO')
+    repro_m = sum(1 for m in todos_mes if m['status'] == 'REPROVADO')
+    cons_m = sum(1 for m in todos_mes if m['status'] == 'CONTRA O CONSUMIDOR')
+    nao_ensaiados_m = sum(1 for m in todos_mes if m['status'] == 'Não Ligou / Não Ensaido')
     
-    c1, c2, c3, c4, c5 = st.columns(5)
-    with c1:
-        st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#64748b"><span class="val-mensal">{dados_auditoria["total_ensaiadas"]}</span><span class="lab-mensal">Ensaios Reais</span></div>', unsafe_allow_html=True)
-    with c2:
-        st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#16a34a"><span class="val-mensal">{dados_auditoria["total_aprovadas"]}</span><span class="lab-mensal">Conformes</span></div>', unsafe_allow_html=True)
-    with c3:
-        st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#dc2626"><span class="val-mensal">{dados_auditoria["total_reprovadas"]}</span><span class="lab-mensal">Não Conformes</span></div>', unsafe_allow_html=True)
-    with c4:
-        st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#7c3aed"><span class="val-mensal">{dados_auditoria["reprov_consumidor"]}</span><span class="lab-mensal">Contra Cons.</span></div>', unsafe_allow_html=True)
-    with c5:
-        taxa = dados_auditoria["taxa_aprovacao"]
-        cor_taxa = "#16a34a" if taxa >= 95 else "#ea580c"
-        st.markdown(f'<div class="metric-card-mensal" style="border-top-color:{cor_taxa}"><span class="val-mensal">{taxa:.2f}%</span><span class="lab-mensal">Aprovação</span></div>', unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # Motivos de Reprovação em linha fina
-    m1, m2, m3, m4 = st.columns(4)
-    m1.info(f"⚡ Exatidão: **{dados_auditoria['reprov_exatidao']}**")
-    m2.warning(f"⚙️ Registrador: **{dados_auditoria['reprov_registrador']}**")
-    m3.error(f"📺 Mostrador/MV: **{dados_auditoria['reprov_mv']}**")
+    total_m = aprov_m + repro_m + cons_m
+    taxa_m = (aprov_m / total_m * 100) if total_m > 0 else 0
     
-    # Temperatura Média
-    temp_media = pd.to_numeric(df_mes['Temperatura'].astype(str).str.replace("°C","",regex=False).str.replace(",",".").str.strip(), errors="coerce").mean()
-    m4.success(f"🌡️ Temp. Média: **{temp_media:.1f}°C**" if not pd.isna(temp_media) else "🌡️ Temp: --")
+    df_daily = get_stats_por_dia(df_mes)
 
-    st.markdown("---")
+    # ==============================
+    # MÉTRICAS PRINCIPAIS (DASHBOARD)
+    # ==============================
+    col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
+    col_m1.metric("Total Ensaiados", f"{total_m:,.0f}".replace(",", "."))
+    col_m2.metric("Taxa de Aprovação", f"{taxa_m:.1f}%", delta=f"{taxa_m-95:.1f}% vs Meta (95%)" if taxa_m > 0 else None)
+    col_m3.metric("Total Reprovados", f"{repro_m:,.0f}".replace(",", "."), delta=repro_m, delta_color="inverse")
+    col_m4.metric("Contra Consumidor", f"{cons_m:,.0f}".replace(",", "."), delta=cons_m, delta_color="inverse")
+    col_m5.metric("Não Ensaidos", f"{nao_ensaiados_m:,.0f}".replace(",", "."))
+
+    # ==============================
+    # CÁLCULO DA TEMPERATURA MÉDIA
+    # ==============================
+    temp_media = 0
+    if 'Temperatura' in df_mes.columns:
+        temp_series = (
+            df_mes['Temperatura']
+            .astype(str)
+            .str.replace("°C", "", regex=False)
+            .str.replace(",", ".", regex=False)
+            .str.strip()
+        )
+        temp_series = pd.to_numeric(temp_series, errors="coerce")
+        temp_media = temp_series.mean()
+        if not pd.isna(temp_media):
+            st.info(f"🌡️ **Temperatura Média do Período:** {temp_media:.1f}°C")
 
     # ==============================
     # GRÁFICOS DE PERFORMANCE
     # ==============================
-    df_daily = get_stats_por_dia(df_mes)
     col_g1, col_g2 = st.columns([1, 1.5])
     
     with col_g1:
+        df_pie = pd.DataFrame({
+            'Status': ['Aprovados','Reprovados','Contra Consumidor'],
+            'Qtd': [aprov_m, repro_m, cons_m]
+        })
         fig_donut = px.pie(
-            values=[dados_auditoria["total_aprovadas"], dados_auditoria["total_reprovadas"], dados_auditoria["reprov_consumidor"]], 
-            names=['Aprovados','Reprovados','Contra Consumidor'], hole=.5,
+            df_pie, values='Qtd', names='Status', hole=.5,
             color_discrete_map={'Aprovados':'#16a34a', 'Reprovados':'#dc2626', 'Contra Consumidor':'#7c3aed'}
         )
-        fig_donut.update_layout(showlegend=False, margin=dict(t=30,b=0,l=0,r=0), height=300)
+        fig_donut.update_traces(textposition='inside', textinfo='percent+label')
+        fig_donut.update_layout(showlegend=False, margin=dict(t=40,b=0,l=0,r=0))
         st.plotly_chart(fig_donut, use_container_width=True)
 
     with col_g2:
@@ -929,37 +935,97 @@ def pagina_visao_mensal(df_completo):
         fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Aprovados'], name='Aprovados', marker_color='#16a34a'))
         fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Reprovados'], name='Reprovados', marker_color='#dc2626'))
         fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Contra Consumidor'], name='Contra Consumidor', marker_color='#7c3aed'))
-        fig_bar.update_layout(barmode='stack', height=300, margin=dict(t=30,b=0,l=0,r=0), hovermode="x unified")
+        
+        fig_bar.update_layout(
+            barmode='stack', title='<b>Evolução Diária de Ensaios</b>',
+            xaxis_title="Dia do Mês", yaxis_title="Quantidade",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            margin=dict(t=80,b=40,l=0,r=0), hovermode="x unified"
+        )
         st.plotly_chart(fig_bar, use_container_width=True)
 
     # ==============================
-    # PAINEL DE AUDITORIA (EXPANDER)
+    # TENDÊNCIA DA TAXA
     # ==============================
-    with st.expander("🔍 Detalhamento Analítico para Auditoria"):
-        st.write(f"### Lista de Medidores - {mes_sel}/{ano_sel}")
+    st.markdown("---")
+    st.subheader("📈 Tendência da Taxa de Aprovação")
+    if not df_daily.empty:
+        fig_line = px.line(
+            df_daily, x='Data', y='Taxa de Aprovação (%)', 
+            markers=True, text='Taxa de Aprovação (%)'
+        )
+        fig_line.update_traces(textposition="top center")
+        fig_line.update_layout(
+            yaxis=dict(range=[0,110]), 
+            yaxis_title="Taxa (%)", 
+            xaxis_title="Dia do Mês"
+        )
+        st.plotly_chart(fig_line, use_container_width=True)
+
+   # =====================================================
+    # AUDITORIA DETALHADA PARA CONFERÊNCIA DO USUÁRIO
+    # =====================================================
+    st.markdown("---")
+    with st.expander("🔍 PAINEL DE AUDITORIA: Por que a taxa deu esse valor?"):
+        st.write(f"### Análise Detalhada do Mês Selecionado")
+        
+        # 1. Tabela de Resumo Diário (O que alimenta o gráfico)
+        st.write("**1. Resumo Diário (Consolidado):**")
         df_exibicao = df_daily.copy()
         df_exibicao['Data'] = df_exibicao['Data'].dt.strftime('%d/%m/%Y')
         st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
 
-        dia_auditoria = st.selectbox("Selecione um dia para auditoria individual:", df_daily['Data'].dt.strftime('%d/%m/%Y'))
+        st.markdown("---")
+        
+        # 2. Filtro para o usuário auditar um dia específico
+        st.write("**2. Auditoria Individual de Medidores:**")
+        dia_auditoria = st.selectbox("Selecione um dia para ver quem foi aprovado/reprovado:", df_daily['Data'].dt.strftime('%d/%m/%Y'))
+        
         if dia_auditoria:
+            # Filtra os medidores daquele dia exato
             data_filtro = pd.to_datetime(dia_auditoria, format='%d/%m/%Y')
             df_dia_f = df_mes[df_mes['Data_dt'] == data_filtro]
+            
             medidores_auditoria = []
             for _, r in df_dia_f.iterrows():
                 medidores_auditoria.extend(processar_ensaio(r))
             
-            df_final_auditoria = pd.DataFrame([{
-                "Pos": m['pos'], "Série": m['serie'], "Status": m['status'],
-                "CN": m['cn'], "CP": m['cp'], "CI": m['ci'], "MV": m['mv'],
-                "Reg": m['reg_erro'], "Motivo": m['motivo']
+            # Criar DataFrame de auditoria - COLUNA MV INCLUÍDA
+            df_auditoria = pd.DataFrame([{
+                "Pos": m['pos'],
+                "Série": m['serie'],
+                "Status": m['status'],
+                "CN": m['cn'],
+                "CP": m['cp'],
+                "CI": m['ci'],
+                "MV": m['mv'],  # <-- INCLUÍDO AQUI
+                "Reg": m['reg_erro'],
+                "Motivo": m['motivo']
             } for m in medidores_auditoria])
 
+            # Mostrar quantos não ligaram
+            nao_ligou = len(df_auditoria[df_auditoria['Status'] == "Não Ligou / Não Ensaido"])
+            ensaiados = len(df_auditoria[df_auditoria['Status'] != "Não Ligou / Não Ensaido"])
+            
+            c_a1, c_a2 = st.columns(2)
+            c_a1.warning(f"🔌 Não Ligaram/Vazios: {nao_ligou}")
+            c_a2.success(f"✅ Considerados no Cálculo: {ensaiados}")
+
+            st.write(f"Lista de medidores do dia {dia_auditoria}:")
+            
+            # Colorir a tabela para facilitar a auditoria
             def color_status(val):
-                color = '#c6f6d5' if val == 'APROVADO' else '#fed7d7' if val == 'REPROVADO' else '#e9d8fd' if val == 'CONTRA O CONSUMIDOR' else '#edf2f7'
+                if val == 'APROVADO': color = '#c6f6d5' # Verde
+                elif val == 'REPROVADO': color = '#fed7d7' # Vermelho
+                elif val == 'CONTRA O CONSUMIDOR': color = '#e9d8fd' # Roxo
+                else: color = '#edf2f7' # Cinza (Não ligou)
                 return f'background-color: {color}'
 
-            st.dataframe(df_final_auditoria.style.applymap(color_status, subset=['Status']), use_container_width=True, hide_index=True)
+            st.dataframe(
+                df_auditoria.style.applymap(color_status, subset=['Status']),
+                use_container_width=True,
+                hide_index=True
+            )
             
 # =======================================================================
 # [BLOCO 08] - PÁGINA: ANÁLISE DE POSIÇÕES (HEATMAP DE REPROVAÇÃO)
