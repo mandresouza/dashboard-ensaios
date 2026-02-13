@@ -435,7 +435,7 @@ def calcular_auditoria_real(df):
     }
     
 # =======================================================================
-# [BLOCO 05] - COMPONENTES VISUAIS (INTEGRAL COM REGISTRADOR)
+# [BLOCO 05] - COMPONENTES VISUAIS (VERSÃO COM ESPAÇAMENTO NOS CARDS)
 # =======================================================================
 
 def renderizar_card(medidor):
@@ -448,7 +448,6 @@ def renderizar_card(medidor):
     }
     cor = status_cor.get(medidor['status'], "#f3f4f6")
     
-    # A técnica abaixo remove espaços à esquerda que causam o erro de exibir o código como texto
     conteudo_html = f"""
 <div style="background:{cor}; border-radius:12px; padding:16px; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left: 6px solid rgba(0,0,0,0.1); display: flex; flex-direction: column; justify-content: space-between; min-height: 380px;">
 <div>
@@ -483,7 +482,7 @@ def renderizar_card(medidor):
     st.markdown(conteudo_html, unsafe_allow_html=True)
 
 def renderizar_resumo(stats):
-    """Renderiza as métricas de resumo no topo da página usando CSS customizado."""
+    """Renderiza as métricas de resumo com espaçamento entre o primeiro e os demais cards."""
     st.markdown("""
         <style>
             .metric-card{background-color:#FFFFFF; padding:20px; border-radius:12px; 
@@ -493,14 +492,21 @@ def renderizar_resumo(stats):
         </style>
     """, unsafe_allow_html=True)
     
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
+    # --- AJUSTE DE ESPAÇAMENTO ---
+    # Criamos 5 colunas: c1 (Card 1), gap (vazia), c2 (Card 2), c3 (Card 3), c4 (Card 4)
+    # A proporção [1, 0.2, 1, 1, 1] cria o respiro após o primeiro card.
+    c1, gap, c2, c3, c4 = st.columns([1, 0.2, 1, 1, 1])
+    
+    with c1:
         st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#1e293b;">{stats["total"]}</div><div class="metric-label">Total Ensaiados</div></div>', unsafe_allow_html=True)
-    with col2:
+    
+    # A coluna 'gap' fica vazia propositalmente para dar o espaço
+    
+    with c2:
         st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#16a34a;">{stats["aprovados"]}</div><div class="metric-label">Aprovados</div></div>', unsafe_allow_html=True)
-    with col3:
+    with c3:
         st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#dc2626;">{stats["reprovados"]}</div><div class="metric-label">Reprovados</div></div>', unsafe_allow_html=True)
-    with col4:
+    with c4:
         st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#7c3aed;">{stats["consumidor"]}</div><div class="metric-label">Contra Consumidor</div></div>', unsafe_allow_html=True)
 
 def renderizar_cabecalho_ensaio(n_ensaio, bancada, temperatura):
@@ -516,7 +522,9 @@ def renderizar_cabecalho_ensaio(n_ensaio, bancada, temperatura):
 
 def renderizar_grafico_reprovacoes(medidores):
     """Gera um gráfico horizontal com os motivos das reprovações."""
-    motivos = [m['motivo'] for m in medidores if m['status'] == 'REPROVADO']
+    import pandas as pd
+    import plotly.express as px
+    motivos = [m['motivo'] for m in medidores if m['status'] in ['REPROVADO', 'CONTRA O CONSUMIDOR']]
     if not motivos:
         return
         
