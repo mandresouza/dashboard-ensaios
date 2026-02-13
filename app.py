@@ -974,38 +974,69 @@ def pagina_visao_mensal(df_completo):
         st.plotly_chart(fig_bar, use_container_width=True)
 
     # =====================================================
-    # PAINEL DE AUDITORIA COMPLETO
+    # PAINEL DE AUDITORIA: Por que a taxa deu esse valor?
     # =====================================================
     st.markdown("---")
-    with st.expander("🔍 PAINEL DE AUDITORIA COMPLETO", expanded=False):
-        datas_disponiveis = df_daily['Data'].dt.strftime('%d/%m/%Y').unique()
-        dia_auditoria_str = st.selectbox("Selecione o dia para conferência detalhada:", datas_disponiveis, key="sel_audit_mensal_final_v11")
+    with st.expander("🔍 PAINEL DE AUDITORIA: Por que a taxa deu esse valor?"):
+        st.write(f"### Análise Detalhada do Mês Selecionado")
         
-        if dia_auditoria_str:
-            data_f = pd.to_datetime(dia_auditoria_str, format='%d/%m/%Y')
-            meds_aud = []
-            for _, r in df_mes[df_mes['Data_dt'] == data_f].iterrows(): 
-                meds_aud.extend(processar_ensaio(r))
-            
-            if meds_aud:
-                df_f = pd.DataFrame([{ 
-                    "Pos": m.get('pos', '-'), "Série": m.get('serie', '-'), "Status": m.get('status', '-'), 
-                    "CN": m.get('cn', '-'), "CP": m.get('cp', '-'), "CI": m.get('ci', '-'), 
-                    "MV": m.get('mv', '-'), 
-                    "Reg Inic": extrair_valor_reg(m, 'inic'), 
-                    "Reg Fim": extrair_valor_reg(m, 'fim'), 
-                    "Reg %": extrair_valor_reg(m, 'erro'), 
-                    "Motivo": m.get('motivo', '-') 
-                } for m in meds_aud])
-                
-                def color_status(val):
-                    color = 'transparent'
-                    if val == 'APROVADO': color = '#c6f6d5'
-                    elif val == 'REPROVADO': color = '#fed7d7'
-                    elif val == 'CONTRA O CONSUMIDOR': color = '#e9d8fd'
-                    return f'background-color: {color}'
+        # 1. Tabela de Resumo Diário (O que alimenta o gráfico)
+        st.write("**1. Resumo Diário (Consolidado):**")
+        df_exibicao = df_daily.copy()
+        df_exibicao['Data'] = df_exibicao['Data'].dt.strftime('%d/%m/%Y')
+        st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
 
-                st.dataframe(df_f.style.applymap(color_status, subset=['Status']), use_container_width=True, hide_index=True)
+        st.markdown("---")
+        
+        # 2. Filtro para o usuário auditar um dia específico
+        st.write("**2. Auditoria Individual de Medidores:**")
+        dia_auditoria = st.selectbox("Selecione um dia para ver quem foi aprovado/reprovado:", df_daily['Data'].dt.strftime('%d/%m/%Y'))
+        
+        if dia_auditoria:
+            # Filtra os medidores daquele dia exato
+            data_filtro = pd.to_datetime(dia_auditoria, format='%d/%m/%Y')
+            df_dia_f = df_mes[df_mes['Data_dt'] == data_filtro]
+            
+            medidores_auditoria = []
+            for _, r in df_dia_f.iterrows():
+                medidores_auditoria.extend(processar_ensaio(r))
+            
+            # Criar DataFrame de auditoria
+            df_auditoria = pd.DataFrame([{
+                "Pos": m['pos'],
+                "Série": m['serie'],
+                "Status": m['status'],
+                "CN": m['cn'],
+                "CP": m['cp'],
+                "CI": m['ci'],
+                "MV": m['mv'],
+                "Reg": m.get('reg_erro', '-'),
+                "Motivo": m['motivo']
+            } for m in medidores_auditoria])
+
+            # Mostrar quantos não ligaram
+            nao_ligou = len(df_auditoria[df_auditoria['Status'] == "Não Ligou / Não Ensaido"])
+            ensaiados = len(df_auditoria[df_auditoria['Status'] != "Não Ligou / Não Ensaido"])
+            
+            c_a1, c_a2 = st.columns(2)
+            c_a1.warning(f"🔌 Não Ligaram/Vazios: {nao_ligou}")
+            c_a2.success(f"✅ Considerados no Cálculo: {ensaiados}")
+
+            st.write(f"Lista de medidores do dia {dia_auditoria}:")
+            
+            # Colorir a tabela para facilitar a auditoria
+            def color_status(val):
+                if val == 'APROVADO': color = '#c6f6d5' # Verde
+                elif val == 'REPROVADO': color = '#fed7d7' # Vermelho
+                elif val == 'CONTRA O CONSUMIDOR': color = '#e9d8fd' # Roxo
+                else: color = '#edf2f7' # Cinza (Não ligou)
+                return f'background-color: {color}'
+
+            st.dataframe(
+                df_auditoria.style.applymap(color_status, subset=['Status']),
+                use_container_width=True,
+                hide_index=True
+            )
                 
 # =======================================================================
 # [BLOCO 08] - PÁGINA: ANÁLISE DE POSIÇÕES (HEATMAP DE REPROVAÇÃO)
