@@ -581,11 +581,11 @@ def renderizar_botao_scroll_topo():
     st.components.v1.html(scroll_button_html, height=0)
 
 # =========================================================
-# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (VERSÃO ÚNICA E LIMPA)
+# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (IDENTIDADE PROFISSIONAL)
 # =========================================================
 
 def pagina_visao_diaria(df_completo):
-    # --- CSS PARA LIMPEZA VISUAL ---
+    # --- CSS PARA IDENTIDADE VISUAL DE LABORATÓRIO ---
     st.markdown('''
         <style> 
             .stApp { scroll-behavior: smooth; } 
@@ -594,23 +594,49 @@ def pagina_visao_diaria(df_completo):
                 border: none; outline: none; background-color: #555; 
                 color: white; cursor: pointer; padding: 15px; 
                 border-radius: 10px; font-size: 18px; opacity: 0.7; 
-            } 
+            }
+            .header-laboratorio {
+                padding: 10px 0px;
+                border-bottom: 2px solid #1e3a8a;
+                margin-bottom: 25px;
+            }
+            .titulo-principal {
+                color: #1e3a8a;
+                font-size: 28px;
+                font-weight: 800;
+                margin-bottom: 0px;
+            }
+            .subtitulo-tecnico {
+                color: #64748b;
+                font-size: 14px;
+                font-weight: 400;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
             .metric-card-clean {
                 background-color: #ffffff;
                 padding: 20px;
-                border-radius: 12px;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
                 text-align: center;
-                border-bottom: 4px solid #3b82f6;
+                border-top: 5px solid #1e3a8a;
             }
-            .val-clean { font-size: 30px; font-weight: 800; color: #1e293b; display: block; }
-            .lab-clean { font-size: 13px; color: #64748b; font-weight: 600; text-transform: uppercase; }
+            .val-clean { font-size: 32px; font-weight: 800; color: #0f172a; display: block; }
+            .lab-clean { font-size: 12px; color: #475569; font-weight: 700; text-transform: uppercase; }
         </style> 
         <a id="top"></a> 
         <a href="#top" id="scroll-to-top"><b>^</b></a> 
     ''', unsafe_allow_html=True)
 
-    st.sidebar.header("🔍 Busca e Filtros")
+    # --- CABEÇALHO PROFISSIONAL ---
+    st.markdown('''
+        <div class="header-laboratorio">
+            <p class="titulo-principal">Sistema de Gestão de Ensaios e Auditoria</p>
+            <p class="subtitulo-tecnico">Laboratório de Ensaios de Medidores de Energia Elétrica - Conformidade Técnica</p>
+        </div>
+    ''', unsafe_allow_html=True)
+
+    st.sidebar.header("🔍 Central de Filtros")
 
     # =====================================================
     # BUSCA POR SÉRIE (Original Mantido)
@@ -618,15 +644,15 @@ def pagina_visao_diaria(df_completo):
     if "search_key" not in st.session_state:
         st.session_state.search_key = 0
         
-    serie_input = st.sidebar.text_input("Pesquisar Número de Série", value="", key=f"busca_{st.session_state.search_key}")
+    serie_input = st.sidebar.text_input("Número de Série do Medidor", value="", key=f"busca_{st.session_state.search_key}")
     termo_busca = serie_input.strip().lower()
 
     if termo_busca:
-        if st.sidebar.button("🗑️ Limpar Pesquisa"):
+        if st.sidebar.button("🗑️ Limpar Busca"):
             st.session_state.search_key += 1
             st.rerun()
             
-        st.markdown(f"### 🔍 Histórico de Ensaios: **{serie_input}**")
+        st.markdown(f"### 🔍 Rastreabilidade de Ensaio: **{serie_input}**")
         resultados = []
         for _, ensaio_row in df_completo.iterrows():
             colunas_serie = [c for c in ensaio_row.index if "_Série" in str(c)]
@@ -646,18 +672,17 @@ def pagina_visao_diaria(df_completo):
     # =====================================================
     if "filtro_data" not in st.session_state: st.session_state.filtro_data = (datetime.now() - pd.Timedelta(hours=3)).date()
     if "filtro_bancada" not in st.session_state: st.session_state.filtro_bancada = "Todas"
-    if "filtro_status" not in st.session_state: st.session_state.filtro_status = []
     
-    st.session_state.filtro_data = st.sidebar.date_input("Data do Ensaio", value=st.session_state.filtro_data, format="DD/MM/YYYY")
+    st.session_state.filtro_data = st.sidebar.date_input("Período do Ensaio", value=st.session_state.filtro_data, format="DD/MM/YYYY")
     bancadas = df_completo['Bancada_Nome'].unique().tolist()
-    st.session_state.filtro_bancada = st.sidebar.selectbox("Bancada", ['Todas'] + bancadas)
+    st.session_state.filtro_bancada = st.sidebar.selectbox("Posto de Ensaio (Bancada)", ['Todas'] + bancadas)
 
     df_filtrado = df_completo[df_completo['Data_dt'].dt.date == st.session_state.filtro_data]
     if st.session_state.filtro_bancada != "Todas":
         df_filtrado = df_filtrado[df_filtrado['Bancada_Nome'] == st.session_state.filtro_bancada]
 
     if df_filtrado.empty:
-        st.info("Nenhum ensaio encontrado.")
+        st.info("Aguardando registros para a data selecionada.")
         return
 
     ensaios = []
@@ -669,30 +694,32 @@ def pagina_visao_diaria(df_completo):
     stats = calcular_estatisticas(todos_os_medidores)
 
     # =====================================================
-    # 🎯 AQUI ESTÁ A MUDANÇA: APENAS UMA ESTRUTURA DE CARDS
+    # INDICADORES TÉCNICOS UNIFICADOS (VISUAL PROFISSIONAL)
     # =====================================================
-    st.subheader(f"📊 Consolidado Técnica - {st.session_state.filtro_data.strftime('%d/%m/%Y')}")
+    st.markdown(f"##### 📈 Performance Técnica - Relatório de {st.session_state.filtro_data.strftime('%d/%m/%Y')}")
     
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
-        st.markdown(f'<div class="metric-card-clean" style="border-color:#1e293b"><span class="val-clean">{stats["total"]}</span><span class="lab-clean">Ensaiados</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card-clean" style="border-top-color:#1e293b"><span class="val-clean">{stats["total"]}</span><span class="lab-clean">Unidades Ensaiadas</span></div>', unsafe_allow_html=True)
     with c2:
-        st.markdown(f'<div class="metric-card-clean" style="border-color:#16a34a"><span class="val-clean">{stats["aprovados"]}</span><span class="lab-clean">Aprovados</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card-clean" style="border-top-color:#16a34a"><span class="val-clean">{stats["aprovados"]}</span><span class="lab-clean">Conformes</span></div>', unsafe_allow_html=True)
     with c3:
-        st.markdown(f'<div class="metric-card-clean" style="border-color:#dc2626"><span class="val-clean">{stats["reprovados"]}</span><span class="lab-clean">Reprovados</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card-clean" style="border-top-color:#dc2626"><span class="val-clean">{stats["reprovados"]}</span><span class="lab-clean">Não Conformes</span></div>', unsafe_allow_html=True)
     with c4:
-        st.markdown(f'<div class="metric-card-clean" style="border-color:#7c3aed"><span class="val-clean">{stats["contra_consumidor"]}</span><span class="lab-clean">Contra Cons.</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card-clean" style="border-top-color:#7c3aed"><span class="val-clean">{stats["contra_consumidor"]}</span><span class="lab-clean">Contra Consumidor</span></div>', unsafe_allow_html=True)
     with c5:
-        st.markdown(f'<div class="metric-card-clean" style="border-color:#16a34a"><span class="val-clean">{stats["taxa_aprovacao"]:.1f}%</span><span class="lab-clean">Aprovação</span></div>', unsafe_allow_html=True)
+        # Cor dinâmica para o índice de qualidade
+        cor_status = "#16a34a" if stats["taxa_aprovacao"] >= 90 else "#ea580c"
+        st.markdown(f'<div class="metric-card-clean" style="border-top-color:{cor_status}"><span class="val-clean">{stats["taxa_aprovacao"]:.1f}%</span><span class="lab-clean">Índice de Qualidade</span></div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Segunda linha apenas com informações técnicas de erro
+    # Detalhamento de Irregularidades Técnicas
     d1, d2, d3, d4 = st.columns(4)
-    d1.info(f"📍 Exatidão: **{stats['motivos'].get('Exatidão', 0)}**")
-    d2.warning(f"📍 Registrador: **{stats['motivos'].get('Registrador', 0)}**")
-    d3.error(f"📍 Mostrador/MV: **{stats['motivos'].get('Mostrador/MV', 0)}**")
-    d4.success(f"✅ Realizado: **{len(ensaios)} Ensaios**")
+    d1.info(f"⚡ Erro de Exatidão: **{stats['motivos'].get('Exatidão', 0)}**")
+    d2.warning(f"⚙️ Falha Registrador: **{stats['motivos'].get('Registrador', 0)}**")
+    d3.error(f"📺 Mostrador/MV: **{stats['motivos'].get('Mostrador/MV', 0)}**")
+    d4.success(f"📋 Total de Lotes: **{len(ensaios)}**")
 
     st.markdown("---")
 
@@ -703,16 +730,16 @@ def pagina_visao_diaria(df_completo):
     with col_g:
         renderizar_grafico_reprovacoes(todos_os_medidores)
     with col_e:
-        st.write("📂 **Exportar**")
+        st.write("📂 **Documentação**")
         pdf = gerar_pdf_relatorio(ensaios=ensaios, data=st.session_state.filtro_data.strftime('%d/%m/%Y'), stats=stats)
-        if pdf: st.download_button("📥 PDF", pdf, file_name=f"relatorio.pdf", use_container_width=True)
+        if pdf: st.download_button("📥 Gerar Relatório PDF", pdf, file_name=f"relatorio_auditoria.pdf", use_container_width=True)
         excel = to_excel(pd.DataFrame(todos_os_medidores))
-        st.download_button("📥 Excel", excel, file_name=f"dados.xlsx", use_container_width=True)
+        st.download_button("📥 Exportar Dados Excel", excel, file_name=f"dados_auditoria.xlsx", use_container_width=True)
 
     # =====================================================
-    # DETALHES DOS ENSAIOS (Parte que você não quer mexer)
+    # DETALHES DOS ENSAIOS (Cards dos Medidores)
     # =====================================================
-    st.subheader("📋 Detalhes dos Ensaios")
+    st.subheader("📋 Rastreabilidade de Medidores")
     for ensaio in ensaios:
         renderizar_cabecalho_ensaio(ensaio["n_ensaio"], ensaio["bancada"], ensaio["temperatura"])
         cols_n = 5
