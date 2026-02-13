@@ -39,7 +39,8 @@ from datetime import datetime
 from fpdf import FPDF
 
 # --- DEFINIÇÃO DE LIMITES RTM IPEM ---
-LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
+# Lembrete: Limites espelhados (Ex: Classe B é ±1.3%)
+LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3, "1": 2.0, "2": 4.0}
 
 # --- CONSTANTES EXCLUSIVAS DO BLOCO DE METROLOGIA ---
 MAPA_BANCADA_SERIE = {
@@ -87,8 +88,10 @@ def processar_metrologia_isolada(row, df_mestra=None):
     tamanho_bancada = 20 if '20_POS' in bancada_row else 10
     
     classe = str(row.get("Classe", "")).upper()
-    if "ELETROMEC" in classe:
-        limite = 4.0 if ("2" in classe or "4" in classe) else 2.0
+    
+    # Lógica de Limite RTM baseada na Classe informada
+    if "ELETROMEC" in classe or any(c in classe for c in ["1", "2"]):
+        limite = 4.0 if "2" in classe else 2.0
     else:
         classe_limpa = re.search(r'[A-D]', classe)
         classe_letra = classe_limpa.group(0) if classe_limpa else 'B'
@@ -197,21 +200,25 @@ def pagina_metrologia_avancada(df_completo):
     df_mestra = carregar_tabela_mestra_sheets()
     meses_n = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
     
-    # Barra Lateral com Filtros
-    st.sidebar.markdown("### 🛠️ Filtros Metrológicos")
+    # Barra Lateral
+    st.sidebar.markdown("### 🛠️ Parâmetros do Laudo")
     col_filt1, col_filt2 = st.sidebar.columns(2)
     mes_sel = col_filt1.selectbox("Mês", range(1, 13), index=datetime.now().month-1, format_func=lambda x: meses_n[x-1])
     ano_sel = col_filt2.selectbox("Ano", sorted(df_completo['Data_dt'].dt.year.unique(), reverse=True))
     
-    # --- FILTRO DE CLASSES ---
-    classes_unicas = sorted(df_completo['Classe'].unique().tolist())
-    classes_sel = st.sidebar.multiselect("Filtrar Classes de Medidores:", classes_unicas, default=classes_unicas)
+    # --- FILTRO DE CLASSES ESPECÍFICO (1, 2, A, B, C, D) ---
+    opcoes_classes = ["1", "2", "A", "B", "C", "D"]
+    classes_sel = st.sidebar.multiselect("Filtrar Classes (Eletromec. e Eletrôn.):", opcoes_classes, default=opcoes_classes)
     
     todos_meds = []
+    # Filtragem robusta para pegar as classes selecionadas dentro da string da coluna 'Classe'
     df_p = df_completo[(df_completo['Data_dt'].dt.month == mes_sel) & 
-                       (df_completo['Data_dt'].dt.year == ano_sel) &
-                       (df_completo['Classe'].isin(classes_sel))]
+                       (df_completo['Data_dt'].dt.year == ano_sel)]
     
+    if not df_p.empty:
+        # Filtra o DataFrame garantindo que a classe esteja na lista selecionada
+        df_p = df_p[df_p['Classe'].apply(lambda x: any(c in str(x).upper() for c in classes_sel))]
+
     for _, r in df_p.sort_values('Data_dt').iterrows():
         for m in processar_metrologia_isolada(r, df_mestra):
             m['Data'] = r['Data_dt']
@@ -219,7 +226,7 @@ def pagina_metrologia_avancada(df_completo):
             todos_meds.append(m)
             
     if not todos_meds:
-        st.info(f"Nenhum dado encontrado para os filtros selecionados.")
+        st.info(f"Nenhum dado encontrado para as classes {', '.join(classes_sel)}.")
         return
 
     df_met = pd.DataFrame(todos_meds)
@@ -242,7 +249,7 @@ def pagina_metrologia_avancada(df_completo):
 
     with tabs[2]:
         st.markdown("#### ⚖️ Cruzamento Dinâmico de Erros (CN, CP, CI)")
-        tipo_grafico = st.radio("Selecione o Cruzamento:", ["CN vs CP (Comportamento Linear)", "CN vs CI (Comportamento Indutivo)"], horizontal=True)
+        tipo_grafico = st.radio("Selecione o Cruzamento:", ["CN vs CP", "CN vs CI"], horizontal=True)
         eixo_y = 'cp' if "CP" in tipo_grafico else 'ci'
         df_disp = df_met.dropna(subset=['cn', eixo_y]).copy()
 
@@ -252,14 +259,12 @@ def pagina_metrologia_avancada(df_completo):
             fig_scat = px.scatter(
                 df_disp, x='cn_j', y=f'{eixo_y}_j', color='status',
                 hover_name='serie',
-                hover_data={'cn': ':.3f', eixo_y: ':.3f', 'pos': True, 'Bancada': True, 'n_ensaio': True},
+                hover_data={'cn': ':.3f', eixo_y: ':.3f', 'pos': True, 'Bancada': True},
                 color_discrete_map={'APROVADO': '#16a34a', 'REPROVADO': '#dc2626', 'ZONA CRÍTICA': '#f1c40f'},
-                labels={'cn_j': 'Erro Carga Nominal (%)', f'{eixo_y}_j': f'Erro Carga {eixo_y.upper()} (%)'}
+                labels={'cn_j': 'Erro CN (%)', f'{eixo_y}_j': f'Erro {eixo_y.upper()} (%)'}
             )
             fig_scat.add_shape(type="rect", x0=-2, y0=-2, x1=2, y1=2, line=dict(color="Red", dash="dash", width=2))
-            fig_scat.update_xaxes(range=[-4.5, 4.5], zeroline=True, zerolinecolor='black', gridcolor='lightgray')
-            fig_scat.update_yaxes(range=[-4.5, 4.5], zeroline=True, zerolinecolor='black', gridcolor='lightgray')
-            fig_scat.update_layout(height=550, template="plotly_white", margin=dict(l=0, r=0, t=20, b=40), autosize=True)
+            fig_scat.update_layout(height=550, template="plotly_white", margin=dict(l=0, r=0, t=20, b=40))
             st.plotly_chart(fig_scat, use_container_width=True)
             
             st.markdown("##### 📝 Resumo Estatístico de Precisão (IPEM)")
