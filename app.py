@@ -261,7 +261,7 @@ def to_excel(df):
     return processed_data
 
 # =======================================================================
-# [BLOCO 04] - PROCESSAMENTO TÉCNICO (VERSÃO DEFINITIVA - SEM ERRO NO 0/1)
+# [BLOCO 04] - PROCESSAMENTO TÉCNICO (VERSÃO FINAL - ZERO ERRO FALSO)
 # =======================================================================
 
 def valor_num(valor):
@@ -285,6 +285,10 @@ def texto(valor):
     return val_str
 
 def processar_ensaio(row, classe_banc20=None):
+    """
+    Regra Definitiva: 0, 0.01 e 1.0 são normais. 
+    Usamos round(x, 2) para garantir que 1.00000001 seja lido como 1.0.
+    """
     medidores = []
     bancada = row.get('Bancada_Nome')
     tamanho_bancada = 20 if bancada == 'BANC_20_POS' else 10
@@ -316,7 +320,7 @@ def processar_ensaio(row, classe_banc20=None):
         erros_list = []
         erros_pontuais = []
         
-        # 2. VALIDAÇÃO DE EXATIDÃO (CN, CP, CI)
+        # 2. VALIDAÇÃO DE EXATIDÃO
         if v_cn is not None and abs(v_cn) > limite_exat: erros_pontuais.append('CN'); erros_list.append("Exatidão")
         if v_cp is not None and abs(v_cp) > limite_exat: erros_pontuais.append('CP'); erros_list.append("Exatidão")
         if v_ci is not None and abs(v_ci) > limite_exat: erros_pontuais.append('CI'); erros_list.append("Exatidão")
@@ -326,27 +330,33 @@ def processar_ensaio(row, classe_banc20=None):
         if (bancada == 'BANC_10_POS' and mv_str != "+") or (bancada != 'BANC_10_POS' and mv_str != "OK"):
             mv_reprovado = True; erros_list.append("Mostrador/MV")
 
-        # 4. VALIDAÇÃO DO REGISTRADOR (REGRA TÉCNICA DIRETA)
-        reg_diff_val = "-"
+        # 4. VALIDAÇÃO DO REGISTRADOR (CORREÇÃO DE ARREDONDAMENTO)
+        reg_diff_display = "-"
         incremento_maior = False
         
         if v_reg_ini is not None and v_reg_fim is not None:
-            diff = round(v_reg_fim - v_reg_ini, 4)
+            # Arredondamos para 2 casas para evitar lixo de memória do Python
+            diff = round(v_reg_fim - v_reg_ini, 2)
             
-            # --- VALORES TÉCNICOS NORMAIS: 0, 0.01 e 1.0 ---
+            # --- VALORES TÉCNICOS NORMAIS (0, 0.01 e 1.0 são APROVADOS) ---
             if diff == 0.0 or diff == 0.01 or diff == 1.0:
-                reg_diff_val = 0.01 if diff <= 0.01 else 1.0 # Normaliza exibição
-                # APROVADO: Não adiciona "Registrador" à lista de erros
+                # Se for 0 ou 0.01, mostramos 0.01 por padrão técnico
+                reg_diff_display = 0.01 if diff <= 0.01 else 1.0
+                # NÃO adiciona erro de Registrador aqui.
             
             # --- VALORES FORA DO PADRÃO ---
             else:
-                reg_diff_val = "ERRO" if diff > 5.0 else diff # Limpa o 3001
+                if diff > 5.0:
+                    reg_diff_display = "ERRO" # Limpa o 3001
+                else:
+                    reg_diff_display = diff
+                
                 erros_list.append("Registrador")
                 if diff > 1.0: incremento_maior = True
         else:
             erros_list.append("Registrador")
 
-        # 5. LÓGICA FINAL DE STATUS
+        # 5. LÓGICA FINAL
         erro_exat = any(v is not None and abs(v) > limite_exat for v in [v_cn, v_cp, v_ci])
         
         if (erro_exat and incremento_maior) or (erro_exat and mv_reprovado):
@@ -358,14 +368,14 @@ def processar_ensaio(row, classe_banc20=None):
 
         medidores.append({
             "pos": pos, "serie": serie, "cn": texto(cn), "cp": texto(cp), "ci": texto(ci), "mv": mv_str,
-            "reg_inicio": texto(r_ini), "reg_fim": texto(r_fim), "reg_erro": reg_diff_val,
+            "reg_inicio": texto(r_ini), "reg_fim": texto(r_fim), "reg_erro": reg_diff_display,
             "status": status, "detalhe": "", "motivo": motivo, "limite": limite_exat,
             "erros_pontuais": erros_pontuais
         })
         
     return medidores
 
-# --- [BLOCO 04B] - FUNÇÕES DE ESTATÍSTICAS E AUDITORIA (CONSOLIDADO) ---
+# --- [BLOCO 04B] - FUNÇÕES DE ESTATÍSTICAS E AUDITORIA ---
 
 def calcular_estatisticas(medidores):
     total = len(medidores)
