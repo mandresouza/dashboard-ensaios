@@ -746,7 +746,7 @@ def pagina_visao_diaria(df_completo):
                     renderizar_card(m)
 
 # =========================================================
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO FINAL SEM ERRO DE CHAVE)
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO AUDITORIA FINAL)
 # =========================================================
 
 def get_stats_por_dia(df_mes):
@@ -848,20 +848,21 @@ def pagina_visao_mensal(df_completo):
     # =====================================================
     # TABELA TÉCNICA (DETALHAMENTO CONTRA CONSUMIDOR)
     # =====================================================
+    # expanded=False para vir fechado por padrão
     if total_c_consumidor > 0:
-        with st.expander(f"🚨 DETALHAMENTO TÉCNICO: {total_c_consumidor} ITENS CONFIRMADOS", expanded=True):
+        with st.expander(f"🚨 DETALHAMENTO TÉCNICO: {total_c_consumidor} ITENS CONFIRMADOS", expanded=False):
             dados_tabela = []
             for m in lista_consumidor_fidedigna:
-                # Usando .get() para evitar KeyError caso o campo esteja vazio
                 dados_tabela.append({
                     "Data": m.get('data_ensaio', 'N/A'), 
                     "Bancada": m.get('bancada_ensaio', 'N/A'), 
+                    "Pos": m.get('pos', '-'),
                     "Série": m.get('serie', 'N/A'),
                     "Erro CN": m.get('cn', '-'), 
                     "Erro CP": m.get('cp', '-'), 
                     "Erro CI": m.get('ci', '-'),
                     "M.V": m.get('mv', '-'), 
-                    "Reg Inic": m.get('reg_inicial', '-'), # Mapeado para o valor processado
+                    "Reg Inic": m.get('reg_inicial', '-'), 
                     "Reg Fim": m.get('reg_final', '-'),
                     "Reg %": m.get('reg_erro', '-'), 
                     "Motivo": m.get('motivo', 'N/A')
@@ -897,7 +898,6 @@ def pagina_visao_mensal(df_completo):
             if col in df_daily.columns:
                 fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily[col], name=col, marker_color=color))
         
-        # TOTAL NO TOPO DAS BARRAS
         fig_bar.add_trace(go.Scatter(x=df_daily['Data'], y=df_daily['Total'], text=df_daily['Total'], mode='text', textposition='top center', showlegend=False))
         fig_bar.update_layout(barmode='stack', height=250, margin=dict(t=20,b=0,l=0,r=0), legend=dict(orientation="h", y=1.2))
         st.plotly_chart(fig_bar, use_container_width=True)
@@ -906,9 +906,10 @@ def pagina_visao_mensal(df_completo):
     # PAINEL DE CONFERÊNCIA GERAL
     # =====================================================
     st.markdown("---")
-    with st.expander("🔍 PAINEL DE AUDITORIA COMPLETO"):
+    # expanded=False para vir fechado por padrão
+    with st.expander("🔍 PAINEL DE AUDITORIA COMPLETO", expanded=False):
         datas_disponiveis = df_daily['Data'].dt.strftime('%d/%m/%Y').unique()
-        dia_auditoria_str = st.selectbox("Selecione o dia para conferência detalhada:", datas_disponiveis, key="sel_audit_mensal_final_v3")
+        dia_auditoria_str = st.selectbox("Selecione o dia para conferência detalhada:", datas_disponiveis, key="sel_audit_mensal_final_v4")
         
         if dia_auditoria_str:
             data_f = pd.to_datetime(dia_auditoria_str, format='%d/%m/%Y')
