@@ -805,14 +805,14 @@ def get_stats_por_dia(df_mes):
         nao_ensaiados = sum(1 for m in medidores if m['status'] == 'Não Ligou / Não Ensaido')
         total_ensaiados = aprovados + reprovados + consumidor
         
-        # Cálculo da taxa para o gráfico de linha
-        taxa_aprovacao = (aprovados / total_ensaiados * 100) if total_ensaiados > 0 else 0
+        # Cálculo da taxa para o gráfico de tendência
+        taxa_dia = (aprovados / total_ensaiados * 100) if total_ensaiados > 0 else 0
         
         daily_stats.append({
             'Data': data, 'Aprovados': aprovados, 'Reprovados': reprovados,
             'Contra Consumidor': consumidor, 'Não Ensaidos': nao_ensaiados,
             'Total': total_ensaiados,
-            'Taxa de Aprovação (%)': round(taxa_aprovacao, 1)
+            'Taxa de Aprovação (%)': round(taxa_dia, 1)
         })
     return pd.DataFrame(daily_stats)
 
@@ -876,7 +876,9 @@ def pagina_visao_mensal(df_completo):
     df_mes = df_completo[(df_completo['Ano'] == ano_sel) & (df_completo['Mes'] == mes_sel)]
     if df_mes.empty: return
 
-    # PROCESSAMENTO
+    # =====================================================
+    # PROCESSAMENTO E ALINHAMENTO DE DADOS
+    # =====================================================
     lista_consumidor_fidedigna = []
     total_nao_ligou = 0
     for _, row in df_mes.iterrows():
@@ -884,6 +886,7 @@ def pagina_visao_mensal(df_completo):
         for m in medidores_da_linha:
             if m['status'] == 'Não Ligou / Não Ensaido':
                 total_nao_ligou += 1
+                
             if m['status'] == 'CONTRA O CONSUMIDOR':
                 try:
                     v_cn = float(str(m['cn']).replace('+', '').replace(',', '.').strip() or 0)
@@ -898,7 +901,7 @@ def pagina_visao_mensal(df_completo):
     total_c_consumidor = len(lista_consumidor_fidedigna)
     dados_auditoria = calcular_auditoria_real(df_mes)
     
-    # CARDS
+    # --- EXIBIÇÃO DOS CARDS (AGORA COM 6 COLUNAS) ---
     st.markdown("### 📊 Indicadores de Performance Mensal")
     a1, a2, a3, a4, a5, a6 = st.columns(6)
     with a1: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#1e293b"><span class="val-mensal">{dados_auditoria["total_ensaiadas"]}</span><span class="lab-mensal">Ensaios Reais</span></div>', unsafe_allow_html=True)
@@ -908,17 +911,23 @@ def pagina_visao_mensal(df_completo):
     with a5: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#64748b"><span class="val-mensal">{total_nao_ligou}</span><span class="lab-mensal">Não Ligou</span></div>', unsafe_allow_html=True)
     with a6: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#16a34a"><span class="val-mensal">{dados_auditoria["taxa_aprovacao"]:.2f}%</span><span class="lab-mensal">Eficiência</span></div>', unsafe_allow_html=True)
 
-    # DETALHAMENTO C. CONSUMIDOR
+    # =====================================================
+    # TABELA TÉCNICA (DETALHAMENTO CONTRA CONSUMIDOR)
+    # =====================================================
     if total_c_consumidor > 0:
         with st.expander(f"🚨 DETALHAMENTO TÉCNICO: {total_c_consumidor} ITENS CONFIRMADOS", expanded=False):
             dados_tabela = []
             for m in lista_consumidor_fidedigna:
                 dados_tabela.append({
-                    "Data": m.get('data_ensaio', 'N/A'), "Bancada": m.get('bancada_ensaio', 'N/A'), 
-                    "Pos": m.get('pos', '-'), "Série": m.get('serie', 'N/A'),
+                    "Data": m.get('data_ensaio', 'N/A'), 
+                    "Bancada": m.get('bancada_ensaio', 'N/A'), 
+                    "Pos": m.get('pos', '-'),
+                    "Série": m.get('serie', 'N/A'),
                     "Erro CN": m.get('cn', '-'), "Erro CP": m.get('cp', '-'), "Erro CI": m.get('ci', '-'),
-                    "M.V": m.get('mv', '-'), "Reg Inic": extrair_valor_reg(m, 'inic'), 
-                    "Reg Fim": extrair_valor_reg(m, 'fim'), "Reg %": extrair_valor_reg(m, 'erro'), 
+                    "M.V": m.get('mv', '-'), 
+                    "Reg Inic": extrair_valor_reg(m, 'inic'), 
+                    "Reg Fim": extrair_valor_reg(m, 'fim'),
+                    "Reg %": extrair_valor_reg(m, 'erro'), 
                     "Motivo": m.get('motivo', 'N/A')
                 })
             st.dataframe(pd.DataFrame(dados_tabela).style.applymap(lambda x: 'color: #7c3aed; font-weight: bold' if isinstance(x, str) and '+' in x else ''), use_container_width=True, hide_index=True)
@@ -930,7 +939,9 @@ def pagina_visao_mensal(df_completo):
     m3.error(f"📺 Mostrador/MV: **{dados_auditoria['reprov_mv']}**")
     m4.success(f"📋 Posições Totais: **{dados_auditoria['total_posicoes']}**")
 
-    # GRÁFICOS
+    # =====================================================
+    # GRÁFICOS RESTAURADOS COM TOTAL NO TOPO
+    # =====================================================
     df_daily = get_stats_por_dia(df_mes)
     st.markdown("---")
     col_g1, col_g2 = st.columns([1, 1.5])
@@ -946,14 +957,25 @@ def pagina_visao_mensal(df_completo):
     with col_g2:
         st.markdown("##### Evolução Mensal")
         fig_bar = go.Figure()
+        
         for col, color in zip(['Aprovados','Reprovados','Contra Consumidor'], ['#16a34a','#dc2626','#7c3aed']):
             if col in df_daily.columns:
                 fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily[col], name=col, marker_color=color))
-        fig_bar.add_trace(go.Scatter(x=df_daily['Data'], y=df_daily['Total'], text=df_daily['Total'].astype(str), mode='text', textposition='top center', showlegend=False))
+        
+        fig_bar.add_trace(go.Scatter(
+            x=df_daily['Data'], 
+            y=df_daily['Total'], 
+            text=df_daily['Total'].astype(str), 
+            mode='text', 
+            textposition='top center', 
+            showlegend=False,
+            textfont=dict(size=12, color='black', family='Arial Black')
+        ))
+        
         fig_bar.update_layout(barmode='stack', height=300, margin=dict(t=30,b=0,l=0,r=0), legend=dict(orientation="h", y=1.2))
         st.plotly_chart(fig_bar, use_container_width=True)
 
-    # --- NOVO GRÁFICO RESTAURADO (TENDÊNCIA DA TAXA) ---
+    # --- GRÁFICO DE TENDÊNCIA (RESTAURADO) ---
     st.markdown("---")
     st.markdown("##### 📈 Tendência da Taxa de Aprovação")
     if not df_daily.empty:
@@ -962,38 +984,64 @@ def pagina_visao_mensal(df_completo):
         fig_line.update_layout(yaxis=dict(range=[0, 110]), yaxis_title="Taxa (%)", xaxis_title="Dia do Mês", height=400)
         st.plotly_chart(fig_line, use_container_width=True)
 
-    # PAINEL DE AUDITORIA
+    # =====================================================
+    # PAINEL DE AUDITORIA: Por que a taxa deu esse valor?
+    # =====================================================
     st.markdown("---")
     with st.expander("🔍 PAINEL DE AUDITORIA: Por que a taxa deu esse valor?"):
         st.write(f"### Análise Detalhada do Mês Selecionado")
+        
         st.write("**1. Resumo Diário (Consolidado):**")
         df_exibicao = df_daily.copy()
         df_exibicao['Data'] = df_exibicao['Data'].dt.strftime('%d/%m/%Y')
         st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
+
         st.markdown("---")
+        
         st.write("**2. Auditoria Individual de Medidores:**")
         dia_auditoria = st.selectbox("Selecione um dia para ver quem foi aprovado/reprovado:", df_daily['Data'].dt.strftime('%d/%m/%Y'))
+        
         if dia_auditoria:
             data_filtro = pd.to_datetime(dia_auditoria, format='%d/%m/%Y')
             df_dia_f = df_mes[df_mes['Data_dt'] == data_filtro]
+            
             medidores_auditoria = []
             for _, r in df_dia_f.iterrows():
                 medidores_auditoria.extend(processar_ensaio(r))
+            
             df_auditoria = pd.DataFrame([{
-                "Pos": m['pos'], "Série": m['serie'], "Status": m['status'],
-                "CN": m['cn'], "CP": m['cp'], "CI": m['ci'], "MV": m['mv'],
-                "Reg": m.get('reg_erro', '-'), "Motivo": m['motivo']
+                "Pos": m['pos'],
+                "Série": m['serie'],
+                "Status": m['status'],
+                "CN": m['cn'],
+                "CP": m['cp'],
+                "CI": m['ci'],
+                "MV": m['mv'],
+                "Reg": m.get('reg_erro', '-'),
+                "Motivo": m['motivo']
             } for m in medidores_auditoria])
+
+            nao_ligou = len(df_auditoria[df_auditoria['Status'] == "Não Ligou / Não Ensaido"])
+            ensaiados = len(df_auditoria[df_auditoria['Status'] != "Não Ligou / Não Ensaido"])
+            
             c_a1, c_a2 = st.columns(2)
-            c_a1.warning(f"🔌 Não Ligaram/Vazios: {len(df_auditoria[df_auditoria['Status'] == 'Não Ligou / Não Ensaido'])}")
-            c_a2.success(f"✅ Considerados no Cálculo: {len(df_auditoria[df_auditoria['Status'] != 'Não Ligou / Não Ensaido'])}")
+            c_a1.warning(f"🔌 Não Ligaram/Vazios: {nao_ligou}")
+            c_a2.success(f"✅ Considerados no Cálculo: {ensaiados}")
+
+            st.write(f"Lista de medidores do dia {dia_auditoria}:")
             
             def color_status(val):
-                if val == 'APROVADO': return 'background-color: #c6f6d5'
-                elif val == 'REPROVADO': return 'background-color: #fed7d7'
-                elif val == 'CONTRA O CONSUMIDOR': return 'background-color: #e9d8fd'
-                return 'background-color: #edf2f7'
-            st.dataframe(df_auditoria.style.applymap(color_status, subset=['Status']), use_container_width=True, hide_index=True)
+                if val == 'APROVADO': color = '#c6f6d5'
+                elif val == 'REPROVADO': color = '#fed7d7'
+                elif val == 'CONTRA O CONSUMIDOR': color = '#e9d8fd'
+                else: color = '#edf2f7'
+                return f'background-color: {color}'
+
+            st.dataframe(
+                df_auditoria.style.applymap(color_status, subset=['Status']),
+                use_container_width=True,
+                hide_index=True
+            )
                 
 # =======================================================================
 # [BLOCO 08] - PÁGINA: ANÁLISE DE POSIÇÕES (HEATMAP DE REPROVAÇÃO)
