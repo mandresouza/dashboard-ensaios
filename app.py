@@ -746,11 +746,11 @@ def pagina_visao_diaria(df_completo):
                     renderizar_card(m)
 
 # =========================================================
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL (CORREÇÃO DE GRÁFICOS)
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL (COM CARD NÃO LIGOU)
 # =========================================================
 
 def get_stats_por_dia(df_mes):
-    """Gera o dataframe consolidado de estatísticas diárias."""
+    """Gera o dataframe consolidado de estatísticas diárias para os gráficos."""
     daily_stats = []
     for data, group in df_mes.groupby('Data_dt'):
         medidores = []
@@ -760,6 +760,7 @@ def get_stats_por_dia(df_mes):
         aprovados = sum(1 for m in medidores if m['status'] == 'APROVADO')
         reprovados = sum(1 for m in medidores if m['status'] == 'REPROVADO')
         
+        # REGRA DE OURO NA CONTAGEM DIÁRIA
         consumidor = 0
         for m in medidores:
             if m['status'] == 'CONTRA O CONSUMIDOR':
@@ -782,7 +783,7 @@ def get_stats_por_dia(df_mes):
     return pd.DataFrame(daily_stats)
 
 def extrair_valor_reg(dicionario_medidor, tipo):
-    """Busca cirúrgica nas chaves do dicionário para capturar Registrador."""
+    """Varredura total para encontrar as chaves de Registrador."""
     for k, v in dicionario_medidor.items():
         key_upper = str(k).upper()
         if tipo == 'inic':
@@ -841,11 +842,19 @@ def pagina_visao_mensal(df_completo):
     df_mes = df_completo[(df_completo['Ano'] == ano_sel) & (df_completo['Mes'] == mes_sel)]
     if df_mes.empty: return
 
-    # --- PROCESSAMENTO DE DADOS ---
+    # =====================================================
+    # PROCESSAMENTO E ALINHAMENTO DE DADOS
+    # =====================================================
     lista_consumidor_fidedigna = []
+    total_nao_ligou = 0
     for _, row in df_mes.iterrows():
         medidores_da_linha = processar_ensaio(row)
         for m in medidores_da_linha:
+            # Contagem de Não Ligou
+            if m['status'] == 'Não Ligou / Não Ensaido':
+                total_nao_ligou += 1
+                
+            # Detalhamento Contra Consumidor
             if m['status'] == 'CONTRA O CONSUMIDOR':
                 try:
                     v_cn = float(str(m['cn']).replace('+', '').replace(',', '.').strip() or 0)
@@ -860,16 +869,19 @@ def pagina_visao_mensal(df_completo):
     total_c_consumidor = len(lista_consumidor_fidedigna)
     dados_auditoria = calcular_auditoria_real(df_mes)
     
-    # --- CARDS ---
+    # --- EXIBIÇÃO DOS CARDS (AGORA COM 6 COLUNAS) ---
     st.markdown("### 📊 Indicadores de Performance Mensal")
-    a1, a2, a3, a4, a5 = st.columns(5)
+    a1, a2, a3, a4, a5, a6 = st.columns(6)
     with a1: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#1e293b"><span class="val-mensal">{dados_auditoria["total_ensaiadas"]}</span><span class="lab-mensal">Ensaios Reais</span></div>', unsafe_allow_html=True)
     with a2: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#16a34a"><span class="val-mensal">{dados_auditoria["total_aprovadas"]}</span><span class="lab-mensal">Aprovados</span></div>', unsafe_allow_html=True)
     with a3: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#dc2626"><span class="val-mensal">{dados_auditoria["total_reprovadas"]}</span><span class="lab-mensal">Reprovados</span></div>', unsafe_allow_html=True)
     with a4: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#7c3aed"><span class="val-mensal">{total_c_consumidor}</span><span class="lab-mensal">C. Consumidor</span></div>', unsafe_allow_html=True)
-    with a5: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#16a34a"><span class="val-mensal">{dados_auditoria["taxa_aprovacao"]:.2f}%</span><span class="lab-mensal">Eficiência</span></div>', unsafe_allow_html=True)
+    with a5: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#64748b"><span class="val-mensal">{total_nao_ligou}</span><span class="lab-mensal">Não Ligou</span></div>', unsafe_allow_html=True)
+    with a6: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#16a34a"><span class="val-mensal">{dados_auditoria["taxa_aprovacao"]:.2f}%</span><span class="lab-mensal">Eficiência</span></div>', unsafe_allow_html=True)
 
-    # --- TABELA TÉCNICA ---
+    # =====================================================
+    # TABELA TÉCNICA (DETALHAMENTO CONTRA CONSUMIDOR)
+    # =====================================================
     if total_c_consumidor > 0:
         with st.expander(f"🚨 DETALHAMENTO TÉCNICO: {total_c_consumidor} ITENS CONFIRMADOS", expanded=False):
             dados_tabela = []
@@ -895,7 +907,9 @@ def pagina_visao_mensal(df_completo):
     m3.error(f"📺 Mostrador/MV: **{dados_auditoria['reprov_mv']}**")
     m4.success(f"📋 Posições Totais: **{dados_auditoria['total_posicoes']}**")
 
-    # --- GRÁFICOS RESTAURADOS ---
+    # =====================================================
+    # GRÁFICOS RESTAURADOS COM TOTAL NO TOPO
+    # =====================================================
     df_daily = get_stats_por_dia(df_mes)
     st.markdown("---")
     col_g1, col_g2 = st.columns([1, 1.5])
@@ -916,7 +930,6 @@ def pagina_visao_mensal(df_completo):
             if col in df_daily.columns:
                 fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily[col], name=col, marker_color=color))
         
-        # CORREÇÃO DO ERRO AQUI: fontfamily -> family
         fig_bar.add_trace(go.Scatter(
             x=df_daily['Data'], 
             y=df_daily['Total'], 
@@ -930,11 +943,13 @@ def pagina_visao_mensal(df_completo):
         fig_bar.update_layout(barmode='stack', height=300, margin=dict(t=30,b=0,l=0,r=0), legend=dict(orientation="h", y=1.2))
         st.plotly_chart(fig_bar, use_container_width=True)
 
-    # --- PAINEL DE AUDITORIA COMPLETO ---
+    # =====================================================
+    # PAINEL DE AUDITORIA COMPLETO
+    # =====================================================
     st.markdown("---")
     with st.expander("🔍 PAINEL DE AUDITORIA COMPLETO", expanded=False):
         datas_disponiveis = df_daily['Data'].dt.strftime('%d/%m/%Y').unique()
-        dia_auditoria_str = st.selectbox("Selecione o dia para conferência detalhada:", datas_disponiveis, key="sel_audit_mensal_final_vCorrect")
+        dia_auditoria_str = st.selectbox("Selecione o dia para conferência detalhada:", datas_disponiveis, key="sel_audit_mensal_final_v11")
         
         if dia_auditoria_str:
             data_f = pd.to_datetime(dia_auditoria_str, format='%d/%m/%Y')
