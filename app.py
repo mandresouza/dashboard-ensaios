@@ -39,7 +39,6 @@ from datetime import datetime
 from fpdf import FPDF
 
 # --- DEFINIÇÃO DE LIMITES RTM IPEM ---
-# Lembrete: Estes limites são para + e para - (Ex: Classe B é ±1.3%)
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
 # --- CONSTANTES EXCLUSIVAS DO BLOCO DE METROLOGIA ---
@@ -117,7 +116,6 @@ def processar_metrologia_isolada(row, df_mestra=None):
             erros_p, alertas_gb = [], []
             for n, v in [('CN', v_cn), ('CP', v_cp), ('CI', v_ci)]:
                 if v is not None:
-                    # Lógica de limite espelhado (+ e -)
                     if abs(v) > limite:
                         erros_p.append(n)
                     elif (abs(v) + inc_banc) > limite:
@@ -129,7 +127,7 @@ def processar_metrologia_isolada(row, df_mestra=None):
                 status, detalhe = "ZONA CRÍTICA", f"⚠️ Guardband: {', '.join(alertas_gb)}"
         
         medidores.append({
-            "n_ensaio": n_ensaio, "pos": pos, "serie": serie,
+            "n_ensaio": n_ensaio, "pos": pos, "serie": serie, "classe_original": classe,
             "cn": v_cn, "cp": v_cp, "ci": v_ci,
             "status": status, "detalhe": detalhe, 
             "erro_ref": erro_ref, "inc_banc": inc_banc, "limite_rtm": limite
@@ -198,12 +196,22 @@ def pagina_metrologia_avancada(df_completo):
     st.markdown("## 🔬 Metrologia Avançada e Estabilidade")
     df_mestra = carregar_tabela_mestra_sheets()
     meses_n = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
+    
+    # Barra Lateral com Filtros
+    st.sidebar.markdown("### 🛠️ Filtros Metrológicos")
     col_filt1, col_filt2 = st.sidebar.columns(2)
     mes_sel = col_filt1.selectbox("Mês", range(1, 13), index=datetime.now().month-1, format_func=lambda x: meses_n[x-1])
     ano_sel = col_filt2.selectbox("Ano", sorted(df_completo['Data_dt'].dt.year.unique(), reverse=True))
     
+    # --- FILTRO DE CLASSES ---
+    classes_unicas = sorted(df_completo['Classe'].unique().tolist())
+    classes_sel = st.sidebar.multiselect("Filtrar Classes de Medidores:", classes_unicas, default=classes_unicas)
+    
     todos_meds = []
-    df_p = df_completo[(df_completo['Data_dt'].dt.month == mes_sel) & (df_completo['Data_dt'].dt.year == ano_sel)]
+    df_p = df_completo[(df_completo['Data_dt'].dt.month == mes_sel) & 
+                       (df_completo['Data_dt'].dt.year == ano_sel) &
+                       (df_completo['Classe'].isin(classes_sel))]
+    
     for _, r in df_p.sort_values('Data_dt').iterrows():
         for m in processar_metrologia_isolada(r, df_mestra):
             m['Data'] = r['Data_dt']
@@ -211,7 +219,7 @@ def pagina_metrologia_avancada(df_completo):
             todos_meds.append(m)
             
     if not todos_meds:
-        st.info(f"Nenhum dado encontrado.")
+        st.info(f"Nenhum dado encontrado para os filtros selecionados.")
         return
 
     df_met = pd.DataFrame(todos_meds)
