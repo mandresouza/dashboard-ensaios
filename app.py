@@ -581,7 +581,7 @@ def renderizar_botao_scroll_topo():
     st.components.v1.html(scroll_button_html, height=0)
 
 # =========================================================
-# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (VERSÃO BLINDADA)
+# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (VERSÃO COMPLETA E FINAL)
 # =========================================================
 
 def pagina_visao_diaria(df_completo):
@@ -670,8 +670,10 @@ def pagina_visao_diaria(df_completo):
     # =====================================================
     # FILTROS E PROCESSAMENTO
     # =====================================================
-    if "filtro_data" not in st.session_state: st.session_state.filtro_data = (datetime.now() - pd.Timedelta(hours=3)).date()
-    if "filtro_bancada" not in st.session_state: st.session_state.filtro_bancada = "Todas"
+    if "filtro_data" not in st.session_state: 
+        st.session_state.filtro_data = (datetime.now() - pd.Timedelta(hours=3)).date()
+    if "filtro_bancada" not in st.session_state: 
+        st.session_state.filtro_bancada = "Todas"
     
     st.session_state.filtro_data = st.sidebar.date_input("Data do Ensaio", value=st.session_state.filtro_data, format="DD/MM/YYYY")
     bancadas = df_completo['Bancada_Nome'].unique().tolist()
@@ -688,24 +690,33 @@ def pagina_visao_diaria(df_completo):
     ensaios = []
     for _, row in df_filtrado.iterrows():
         medidores = processar_ensaio(row)
-        ensaios.append({"n_ensaio": row.get("N_ENSAIO", "N/A"), "bancada": row["Bancada_Nome"], "temperatura": row.get("Temperatura", "--"), "medidores": medidores})
+        ensaios.append({
+            "n_ensaio": row.get("N_ENSAIO", "N/A"), 
+            "bancada": row["Bancada_Nome"], 
+            "temperatura": row.get("Temperatura", "--"), 
+            "medidores": medidores
+        })
 
     todos_os_medidores = [m for e in ensaios for m in e["medidores"]]
     stats = calcular_estatisticas(todos_os_medidores)
 
-    # --- TRATAMENTO SEGURO DE CHAVES (EVITA KEYERROR) ---
+    # --- TRATAMENTO SEGURO DE CONTADORES ---
+    dict_motivos = stats.get("motivos", {})
+    if not isinstance(dict_motivos, dict): dict_motivos = {}
+    
+    # Busca por múltiplas variações de nomes para garantir que não fique zerado
+    exatidao = dict_motivos.get('Exatidão', dict_motivos.get('Erro de Exatidão', 0))
+    registrador = dict_motivos.get('Registrador', dict_motivos.get('Falha Registrador', 0))
+    mostrador = dict_motivos.get('Mostrador/MV', dict_motivos.get('Mostrador / MV', 0))
+    
     v_total = stats.get("total", 0)
     v_aprov = stats.get("aprovados", 0)
     v_repro = stats.get("reprovados", 0)
     v_cons  = stats.get("contra_consumidor", stats.get("Contra Consumidor", 0))
     v_taxa  = stats.get("taxa_aprovacao", 0)
-    
-    # Blindagem para o dicionário de motivos
-    dict_motivos = stats.get("motivos", {})
-    if not isinstance(dict_motivos, dict): dict_motivos = {}
 
     # =====================================================
-    # INDICADORES TÉCNICOS
+    # INDICADORES TÉCNICOS (VISUAL PROFISSIONAL)
     # =====================================================
     st.markdown(f"##### 📈 Performance Técnica - Relatório de {st.session_state.filtro_data.strftime('%d/%m/%Y')}")
     
@@ -724,11 +735,11 @@ def pagina_visao_diaria(df_completo):
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Detalhamento de Irregularidades Técnicas (COM GET SEGURO)
+    # Detalhamento de Irregularidades Técnicas
     d1, d2, d3, d4 = st.columns(4)
-    d1.info(f"⚡ Erro de Exatidão: **{dict_motivos.get('Exatidão', 0)}**")
-    d2.warning(f"⚙️ Falha Registrador: **{dict_motivos.get('Registrador', 0)}**")
-    d3.error(f"📺 Mostrador/MV: **{dict_motivos.get('Mostrador/MV', 0)}**")
+    d1.info(f"⚡ Erro de Exatidão: **{exatidao}**")
+    d2.warning(f"⚙️ Falha Registrador: **{registrador}**")
+    d3.error(f"📺 Mostrador/MV: **{mostrador}**")
     d4.success(f"📋 Total de Lotes: **{len(ensaios)}**")
 
     st.markdown("---")
@@ -742,9 +753,9 @@ def pagina_visao_diaria(df_completo):
     with col_e:
         st.write("📂 **Documentação**")
         pdf = gerar_pdf_relatorio(ensaios=ensaios, data=st.session_state.filtro_data.strftime('%d/%m/%Y'), stats=stats)
-        if pdf: st.download_button("📥 Gerar Relatório PDF", pdf, file_name=f"relatorio_auditoria.pdf", use_container_width=True, key="btn_pdf_diario")
+        if pdf: st.download_button("📥 Gerar Relatório PDF", pdf, file_name=f"relatorio_auditoria.pdf", use_container_width=True, key="diario_pdf")
         excel = to_excel(pd.DataFrame(todos_os_medidores))
-        st.download_button("📥 Exportar Dados Excel", excel, file_name=f"dados_auditoria.xlsx", use_container_width=True, key="btn_excel_diario")
+        st.download_button("📥 Exportar Dados Excel", excel, file_name=f"dados_auditoria.xlsx", use_container_width=True, key="diario_excel")
 
     # =====================================================
     # DETALHES DOS ENSAIOS (Cards dos Medidores)
