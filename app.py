@@ -261,7 +261,7 @@ def to_excel(df):
     return processed_data
 
 # =======================================================================
-# [BLOCO 04A] - PROCESSAMENTO COM DETECÇÃO DE ROLLOVER
+# [BLOCO 04A] - VERSÃO ULTRA SIMPLIFICADA
 # =======================================================================
 
 def valor_num(valor):
@@ -284,51 +284,8 @@ def texto(valor):
         return val_str[:-2]
     return val_str
 
-def calcular_incremento_registrador(reg_inicio, reg_fim):
-    """
-    Calcula incremento real do registrador considerando rollover (virada de contador).
-    
-    LÓGICA:
-    - Incremento normal: 0 a 2 m³ (0 a 200 pulsos)
-    - Incremento suspeito: > 100 m³ = possível rollover
-    - Rollover detectado: recalcula considerando virada do contador
-    """
-    if reg_inicio is None or reg_fim is None:
-        return None
-    
-    # Calcula diferença simples
-    diff = reg_fim - reg_inicio
-    
-    # --- DETECÇÃO DE ROLLOVER ---
-    # Se a diferença for muito grande (> 100 m³), provavelmente houve rollover
-    if diff > 100:
-        # Exemplo: 45891 → 48892 (diff=3001)
-        # Na verdade: 45891 → 99999 → 00001 (avançou apenas alguns pulsos)
-        
-        # Tenta detectar se é rollover:
-        # Se reg_fim está próximo de um múltiplo de 10000, pode ser rollover
-        modulo_fim = reg_fim % 10000
-        
-        # Se o número final é pequeno (< 100) e o inicial é grande (> 10000)
-        # é forte indício de rollover
-        if modulo_fim < 100 and reg_inicio > 10000:
-            # Recalcula: (99999 - reg_inicio) + modulo_fim
-            diff_recalc = (99999 - reg_inicio) + modulo_fim
-            
-            # Se o recálculo der um valor razoável (< 10 m³), usa ele
-            if diff_recalc < 10:
-                return diff_recalc / 100  # Converte pulsos para m³
-        
-        # Se não conseguiu detectar rollover mas diff > 1000, marca como erro
-        if diff > 1000:
-            return 999999  # Valor sentinela para "ERRO"
-    
-    # Converte pulsos para m³ (1 pulso = 0.01 m³)
-    return diff / 100 if diff >= 0 else None
-
-
 def processar_ensaio(row, classe_banc20=None):
-    """Processa ensaio com detecção inteligente de rollover"""
+    """VERSÃO SIMPLIFICADA - SÓ LÊ DA PLANILHA, NÃO CALCULA NADA"""
     medidores = []
     bancada = row.get('Bancada_Nome')
     tamanho_bancada = 20 if bancada == 'BANC_20_POS' else 10
@@ -340,19 +297,24 @@ def processar_ensaio(row, classe_banc20=None):
 
     for pos in range(1, tamanho_bancada + 1):
         serie = texto(row.get(f"P{pos}_Série"))
-        cn, cp, ci = row.get(f"P{pos}_CN"), row.get(f"P{pos}_CP"), row.get(f"P{pos}_CI")
+        cn = row.get(f"P{pos}_CN")
+        cp = row.get(f"P{pos}_CP")
+        ci = row.get(f"P{pos}_CI")
         mv = row.get(f"P{pos}_MV")
         r_ini = row.get(f"P{pos}_REG_Inicio")
         r_fim = row.get(f"P{pos}_REG_Fim")
-        reg_erro_planilha = row.get(f"P{pos}_REG_Erro")
         
-        v_cn, v_cp, v_ci = valor_num(cn), valor_num(cp), valor_num(ci)
-        v_reg_ini, v_reg_fim = valor_num(r_ini), valor_num(r_fim)
-        v_reg_erro_planilha = valor_num(reg_erro_planilha)
+        # *** LÊ O ERRO DA PLANILHA - NÃO CALCULA ***
+        reg_erro = row.get(f"P{pos}_REG_Erro")
+        
+        v_cn = valor_num(cn)
+        v_cp = valor_num(cp)
+        v_ci = valor_num(ci)
+        v_reg_erro = valor_num(reg_erro)
         mv_str = str(texto(mv)).strip().upper()
 
         # --- POSIÇÃO VAZIA ---
-        if v_cn is None and v_cp is None and v_ci is None and v_reg_ini is None:
+        if v_cn is None and v_cp is None and v_ci is None:
             medidores.append({
                 "pos": pos, "serie": serie, "cn": "-", "cp": "-", "ci": "-", "mv": "-",
                 "reg_inicio": "-", "reg_fim": "-", "reg_erro": "-",
@@ -364,7 +326,7 @@ def processar_ensaio(row, classe_banc20=None):
         erros_list = []
         erros_pontuais = []
         
-        # --- 1. VALIDAÇÃO EXATIDÃO ---
+        # --- 1. EXATIDÃO ---
         if v_cn is not None and abs(v_cn) > limite_exat: 
             erros_pontuais.append('CN')
             erros_list.append("Exatidão")
@@ -375,56 +337,36 @@ def processar_ensaio(row, classe_banc20=None):
             erros_pontuais.append('CI')
             erros_list.append("Exatidão")
 
-        # --- 2. VALIDAÇÃO MOSTRADOR ---
-        mv_reprovado = False
+        # --- 2. MOSTRADOR ---
         if (bancada == 'BANC_10_POS' and mv_str != "+") or \
            (bancada != 'BANC_10_POS' and mv_str != "OK"):
-            mv_reprovado = True
             erros_list.append("Mostrador/MV")
 
-        # --- 3. VALIDAÇÃO REGISTRADOR COM ROLLOVER ---
-        reg_diff_display = "-"
-        registrador_com_erro = False
+        # --- 3. REGISTRADOR - LÓGICA ULTRA SIMPLES ---
+        reg_display = "-"
         
-        # PRIORIDADE 1: Usar valor da planilha se existir E for confiável
-        if v_reg_erro_planilha is not None and v_reg_erro_planilha > 0:
-            incremento = v_reg_erro_planilha
-        # PRIORIDADE 2: Calcular com detecção de rollover
-        elif v_reg_ini is not None and v_reg_fim is not None:
-            incremento = calcular_incremento_registrador(v_reg_ini, v_reg_fim)
-        else:
-            incremento = None
-        
-        if incremento is not None:
-            # Valor sentinela para erro
-            if incremento >= 999999:
-                reg_diff_display = "ERRO"
-                registrador_com_erro = True
-                erros_list.append("Registrador")
-            # Incremento normal (até 1.5 m³)
-            elif incremento <= 1.5:
-                if incremento < 0.05:
-                    reg_diff_display = "0.01"
-                elif incremento <= 1.05:
-                    reg_diff_display = "1.0"
+        if v_reg_erro is not None:
+            # SE FOR 0, 0.01 ou 1.0 = APROVADO
+            if v_reg_erro <= 1.5:
+                if v_reg_erro == 0 or v_reg_erro < 0.05:
+                    reg_display = "0.01"
+                elif v_reg_erro <= 1.05:
+                    reg_display = "1.0"
                 else:
-                    reg_diff_display = f"{incremento:.2f}"
-                # NÃO ADICIONA ERRO - REGISTRADOR OK
-            # Incremento anormal (> 1.5 m³)
+                    reg_display = f"{v_reg_erro:.2f}"
+                # *** NÃO ADICIONA ERRO ***
+            
+            # SE FOR > 1.5 = REPROVADO
             else:
-                registrador_com_erro = True
-                if incremento > 100:
-                    reg_diff_display = "ERRO"
-                else:
-                    reg_diff_display = f"{incremento:.2f}"
-                erros_list.append("Registrador")
-        else:
-            reg_diff_display = "-"
+                reg_display = "ERRO" if v_reg_erro > 100 else f"{v_reg_erro:.2f}"
+                erros_list.append("Registrador")  # ← SÓ ADICIONA AQUI!
 
-        # --- 4. LÓGICA DE STATUS FINAL ---
-        erro_exat = any(v is not None and abs(v) > limite_exat for v in [v_cn, v_cp, v_ci])
+        # --- 4. STATUS FINAL ---
+        erro_exat = len([e for e in erros_list if e == "Exatidão"]) > 0
+        erro_reg = "Registrador" in erros_list
+        erro_mv = "Mostrador/MV" in erros_list
         
-        if (erro_exat and registrador_com_erro) or (erro_exat and mv_reprovado):
+        if (erro_exat and erro_reg) or (erro_exat and erro_mv):
             status = "CONTRA O CONSUMIDOR"
             motivo = "Contra Consumidor"
         elif len(erros_list) > 0:
@@ -443,7 +385,7 @@ def processar_ensaio(row, classe_banc20=None):
             "mv": mv_str,
             "reg_inicio": texto(r_ini), 
             "reg_fim": texto(r_fim), 
-            "reg_erro": reg_diff_display,
+            "reg_erro": reg_display,
             "status": status, 
             "detalhe": "", 
             "motivo": motivo, 
@@ -455,24 +397,17 @@ def processar_ensaio(row, classe_banc20=None):
 
 
 # =======================================================================
-# [BLOCO 04B] - ESTATÍSTICAS E AUDITORIA (SEM ALTERAÇÕES)
+# [BLOCO 04B] - ESTATÍSTICAS (SEM ALTERAÇÕES)
 # =======================================================================
 
 def calcular_estatisticas(medidores):
-    """Calcula estatísticas de aprovação/reprovação"""
     total = len(medidores)
     apr = sum(1 for m in medidores if m['status'] == 'APROVADO')
     rep = sum(1 for m in medidores if m['status'] == 'REPROVADO')
     con = sum(1 for m in medidores if m['status'] == 'CONTRA O CONSUMIDOR')
-    return {
-        "total": total, 
-        "aprovados": apr, 
-        "reprovados": rep, 
-        "consumidor": con
-    }
+    return {"total": total, "aprovados": apr, "reprovados": rep, "consumidor": con}
 
 def calcular_auditoria_real(df):
-    """Calcula auditoria geral de todos os ensaios"""
     t_pos, t_ens, t_apr, t_rep = 0, 0, 0, 0
     r_exat, r_reg, r_mv, r_cons = 0, 0, 0, 0
     
@@ -486,27 +421,17 @@ def calcular_auditoria_real(df):
                     t_apr += 1
                 else:
                     t_rep += 1
-                    if "Exatidão" in m['motivo']: 
-                        r_exat += 1
-                    if "Registrador" in m['motivo']: 
-                        r_reg += 1
-                    if "Mostrador/MV" in m['motivo']: 
-                        r_mv += 1
-                    if m['status'] == "CONTRA O CONSUMIDOR": 
-                        r_cons += 1
+                    if "Exatidão" in m['motivo']: r_exat += 1
+                    if "Registrador" in m['motivo']: r_reg += 1
+                    if "Mostrador/MV" in m['motivo']: r_mv += 1
+                    if m['status'] == "CONTRA O CONSUMIDOR": r_cons += 1
     
     taxa = (t_apr / t_ens * 100) if t_ens > 0 else 0
     
     return {
-        "total_posicoes": t_pos, 
-        "total_ensaiadas": t_ens, 
-        "total_aprovadas": t_apr, 
-        "total_reprovadas": t_rep, 
-        "taxa_aprovacao": taxa, 
-        "reprov_exatidao": r_exat, 
-        "reprov_registrador": r_reg, 
-        "reprov_mv": r_mv, 
-        "reprov_consumidor": r_cons
+        "total_posicoes": t_pos, "total_ensaiadas": t_ens, "total_aprovadas": t_apr, 
+        "total_reprovadas": t_rep, "taxa_aprovacao": taxa, "reprov_exatidao": r_exat, 
+        "reprov_registrador": r_reg, "reprov_mv": r_mv, "reprov_consumidor": r_cons
     }
     
 # =======================================================================
