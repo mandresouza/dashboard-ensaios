@@ -27,7 +27,7 @@ st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
 # =======================================================================
-# [BLOCO ISOLADO] - METROLOGIA AVANÇADA (VERSÃO RESTAURADA - TAMANHO IDEAL)
+# [BLOCO ISOLADO] - METROLOGIA AVANÇADA (VERSÃO FINAL - LARGURA REAL)
 # =======================================================================
 
 # --- CONSTANTES EXCLUSIVAS DO BLOCO DE METROLOGIA ---
@@ -76,7 +76,6 @@ def processar_metrologia_isolada(row, df_mestra=None, classe_banc20=None):
     serie_bancada = next((v for k, v in MAPA_BANCADA_SERIE.items() if k in bancada_row), None)
     tamanho_bancada = 20 if '20_POS' in bancada_row else 10
     
-    # Busca o limite no dicionário LIMITES_CLASSE do Bloco 1
     classe = str(row.get("Classe", "")).upper()
     if "ELETROMEC" in classe:
         limite = 4.0 if ("2" in classe or "4" in classe) else 2.0
@@ -127,6 +126,13 @@ def processar_metrologia_isolada(row, df_mestra=None, classe_banc20=None):
     return medidores
 
 def pagina_metrologia_avancada(df_completo):
+    # FORÇA LARGURA TOTAL NO CSS PARA O GRÁFICO NÃO FICAR PEQUENO
+    st.markdown("""
+        <style>
+            .block-container { padding-left: 1rem !important; padding-right: 1rem !important; max-width: 98% !important; }
+        </style>
+    """, unsafe_allow_html=True)
+
     st.markdown("## 🔬 Metrologia Avançada e Estabilidade")
     df_mestra = carregar_tabela_mestra_sheets()
     
@@ -144,41 +150,11 @@ def pagina_metrologia_avancada(df_completo):
             todos_meds.append(m)
             
     if not todos_meds:
-        st.info(f"Nenhum dado de ensaio encontrado.")
+        st.info(f"Nenhum dado encontrado.")
         return
 
     df_met = pd.DataFrame(todos_meds)
     tabs = st.tabs(["📈 Cartas de Controle", "⚠️ Alertas Guardband", "📊 Cruzamento de Erros (RTM)"])
-
-    with tabs[0]:
-        c1, c2 = st.columns(2)
-        b_sel = c1.selectbox("Selecione a Bancada", sorted(df_met['Bancada'].unique()))
-        p_sel = c2.slider("Selecione a Posição", 1, 20, 1)
-        
-        df_chart = df_met[(df_met['Bancada'] == b_sel) & (df_met['pos'] == p_sel)].copy()
-        df_chart['Erro_Medio'] = df_chart.apply(lambda r: np.mean([x for x in [r['cn'], r['cp'], r['ci']] if x is not None]), axis=1)
-        df_chart = df_chart.dropna(subset=['Erro_Medio'])
-        
-        if not df_chart.empty:
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=df_chart['Data'], y=df_chart['Erro_Medio'], mode='lines+markers', name='Erro do Medidor', line=dict(color='#2ecc71', width=3)))
-            fig.add_trace(go.Scatter(x=df_chart['Data'], y=df_chart['erro_ref'], mode='lines', name='Referência Bancada', line=dict(dash='dash', color='#e74c3c')))
-            
-            avg, std = df_chart['Erro_Medio'].mean(), df_chart['Erro_Medio'].std()
-            if not pd.isna(std) and std > 0:
-                fig.add_hline(y=avg + 2*std, line_dash="dot", line_color="#f1c40f", annotation_text="LSC")
-                fig.add_hline(y=avg - 2*std, line_dash="dot", line_color="#f1c40f", annotation_text="LIC")
-            
-            fig.update_layout(title=f"Carta Individual: {b_sel} (Pos {p_sel})", xaxis_title="Data", yaxis_title="Erro Médio (%)")
-            st.plotly_chart(fig, use_container_width=True)
-
-    with tabs[1]:
-        df_gb = df_met[df_met['status'] == 'ZONA CRÍTICA']
-        if not df_gb.empty:
-            st.warning(f"Identificados {len(df_gb)} medidores na zona de risco por incerteza.")
-            st.dataframe(df_gb[['Data', 'n_ensaio', 'Bancada', 'pos', 'serie', 'detalhe']], use_container_width=True, hide_index=True)
-        else:
-            st.success("Nenhum medidor na zona crítica de Guardband.")
 
     with tabs[2]:
         st.markdown("#### ⚖️ Cruzamento de Cargas e Limites de Exatidão")
@@ -187,6 +163,7 @@ def pagina_metrologia_avancada(df_completo):
         
         df_disp = df_met.dropna(subset=['cn', eixo_y]).copy()
         if not df_disp.empty:
+            # Jittering para visualização profissional
             df_disp['cn_j'] = df_disp['cn'] + np.random.uniform(-0.015, 0.015, len(df_disp))
             df_disp[f'{eixo_y}_j'] = df_disp[eixo_y] + np.random.uniform(-0.015, 0.015, len(df_disp))
 
@@ -197,17 +174,21 @@ def pagina_metrologia_avancada(df_completo):
                 labels={'cn_j': 'Erro Carga Nominal (%)', f'{eixo_y}_j': f'Erro Carga {eixo_y.upper()} (%)'}
             )
             
-            # Tracejados Vermelhos RTM Originais
             lim_ref = df_disp['limite_rtm'].mean()
             fig_scat.add_shape(type="rect", x0=-lim_ref, y0=-lim_ref, x1=lim_ref, y1=lim_ref, 
                                line=dict(color="#e74c3c", width=2, dash="dash"))
             
-            # Eixos Centrais e Grade Original
             fig_scat.update_xaxes(zeroline=True, zerolinecolor='black', zerolinewidth=1, gridcolor='lightgray', range=[-5, 5])
             fig_scat.update_yaxes(zeroline=True, zerolinecolor='black', zerolinewidth=1, gridcolor='lightgray', range=[-5, 5])
             
-            # RESTAURAÇÃO DO TAMANHO IDEAL (700px)
-            fig_scat.update_layout(height=700, template="plotly_dark")
+            # TAMANHO REAJUSTADO PARA OCUPAR A TELA TODA
+            fig_scat.update_layout(
+                height=800, 
+                autosize=True,
+                margin=dict(l=10, r=10, t=30, b=10),
+                template="plotly_dark"
+            )
+            
             st.plotly_chart(fig_scat, use_container_width=True)
             
             st.markdown("##### 📝 Resumo de Precisão por Bancada")
