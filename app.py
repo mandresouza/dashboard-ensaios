@@ -746,7 +746,7 @@ def pagina_visao_diaria(df_completo):
                     renderizar_card(m)
 
 # =========================================================
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO FINALIZADA)
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO FINAL DETALHADA)
 # =========================================================
 
 def get_stats_por_dia(df_mes):
@@ -853,9 +853,17 @@ def pagina_visao_mensal(df_completo):
             dados_tabela = []
             for m in lista_consumidor_fidedigna:
                 dados_tabela.append({
-                    "Data": m['data_ensaio'], "Bancada": m['bancada_ensaio'], "Série": m['serie'],
-                    "Erro CN": m['cn'], "Erro CP": m['cp'], "Erro CI": m['ci'],
-                    "M.V": m['mv'], "Reg.": m['reg_erro'], "Motivo": m['motivo']
+                    "Data": m['data_ensaio'], 
+                    "Bancada": m['bancada_ensaio'], 
+                    "Série": m['serie'],
+                    "Erro CN": m['cn'], 
+                    "Erro CP": m['cp'], 
+                    "Erro CI": m['ci'],
+                    "M.V": m['mv'], 
+                    "Reg Inic": m['reg_inicial'],
+                    "Reg Fim": m['reg_final'],
+                    "Reg %": m['reg_erro'], 
+                    "Motivo": m['motivo']
                 })
             st.dataframe(pd.DataFrame(dados_tabela).style.applymap(lambda x: 'color: #7c3aed; font-weight: bold' if isinstance(x, str) and '+' in x else ''), use_container_width=True, hide_index=True)
 
@@ -890,18 +898,16 @@ def pagina_visao_mensal(df_completo):
         
         # TOTAL NO TOPO DAS BARRAS
         fig_bar.add_trace(go.Scatter(x=df_daily['Data'], y=df_daily['Total'], text=df_daily['Total'], mode='text', textposition='top center', showlegend=False))
-
         fig_bar.update_layout(barmode='stack', height=250, margin=dict(t=20,b=0,l=0,r=0), legend=dict(orientation="h", y=1.2))
         st.plotly_chart(fig_bar, use_container_width=True)
 
     # =====================================================
-    # PAINEL DE CONFERÊNCIA GERAL (ABA RECOLHÍVEL COM CORES)
+    # PAINEL DE CONFERÊNCIA GERAL
     # =====================================================
     st.markdown("---")
     with st.expander("🔍 PAINEL DE AUDITORIA COMPLETO"):
-        # Seletor de data dentro da "aba"
         datas_disponiveis = df_daily['Data'].dt.strftime('%d/%m/%Y').unique()
-        dia_auditoria_str = st.selectbox("Selecione o dia para conferência detalhada:", datas_disponiveis, key="sel_audit_mensal")
+        dia_auditoria_str = st.selectbox("Selecione o dia para conferência detalhada:", datas_disponiveis, key="sel_audit_mensal_final")
         
         if dia_auditoria_str:
             data_f = pd.to_datetime(dia_auditoria_str, format='%d/%m/%Y')
@@ -914,16 +920,16 @@ def pagina_visao_mensal(df_completo):
                 df_final = pd.DataFrame([{ 
                     "Pos": m['pos'], "Série": m['serie'], "Status": m['status'], 
                     "CN": m['cn'], "CP": m['cp'], "CI": m['ci'], 
-                    "MV": m['mv'], "Reg": m['reg_erro'], "Motivo": m['motivo'] 
+                    "MV": m['mv'], "Reg Inic": m['reg_inicial'], "Reg Fim": m['reg_final'], "Reg %": m['reg_erro'], 
+                    "Motivo": m['motivo'] 
                 } for m in meds_aud])
                 
-                # Função interna para pintar as células do Status conforme solicitado
                 def color_status(val):
                     color = 'transparent'
-                    if val == 'APROVADO': color = '#c6f6d5; color: #22543d' # Verde
-                    elif val == 'REPROVADO': color = '#fed7d7; color: #822727' # Vermelho
-                    elif val == 'CONTRA O CONSUMIDOR': color = '#e9d8fd; color: #553c9a' # Roxo
-                    elif val == 'Não Ligou / Não Ensaido': color = '#edf2f7; color: #2d3748' # Cinza
+                    if val == 'APROVADO': color = '#c6f6d5; color: #22543d'
+                    elif val == 'REPROVADO': color = '#fed7d7; color: #822727'
+                    elif val == 'CONTRA O CONSUMIDOR': color = '#e9d8fd; color: #553c9a'
+                    elif val == 'Não Ligou / Não Ensaido': color = '#edf2f7; color: #2d3748'
                     return f'background-color: {color}; font-weight: bold'
 
                 st.dataframe(df_final.style.applymap(color_status, subset=['Status']), use_container_width=True, hide_index=True)
