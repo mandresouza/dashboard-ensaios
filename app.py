@@ -27,7 +27,7 @@ st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
 # =======================================================================
-# [BLOCO ISOLADO] - METROLOGIA AVANÇADA (VERSÃO IDENTICA À FOTO)
+# [BLOCO INTEGRAL] - METROLOGIA AVANÇADA + GERADOR DE LAUDO PDF
 # =======================================================================
 
 import plotly.graph_objects as go
@@ -36,6 +36,8 @@ import pandas as pd
 import numpy as np
 import re
 from datetime import datetime
+from fpdf import FPDF
+import base64
 
 # --- CONSTANTES EXCLUSIVAS DO BLOCO DE METROLOGIA ---
 MAPA_BANCADA_SERIE = {
@@ -79,7 +81,6 @@ def processar_metrologia_isolada(row, df_mestra=None):
     medidores = []
     bancada_row = str(row.get('Bancada_Nome', ''))
     n_ensaio = row.get('N_ENSAIO', 'N/A')
-    
     serie_bancada = next((v for k, v in MAPA_BANCADA_SERIE.items() if k in bancada_row), None)
     tamanho_bancada = 20 if '20_POS' in bancada_row else 10
     
@@ -100,7 +101,6 @@ def processar_metrologia_isolada(row, df_mestra=None):
         v_ci = valor_num_metrologia(row.get(f"P{pos}_CI"))
         
         erro_ref, inc_banc = 0.0, 0.05
-        
         if df_mestra is not None and serie_bancada:
             ref_row = df_mestra[(df_mestra['Serie_Bancada'].astype(str) == str(serie_bancada)) & (df_mestra['Posicao'] == pos)]
             if not ref_row.empty:
@@ -132,13 +132,32 @@ def processar_metrologia_isolada(row, df_mestra=None):
         })
     return medidores
 
+def gerar_pdf_metrologia(df_resumo, mes_txt):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(190, 10, f"Laudo de Estabilidade Metrologica - {mes_txt}", 0, 1, 'C')
+    pdf.ln(10)
+    
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(190, 10, "Resumo de Precisao por Bancada:", 0, 1, 'L')
+    
+    pdf.set_font("Arial", '', 10)
+    for index, row in df_resumo.iterrows():
+        txt = f"Bancada: {index} | Erro Medio CN: {row['cn']:.4f}% | Desvio Padrao: {row['cn_std']:.4f}"
+        pdf.cell(190, 8, txt, 1, 1)
+    
+    pdf.ln(10)
+    pdf.set_font("Arial", 'I', 8)
+    pdf.cell(190, 10, f"Relatorio gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 0, 'R')
+    
+    return pdf.output(dest='S').encode('latin-1')
+
 def pagina_metrologia_avancada(df_completo):
-    # CSS para garantir que a página aceite o esticamento
     st.markdown("<style>.main > div { max-width: 100% !important; }</style>", unsafe_allow_html=True)
-    
     st.markdown("## 🔬 Metrologia Avançada e Estabilidade")
-    df_mestra = carregar_tabela_mestra_sheets()
     
+    df_mestra = carregar_tabela_mestra_sheets()
     meses_n = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
     col_filt1, col_filt2 = st.sidebar.columns(2)
     mes_sel = col_filt1.selectbox("Mês", range(1, 13), index=datetime.now().month-1, format_func=lambda x: meses_n[x-1])
@@ -146,7 +165,6 @@ def pagina_metrologia_avancada(df_completo):
     
     todos_meds = []
     df_p = df_completo[(df_completo['Data_dt'].dt.month == mes_sel) & (df_completo['Data_dt'].dt.year == ano_sel)]
-    
     for _, r in df_p.sort_values('Data_dt').iterrows():
         for m in processar_metrologia_isolada(r, df_mestra):
             m['Data'] = r['Data_dt']
@@ -160,6 +178,7 @@ def pagina_metrologia_avancada(df_completo):
     df_met = pd.DataFrame(todos_meds)
     tabs = st.tabs(["📈 Estabilidade da Bancada", "⚠️ Alertas Guardband", "📊 Dispersão Total (CN, CP, CI)"])
 
+    # --- ABA 1 E 2 PERMANECEM IGUAIS ---
     with tabs[0]:
         c1, c2 = st.columns(2)
         b_sel = c1.selectbox("Selecione a Bancada", sorted(df_met['Bancada'].unique()), key="banc_c")
@@ -175,6 +194,7 @@ def pagina_metrologia_avancada(df_completo):
     with tabs[1]:
         st.dataframe(df_met[df_met['status'] == 'ZONA CRÍTICA'], use_container_width=True)
 
+    # --- ABA 3: DISPERSÃO + NOVO BOTÃO PDF ---
     with tabs[2]:
         st.markdown("#### ⚖️ Cruzamento Dinâmico de Erros (CN, CP, CI)")
         tipo_grafico = st.radio("Selecione o Cruzamento:", ["CN vs CP (Comportamento Linear)", "CN vs CI (Comportamento Indutivo)"], horizontal=True)
@@ -182,7 +202,6 @@ def pagina_metrologia_avancada(df_completo):
         df_disp = df_met.dropna(subset=['cn', eixo_y]).copy()
 
         if not df_disp.empty:
-            # Jittering exatamente como na foto
             df_disp['cn_j'] = df_disp['cn'] + np.random.uniform(-0.02, 0.02, len(df_disp))
             df_disp[f'{eixo_y}_j'] = df_disp[eixo_y] + np.random.uniform(-0.02, 0.02, len(df_disp))
 
@@ -193,27 +212,24 @@ def pagina_metrologia_avancada(df_completo):
                 color_discrete_map={'APROVADO': '#16a34a', 'REPROVADO': '#dc2626', 'ZONA CRÍTICA': '#f1c40f'},
                 labels={'cn_j': 'Erro Carga Nominal (%)', f'{eixo_y}_j': f'Erro Carga {eixo_y.upper()} (%)'}
             )
-            
-            # Moldura RTM idêntica à foto
             fig_scat.add_shape(type="rect", x0=-2, y0=-2, x1=2, y1=2, line=dict(color="Red", dash="dash", width=2))
-            
-            # Eixos e Grade idênticos à foto
             fig_scat.update_xaxes(range=[-4.5, 4.5], zeroline=True, zerolinecolor='black', gridcolor='lightgray')
             fig_scat.update_yaxes(range=[-4.5, 4.5], zeroline=True, zerolinecolor='black', gridcolor='lightgray')
-            
-            # O SEGREDO DA FOTO: Altura menor (550) e margens apertadas para esticar na largura
-            fig_scat.update_layout(
-                height=550, 
-                template="plotly_white",
-                margin=dict(l=0, r=0, t=20, b=40),
-                autosize=True
-            )
-            
+            fig_scat.update_layout(height=550, template="plotly_white", margin=dict(l=0, r=0, t=20, b=40), autosize=True)
             st.plotly_chart(fig_scat, use_container_width=True)
-            st.dataframe(df_disp.groupby('Bancada').agg({'cn': 'mean', 'cp': 'mean', 'ci': 'mean'}).round(4), use_container_width=True)
+            
+            # --- TABELA DE RESUMO E BOTÃO DE EXPORTAÇÃO ---
+            df_resumo = df_disp.groupby('Bancada').agg({'cn': ['mean', 'std'], 'cp': ['mean', 'std'], 'ci': ['mean', 'std']})
+            df_resumo.columns = ['cn', 'cn_std', 'cp', 'cp_std', 'ci', 'ci_std']
+            st.dataframe(df_resumo.round(4), use_container_width=True)
+            
+            pdf_data = gerar_pdf_metrologia(df_resumo, f"{meses_n[mes_sel-1]} {ano_sel}")
+            st.download_button(label="📥 Baixar Laudo de Estabilidade (PDF)", 
+                               data=pdf_data, 
+                               file_name=f"Laudo_Metrologia_{meses_n[mes_sel-1]}.pdf", 
+                               mime="application/pdf")
 
 # =======================================================================
-
 # [FIM DO BLOCO ISOLADO]
 
 # =======================================================================
