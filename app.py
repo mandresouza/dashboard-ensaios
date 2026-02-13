@@ -746,7 +746,7 @@ def pagina_visao_diaria(df_completo):
                     renderizar_card(m)
 
 # =========================================================
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO AUDITORIA FINAL)
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL (CORREÇÃO DE CHAVES REG)
 # =========================================================
 
 def get_stats_por_dia(df_mes):
@@ -848,7 +848,6 @@ def pagina_visao_mensal(df_completo):
     # =====================================================
     # TABELA TÉCNICA (DETALHAMENTO CONTRA CONSUMIDOR)
     # =====================================================
-    # expanded=False para vir fechado por padrão
     if total_c_consumidor > 0:
         with st.expander(f"🚨 DETALHAMENTO TÉCNICO: {total_c_consumidor} ITENS CONFIRMADOS", expanded=False):
             dados_tabela = []
@@ -862,9 +861,9 @@ def pagina_visao_mensal(df_completo):
                     "Erro CP": m.get('cp', '-'), 
                     "Erro CI": m.get('ci', '-'),
                     "M.V": m.get('mv', '-'), 
-                    "Reg Inic": m.get('reg_inicial', '-'), 
-                    "Reg Fim": m.get('reg_final', '-'),
-                    "Reg %": m.get('reg_erro', '-'), 
+                    "Reg Inic": m.get('P1_REG_Inicio', '-'), 
+                    "Reg Fim": m.get('P1_REG_Fim', '-'),
+                    "Reg %": m.get('P1_REG_Erro', '-'), 
                     "Motivo": m.get('motivo', 'N/A')
                 })
             st.dataframe(pd.DataFrame(dados_tabela).style.applymap(lambda x: 'color: #7c3aed; font-weight: bold' if isinstance(x, str) and '+' in x else ''), use_container_width=True, hide_index=True)
@@ -906,10 +905,9 @@ def pagina_visao_mensal(df_completo):
     # PAINEL DE CONFERÊNCIA GERAL
     # =====================================================
     st.markdown("---")
-    # expanded=False para vir fechado por padrão
     with st.expander("🔍 PAINEL DE AUDITORIA COMPLETO", expanded=False):
         datas_disponiveis = df_daily['Data'].dt.strftime('%d/%m/%Y').unique()
-        dia_auditoria_str = st.selectbox("Selecione o dia para conferência detalhada:", datas_disponiveis, key="sel_audit_mensal_final_v4")
+        dia_auditoria_str = st.selectbox("Selecione o dia para conferência detalhada:", datas_disponiveis, key="sel_audit_mensal_final_v5")
         
         if dia_auditoria_str:
             data_f = pd.to_datetime(dia_auditoria_str, format='%d/%m/%Y')
@@ -920,10 +918,16 @@ def pagina_visao_mensal(df_completo):
             
             if meds_aud:
                 df_final = pd.DataFrame([{ 
-                    "Pos": m.get('pos', '-'), "Série": m.get('serie', '-'), "Status": m.get('status', '-'), 
-                    "CN": m.get('cn', '-'), "CP": m.get('cp', '-'), "CI": m.get('ci', '-'), 
-                    "MV": m.get('mv', '-'), "Reg Inic": m.get('reg_inicial', '-'), 
-                    "Reg Fim": m.get('reg_final', '-'), "Reg %": m.get('reg_erro', '-'), 
+                    "Pos": m.get('pos', '-'), 
+                    "Série": m.get('serie', '-'), 
+                    "Status": m.get('status', '-'), 
+                    "CN": m.get('cn', '-'), 
+                    "CP": m.get('cp', '-'), 
+                    "CI": m.get('ci', '-'), 
+                    "MV": m.get('mv', '-'), 
+                    "Reg Inic": m.get('P1_REG_Inicio', '-'), 
+                    "Reg Fim": m.get('P1_REG_Fim', '-'), 
+                    "Reg %": m.get('P1_REG_Erro', '-'), 
                     "Motivo": m.get('motivo', '-') 
                 } for m in meds_aud])
                 
