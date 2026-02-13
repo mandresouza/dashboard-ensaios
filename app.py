@@ -27,7 +27,7 @@ st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
 # =======================================================================
-# [BLOCO ISOLADO] - METROLOGIA AVANÇADA (VERSÃO INTEGRAL IPEM/INMETRO)
+# [BLOCO INTEGRAL] - METROLOGIA LEGAL RTM (CLASSE A, B, C, D e ELETROMEC)
 # =======================================================================
 
 import plotly.graph_objects as go
@@ -36,7 +36,16 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 
-# --- CONSTANTES EXCLUSIVAS DO BLOCO DE METROLOGIA ---
+# --- MAPA DE LIMITES RTM ATUALIZADO PELO FISCAL ---
+LIMITES_CLASSE = {
+    'CLASSE_A': 2.5,
+    'CLASSE_B': 1.3,
+    'CLASSE_C': 0.7,
+    'CLASSE_D': 0.3,
+    'ELETROMEC_1': 2.0,
+    'ELETROMEC_2': 4.0
+}
+
 MAPA_BANCADA_SERIE = {
     'BANC_10_POS_MQN-1': 'B1172110310148',
     'BANC_20_POS_MQN-2': '85159',
@@ -45,17 +54,24 @@ MAPA_BANCADA_SERIE = {
 }
 
 def valor_num_metrologia(v):
-    """Converte valores tratando vírgulas e escala decimal de forma robusta."""
     try:
-        if pd.isna(v) or str(v).strip() in ["", "-", "None"]:
-            return None
+        if pd.isna(v) or str(v).strip() in ["", "-", "None"]: return None
         s = str(v).replace("%", "").replace(" ", "").replace(",", ".").strip()
         val = float(s)
-        if abs(val) > 100:
-            val = val / 1000  
+        if abs(val) > 100: val = val / 1000  
         return val
-    except:
-        return None
+    except: return None
+
+def identificar_limite_rtm(classe_input):
+    """Retorna a tolerância exata conforme a RTM para laboratório físico."""
+    c = str(classe_input).upper().strip()
+    if 'CLASSE A' in c or 'CLASSE_A' in c: return 2.5
+    if 'CLASSE B' in c or 'CLASSE_B' in c: return 1.3
+    if 'CLASSE C' in c or 'CLASSE_C' in c: return 0.7
+    if 'CLASSE D' in c or 'CLASSE_D' in c: return 0.3
+    if 'ELETROMEC' in c:
+        return 4.0 if ('2' in c or '4' in c) else 2.0
+    return 1.3 # Default Classe B
 
 @st.cache_data(ttl=600)
 def carregar_tabela_mestra_sheets():
@@ -64,77 +80,63 @@ def carregar_tabela_mestra_sheets():
     try:
         df = pd.read_csv(url)
         df['Erro_Sistematico_Pct'] = df['Erro_Sistematico_Pct'].apply(valor_num_metrologia)
-        if 'Incerteza_U_Pct' in df.columns:
-            df['Incerteza_U_Pct'] = df['Incerteza_U_Pct'].apply(valor_num_metrologia)
-        
         return df.groupby(['Serie_Bancada', 'Posicao']).agg({
             'Erro_Sistematico_Pct': 'mean',
-            'Incerteza_U_Pct': 'mean' if 'Incerteza_U_Pct' in df.columns else 'first'
+            'Incerteza_U_Pct': 'mean'
         }).reset_index()
-    except:
-        return None
+    except: return None
 
 def processar_metrologia_isolada(row, df_mestra=None):
     medidores = []
     bancada_row = str(row.get('Bancada_Nome', ''))
     n_ensaio = row.get('N_ENSAIO', 'N/A')
+    limite_vazao = identificar_limite_rtm(row.get("Classe", "CLASSE B"))
     
     serie_bancada = next((v for k, v in MAPA_BANCADA_SERIE.items() if k in bancada_row), None)
     tamanho_bancada = 20 if '20_POS' in bancada_row else 10
     
-    classe = str(row.get("Classe", "")).upper()
-    limite = 4.0 if "ELETROMEC" in (classe or 'B') else 1.3 
-    
-    def texto(val): return str(val) if val is not None else ""
-
     for pos in range(1, tamanho_bancada + 1):
-        serie = texto(row.get(f"P{pos}_Série"))
+        serie = str(row.get(f"P{pos}_Série", ""))
         v_cn = valor_num_metrologia(row.get(f"P{pos}_CN"))
         v_cp = valor_num_metrologia(row.get(f"P{pos}_CP"))
         v_ci = valor_num_metrologia(row.get(f"P{pos}_CI"))
         
-        erro_ref, inc_banc = 0.0, 0.05
-        
+        inc_banc = 0.05 # Valor de segurança padrão
         if df_mestra is not None and serie_bancada:
             ref_row = df_mestra[(df_mestra['Serie_Bancada'].astype(str) == str(serie_bancada)) & (df_mestra['Posicao'] == pos)]
             if not ref_row.empty:
-                erro_ref = ref_row['Erro_Sistematico_Pct'].values[0] or 0.0
-                inc_banc = ref_row['Incerteza_U_Pct'].values[0] if 'Incerteza_U_Pct' in ref_row.columns else 0.05
+                inc_banc = ref_row['Incerteza_U_Pct'].values[0] or 0.05
         
         if v_cn is None and v_cp is None and v_ci is None:
-            status, detalhe = "Não Ligou / Não Ensaido", ""
+            status, detalhe = "Não Ligou", ""
         else:
             status, detalhe = "APROVADO", ""
-            erros_p, alertas_gb = [], []
+            erros_rtm = []
             for n, v in [('CN', v_cn), ('CP', v_cp), ('CI', v_ci)]:
                 if v is not None:
-                    if abs(v) > limite:
-                        erros_p.append(n)
-                    elif (abs(v) + inc_banc) > limite:
-                        alertas_gb.append(n)
+                    if abs(v) > limite_vazao: erros_rtm.append(n)
+                    elif (abs(v) + inc_banc) > limite_vazao:
+                        status = "ZONA CRÍTICA" if status != "REPROVADO" else "REPROVADO"
             
-            if erros_p:
-                status, detalhe = "REPROVADO", f"⚠️ Erro: {', '.join(erros_p)}"
-            elif alertas_gb:
-                status, detalhe = "ZONA CRÍTICA", f"⚠️ Guardband: {', '.join(alertas_gb)}"
+            if erros_rtm:
+                status, detalhe = "REPROVADO", f"⚠️ Excedeu {limite_vazao}% em: {', '.join(erros_rtm)}"
+            elif status == "ZONA CRÍTICA":
+                detalhe = f"⚠️ Risco: Erro + Incerteza > {limite_rtm}%"
         
         medidores.append({
             "n_ensaio": n_ensaio, "pos": pos, "serie": serie,
             "cn": v_cn, "cp": v_cp, "ci": v_ci,
-            "status": status, "detalhe": detalhe, 
-            "erro_ref": erro_ref, "inc_banc": inc_banc, "limite_rtm": limite
+            "status": status, "detalhe": detalhe, "limite": limite_vazao
         })
     return medidores
 
 def pagina_metrologia_avancada(df_completo):
-    st.markdown("## 🔬 Metrologia Avançada e Estabilidade")
+    st.markdown("## 🔬 Metrologia Avançada - Laboratório Físico")
     df_mestra = carregar_tabela_mestra_sheets()
     
-    meses_n = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
-    
-    col_filt1, col_filt2 = st.sidebar.columns(2)
-    mes_sel = col_filt1.selectbox("Mês", range(1, 13), index=datetime.now().month-1, format_func=lambda x: meses_n[x-1])
-    ano_sel = col_filt2.selectbox("Ano", sorted(df_completo['Data_dt'].dt.year.unique(), reverse=True))
+    # Filtro lateral
+    mes_sel = st.sidebar.selectbox("Mês", range(1, 13), index=datetime.now().month-1)
+    ano_sel = st.sidebar.selectbox("Ano", sorted(df_completo['Data_dt'].dt.year.unique(), reverse=True))
     
     todos_meds = []
     df_p = df_completo[(df_completo['Data_dt'].dt.month == mes_sel) & (df_completo['Data_dt'].dt.year == ano_sel)]
@@ -146,91 +148,39 @@ def pagina_metrologia_avancada(df_completo):
             todos_meds.append(m)
             
     if not todos_meds:
-        st.info(f"Nenhum dado encontrado para o período selecionado.")
+        st.info("Nenhum dado encontrado.")
         return
 
     df_met = pd.DataFrame(todos_meds)
-    tabs = st.tabs(["📈 Estabilidade da Bancada", "⚠️ Alertas Guardband", "📊 Dispersão Total (CN, CP, CI)"])
-
-    with tabs[0]:
-        st.markdown("#### Carta de Controle de Ensaio")
-        c1, c2 = st.columns(2)
-        b_sel = c1.selectbox("Selecione a Bancada", sorted(df_met['Bancada'].unique()), key="banc_carta")
-        p_sel = c2.slider("Posição", 1, 20, 1, key="pos_carta")
-        
-        df_chart = df_met[(df_met['Bancada'] == b_sel) & (df_met['pos'] == p_sel)].copy()
-        df_chart['Erro_Medio'] = df_chart.apply(lambda r: np.mean([x for x in [r['cn'], r['cp'], r['ci']] if x is not None]), axis=1)
-        df_chart = df_chart.dropna(subset=['Erro_Medio'])
-        
-        if not df_chart.empty:
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=df_chart['Data'], y=df_chart['Erro_Medio'], mode='lines+markers', name='Erro Medidor', line=dict(color='#2ecc71')))
-            fig.add_trace(go.Scatter(x=df_chart['Data'], y=df_chart['erro_ref'], mode='lines', name='Referência Bancada', line=dict(dash='dash', color='#e74c3c')))
-            
-            avg, std = df_chart['Erro_Medio'].mean(), df_chart['Erro_Medio'].std()
-            if not pd.isna(std) and std > 0:
-                fig.add_hline(y=avg + 2*std, line_dash="dot", line_color="orange", annotation_text="LSC")
-                fig.add_hline(y=avg - 2*std, line_dash="dot", line_color="orange", annotation_text="LIC")
-            
-            fig.update_layout(title=f"Estabilidade: {b_sel} - Posição {p_sel}", xaxis_title="Data", yaxis_title="Erro Médio (%)")
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Sem ensaios para esta posição no mês.")
+    tabs = st.tabs(["📈 Estabilidade", "⚠️ Alertas RTM", "📊 Dispersão Total"])
 
     with tabs[1]:
-        st.markdown("#### 🚩 Medidores em Zona Crítica (Risco de Incerteza)")
-        df_gb = df_met[df_met['status'] == 'ZONA CRÍTICA']
-        if not df_gb.empty:
-            st.warning(f"Foram detectados {len(df_gb)} medidores que operam no limite da incerteza expandida.")
-            st.dataframe(df_gb[['Data', 'n_ensaio', 'Bancada', 'pos', 'serie', 'cn', 'cp', 'ci', 'detalhe']], use_container_width=True, hide_index=True)
-        else:
-            st.success("Operação nominal: Nenhum medidor detectado na zona de risco Guardband.")
+        st.markdown("##### Detalhamento de Irregularidades por Classe")
+        st.dataframe(df_met[df_met['status'] != 'APROVADO'], use_container_width=True, hide_index=True)
 
     with tabs[2]:
-        st.markdown("#### ⚖️ Cruzamento Dinâmico de Erros (CN, CP, CI)")
+        st.markdown("#### Cruzamento Dinâmico de Erros")
+        comp = st.radio("Comparação:", ["CN vs CP", "CN vs CI"], horizontal=True)
+        e_y = 'cp' if "CP" in comp else 'ci'
         
-        # Seleção dinâmica de eixos para fiscalização
-        tipo_grafico = st.radio("Selecione o Cruzamento de Cargas para Análise:", 
-                                ["CN vs CP (Comportamento Linear)", "CN vs CI (Comportamento Indutivo)"], horizontal=True)
-        
-        eixo_y_label = 'cp' if "CP" in tipo_grafico else 'ci'
-        
-        df_disp = df_met.dropna(subset=['cn', eixo_y_label]).copy()
-
+        df_disp = df_met.dropna(subset=['cn', e_y]).copy()
         if not df_disp.empty:
-            # Jittering para visualização profissional
             df_disp['cn_j'] = df_disp['cn'] + np.random.uniform(-0.02, 0.02, len(df_disp))
-            df_disp[f'{eixo_y_label}_j'] = df_disp[eixo_y_label] + np.random.uniform(-0.02, 0.02, len(df_disp))
+            df_disp['ey_j'] = df_disp[e_y] + np.random.uniform(-0.02, 0.02, len(df_disp))
 
-            fig_scat = px.scatter(
-                df_disp, x='cn_j', y=f'{eixo_y_label}_j', color='status',
-                hover_name='serie',
-                hover_data={'cn': ':.3f', eixo_y_label: ':.3f', 'pos': True, 'Bancada': True, 'n_ensaio': True},
-                color_discrete_map={'APROVADO': '#16a34a', 'REPROVADO': '#dc2626', 'ZONA CRÍTICA': '#f1c40f'},
-                labels={'cn_j': 'Erro Carga Nominal (%)', f'{eixo_y_label}_j': f'Erro Carga {eixo_y_label.upper()} (%)'},
-                opacity=0.7
-            )
+            fig = px.scatter(df_disp, x='cn_j', y='ey_j', color='status',
+                             hover_data=['serie', 'limite', 'Bancada'],
+                             color_discrete_map={'APROVADO': '#16a34a', 'REPROVADO': '#dc2626', 'ZONA CRÍTICA': '#f1c40f'})
             
-            # Moldura RTM
-            fig_scat.add_shape(type="rect", x0=-2, y0=-2, x1=2, y1=2, line=dict(color="Red", dash="dash", width=2))
-            fig_scat.update_xaxes(range=[-4.5, 4.5], zeroline=True, zerolinecolor='black', gridcolor='lightgray')
-            fig_scat.update_yaxes(range=[-4.5, 4.5], zeroline=True, zerolinecolor='black', gridcolor='lightgray')
+            # Moldura que respeita a média dos limites dos medidores em tela
+            lim_ref = df_disp['limite'].mean()
+            fig.add_shape(type="rect", x0=-lim_ref, y0=-lim_ref, x1=lim_ref, y1=lim_ref, line=dict(color="Red", dash="dash"))
+            st.plotly_chart(fig, use_container_width=True)
             
-            st.plotly_chart(fig_scat, use_container_width=True)
-            
-            st.markdown("##### 📝 Resumo Estatístico de Precisão (IPEM)")
-            # Agregando médias e desvios para as 3 cargas
-            stats_final = df_disp.groupby('Bancada').agg({
-                'cn': ['mean', 'std'],
-                'cp': ['mean', 'std'],
-                'ci': ['mean', 'std']
-            }).round(4)
-            st.dataframe(stats_final, use_container_width=True)
-        else:
-            st.warning("Dados insuficientes para gerar a dispersão.")
+            st.markdown("##### Estatística por Bancada")
+            st.dataframe(df_disp.groupby('Bancada').agg({'cn': ['mean', 'std'], 'cp': ['mean', 'std'], 'ci': ['mean', 'std']}).round(4), use_container_width=True)
 
 # =======================================================================
-# [FIM DO BLOCO ISOLADO]
 
 # =======================================================================
 # [BLOCO 02] - CARREGAMENTO DE DADOS (ORIGINAL)
