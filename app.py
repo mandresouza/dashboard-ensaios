@@ -261,7 +261,7 @@ def to_excel(df):
     return processed_data
 
 # =======================================================================
-# [BLOCO 04] - PROCESSAMENTO TÉCNICO (VERSÃO CONSOLIDADA - REGRA 0, 0.01, 1.0)
+# [BLOCO 04] - PROCESSAMENTO TÉCNICO (VERSÃO DEFINITIVA - SEM ERRO NO 0/1)
 # =======================================================================
 
 def valor_num(valor):
@@ -285,40 +285,22 @@ def texto(valor):
     return val_str
 
 def processar_ensaio(row, classe_banc20=None):
-    """
-    Regra de Ouro:
-    - Se Diferença == 0: Substitui por 0.01 e APROVA (Normal).
-    - Se Diferença == 0.01: APROVA (Normal).
-    - Se Diferença == 1.0: APROVA (Normal).
-    - Se Diferença > 5.0 (Ex: 3001): REPROVA como ERRO.
-    """
     medidores = []
     bancada = row.get('Bancada_Nome')
     tamanho_bancada = 20 if bancada == 'BANC_20_POS' else 10
     
     classe = str(row.get("Classe", "")).upper()
-    if not classe and bancada == 'BANC_20_POS' and classe_banc20:
-        classe = classe_banc20
-    if not classe:
-        classe = 'B'
-        
-    # Busca limite da constante ou usa padrão 1.3
-    limite = 4.0 if "ELETROMEC" in classe else 1.3
+    if not classe: classe = 'B'
+    limite_exat = 4.0 if "ELETROMEC" in classe else 1.3
 
     for pos in range(1, tamanho_bancada + 1):
         serie = texto(row.get(f"P{pos}_Série"))
-        cn = row.get(f"P{pos}_CN")
-        cp = row.get(f"P{pos}_CP")
-        ci = row.get(f"P{pos}_CI")
+        cn, cp, ci = row.get(f"P{pos}_CN"), row.get(f"P{pos}_CP"), row.get(f"P{pos}_CI")
         mv = row.get(f"P{pos}_MV")
-        r_ini_val = row.get(f"P{pos}_REG_Inicio")
-        r_fim_val = row.get(f"P{pos}_REG_Fim")
+        r_ini, r_fim = row.get(f"P{pos}_REG_Inicio"), row.get(f"P{pos}_REG_Fim")
         
-        v_cn = valor_num(cn)
-        v_cp = valor_num(cp)
-        v_ci = valor_num(ci)
-        v_reg_ini = valor_num(r_ini_val)
-        v_reg_fim = valor_num(r_fim_val)
+        v_cn, v_cp, v_ci = valor_num(cn), valor_num(cp), valor_num(ci)
+        v_reg_ini, v_reg_fim = valor_num(r_ini), valor_num(r_fim)
         mv_str = str(texto(mv)).strip().upper()
 
         # 1. TRATAMENTO DE NÃO ENSAIADOS
@@ -327,86 +309,70 @@ def processar_ensaio(row, classe_banc20=None):
                 "pos": pos, "serie": serie, "cn": "-", "cp": "-", "ci": "-", "mv": "-",
                 "reg_inicio": "-", "reg_fim": "-", "reg_erro": "-",
                 "status": "Não Ligou / Não Ensaido", "detalhe": "", "motivo": "N/A", 
-                "limite": limite, "erros_pontuais": []
+                "limite": limite_exat, "erros_pontuais": []
             })
             continue
 
         erros_list = []
         erros_pontuais = []
         
-        # 2. VALIDAÇÃO DE EXATIDÃO
-        if v_cn is not None and abs(v_cn) > limite: erros_pontuais.append('CN'); erros_list.append("Exatidão")
-        if v_cp is not None and abs(v_cp) > limite: erros_pontuais.append('CP'); erros_list.append("Exatidão")
-        if v_ci is not None and abs(v_ci) > limite: erros_pontuais.append('CI'); erros_list.append("Exatidão")
+        # 2. VALIDAÇÃO DE EXATIDÃO (CN, CP, CI)
+        if v_cn is not None and abs(v_cn) > limite_exat: erros_pontuais.append('CN'); erros_list.append("Exatidão")
+        if v_cp is not None and abs(v_cp) > limite_exat: erros_pontuais.append('CP'); erros_list.append("Exatidão")
+        if v_ci is not None and abs(v_ci) > limite_exat: erros_pontuais.append('CI'); erros_list.append("Exatidão")
 
         # 3. VALIDAÇÃO DE MOSTRADOR (MV)
         mv_reprovado = False
-        if bancada == 'BANC_10_POS':
-            if mv_str != "+": mv_reprovado = True; erros_list.append("Mostrador/MV")
-        else:
-            if mv_str != "OK": mv_reprovado = True; erros_list.append("Mostrador/MV")
+        if (bancada == 'BANC_10_POS' and mv_str != "+") or (bancada != 'BANC_10_POS' and mv_str != "OK"):
+            mv_reprovado = True; erros_list.append("Mostrador/MV")
 
-        # 4. VALIDAÇÃO DO REGISTRADOR (CONSIDERANDO 0 E 0.01 COMO NORMAIS)
+        # 4. VALIDAÇÃO DO REGISTRADOR (REGRA TÉCNICA DIRETA)
         reg_diff_val = "-"
         incremento_maior = False
         
         if v_reg_ini is not None and v_reg_fim is not None:
-            resultado_conta = round(v_reg_fim - v_reg_ini, 4)
+            diff = round(v_reg_fim - v_reg_ini, 4)
             
-            # TRATAMENTO DO ZERO: Vira 0.01 e NÃO entra na lista de erros
-            if resultado_conta == 0.0:
-                resultado_conta = 0.01
+            # --- VALORES TÉCNICOS NORMAIS: 0, 0.01 e 1.0 ---
+            if diff == 0.0 or diff == 0.01 or diff == 1.0:
+                reg_diff_val = 0.01 if diff <= 0.01 else 1.0 # Normaliza exibição
+                # APROVADO: Não adiciona "Registrador" à lista de erros
             
-            reg_diff_val = resultado_conta
-            
-            # SE FOR OS VALORES NORMAIS (1.0 ou 0.01), SEGUE SEM ERRO
-            if resultado_conta == 1.0 or resultado_conta == 0.01:
-                pass 
+            # --- VALORES FORA DO PADRÃO ---
             else:
-                # SE FOR DIFERENTE (Ex: 3001 ou 0.5), AÍ SIM ADICIONA ERRO
+                reg_diff_val = "ERRO" if diff > 5.0 else diff # Limpa o 3001
                 erros_list.append("Registrador")
-                if resultado_conta > 1.0: 
-                    incremento_maior = True
-                if resultado_conta > 5.0:
-                    reg_diff_val = "ERRO" # Limpa o visual do 3001
+                if diff > 1.0: incremento_maior = True
         else:
             erros_list.append("Registrador")
 
         # 5. LÓGICA FINAL DE STATUS
-        erro_pos_exat = any(v is not None and abs(v) > limite for v in [v_cn, v_cp, v_ci])
+        erro_exat = any(v is not None and abs(v) > limite_exat for v in [v_cn, v_cp, v_ci])
         
-        if (erro_pos_exat and incremento_maior) or (erro_pos_exat and mv_reprovado):
-            status = "CONTRA O CONSUMIDOR"
-            motivo = "Contra Consumidor"
+        if (erro_exat and incremento_maior) or (erro_exat and mv_reprovado):
+            status, motivo = "CONTRA O CONSUMIDOR", "Contra Consumidor"
         elif len(erros_list) > 0:
-            status = "REPROVADO"
-            motivo = " / ".join(sorted(list(set(erros_list))))
+            status, motivo = "REPROVADO", " / ".join(sorted(list(set(erros_list))))
         else:
-            status = "APROVADO"
-            motivo = "Nenhum"
+            status, motivo = "APROVADO", "Nenhum"
 
         medidores.append({
-            "pos": pos, "serie": serie,
-            "cn": texto(cn), "cp": texto(cp), "ci": texto(ci), "mv": mv_str,
-            "reg_inicio": texto(r_ini_val), "reg_fim": texto(r_fim_val),
-            "reg_erro": reg_diff_val, "status": status, "detalhe": "",
-            "motivo": motivo, "limite": limite,
+            "pos": pos, "serie": serie, "cn": texto(cn), "cp": texto(cp), "ci": texto(ci), "mv": mv_str,
+            "reg_inicio": texto(r_ini), "reg_fim": texto(r_fim), "reg_erro": reg_diff_val,
+            "status": status, "detalhe": "", "motivo": motivo, "limite": limite_exat,
             "erros_pontuais": erros_pontuais
         })
         
     return medidores
 
-# --- [BLOCO 04B] - FUNÇÕES DE ESTATÍSTICAS E AUDITORIA ---
+# --- [BLOCO 04B] - FUNÇÕES DE ESTATÍSTICAS E AUDITORIA (CONSOLIDADO) ---
 
 def calcular_estatisticas(medidores):
     total = len(medidores)
-    aprovados = sum(1 for m in medidores if m['status'] == 'APROVADO')
-    reprovados = sum(1 for m in medidores if m['status'] == 'REPROVADO')
-    consumidor = sum(1 for m in medidores if m['status'] == 'CONTRA O CONSUMIDOR')
-    return {
-        "total": total, "aprovados": aprovados,
-        "reprovados": reprovados, "consumidor": consumidor
-    }
+    apr = sum(1 for m in medidores if m['status'] == 'APROVADO')
+    rep = sum(1 for m in medidores if m['status'] == 'REPROVADO')
+    con = sum(1 for m in medidores if m['status'] == 'CONTRA O CONSUMIDOR')
+    return {"total": total, "aprovados": apr, "reprovados": rep, "consumidor": con}
 
 def calcular_auditoria_real(df):
     t_pos, t_ens, t_apr, t_rep, r_exat, r_reg, r_mv, r_cons = 0, 0, 0, 0, 0, 0, 0, 0
@@ -427,15 +393,9 @@ def calcular_auditoria_real(df):
     
     taxa = (t_apr / t_ens * 100) if t_ens > 0 else 0
     return {
-        "total_posicoes": t_pos, 
-        "total_ensaiadas": t_ens,
-        "total_aprovadas": t_apr, 
-        "total_reprovadas": t_rep,
-        "taxa_aprovacao": taxa, 
-        "reprov_exatidao": r_exat,
-        "reprov_registrador": r_reg, 
-        "reprov_mv": r_mv,
-        "reprov_consumidor": r_cons
+        "total_posicoes": t_pos, "total_ensaiadas": t_ens, "total_aprovadas": t_apr, 
+        "total_reprovadas": t_rep, "taxa_aprovacao": taxa, "reprov_exatidao": r_exat, 
+        "reprov_registrador": r_reg, "reprov_mv": r_mv, "reprov_consumidor": r_cons
     }
     
 # =======================================================================
