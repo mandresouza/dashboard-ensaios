@@ -744,7 +744,7 @@ def pagina_visao_diaria(df_completo):
             for j, m in enumerate(ensaio["medidores"][i : i + cols_n]):
                 with cols[j]:
                     renderizar_card(m)
-          
+
 # =========================================================
 # [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO AUDITORIA TÉCNICA)
 # =========================================================
@@ -789,10 +789,6 @@ def pagina_visao_mensal(df_completo):
             }
             .val-mensal { font-size: 24px; font-weight: 800; color: #0f172a; display: block; }
             .lab-mensal { font-size: 11px; color: #475569; font-weight: 700; text-transform: uppercase; }
-            .alerta-critico-box {
-                padding: 20px; background-color: #fff5f5; border: 1px solid #feb2b2;
-                border-left: 6px solid #e53e3e; border-radius: 8px; margin: 15px 0px;
-            }
         </style> 
     ''', unsafe_allow_html=True)
 
@@ -838,31 +834,44 @@ def pagina_visao_mensal(df_completo):
         st.markdown(f'<div class="metric-card-mensal" style="border-top-color:{cor_taxa}"><span class="val-mensal">{dados_auditoria["taxa_aprovacao"]:.2f}%</span><span class="lab-mensal">Eficiência</span></div>', unsafe_allow_html=True)
 
     # =====================================================
-    # DETALHAMENTO FIDEDIGNO: CONTRA O CONSUMIDOR
+    # DETALHAMENTO FIDEDIGNO: CONTRA O CONSUMIDOR (FILTRADO)
     # =====================================================
     if dados_auditoria["reprov_consumidor"] > 0:
-        st.markdown('<div class="alerta-critico-box"><h4>⚠️ Alerta de Auditoria: Medidores Contra o Consumidor</h4><p>Os itens abaixo apresentam dupla reprovação ou erros positivos críticos que impactam o faturamento.</p></div>', unsafe_allow_html=True)
-        
-        criticos_data = []
-        for _, row in df_mes.iterrows():
-            medidores = processar_ensaio(row)
-            for m in medidores:
-                if m['status'] == 'CONTRA O CONSUMIDOR':
-                    criticos_data.append({
-                        "Data": row['Data'],
-                        "Bancada": row['Bancada_Nome'],
-                        "Série": m['serie'],
-                        "Erro CN": m['cn'],
-                        "Erro CP": m['cp'],
-                        "Erro CI": m['ci'],
-                        "M.V": m['mv'],
-                        "Reg.": m['reg_erro'],
-                        "Motivo": m['motivo']
-                    })
-        
-        if criticos_data:
-            df_c = pd.DataFrame(criticos_data)
-            st.dataframe(df_c.style.applymap(lambda x: 'color: #e53e3e; font-weight: bold' if isinstance(x, str) and '+' in x else ''), use_container_width=True, hide_index=True)
+        # Usa o expander para permitir que o usuário recolha a barra clicando nela
+        with st.expander("🚨 DETALHAR MEDIDORES CONTRA O CONSUMIDOR (ERROS POSITIVOS)", expanded=True):
+            criticos_data = []
+            for _, row in df_mes.iterrows():
+                medidores = processar_ensaio(row)
+                for m in medidores:
+                    # TRAVA DE SEGURANÇA: Status correto E valor numérico positivo em pelo menos uma carga
+                    if m['status'] == 'CONTRA O CONSUMIDOR':
+                        try:
+                            # Converte para float para garantir a comparação matemática
+                            v_cn = float(str(m['cn']).replace(',', '.'))
+                            v_cp = float(str(m['cp']).replace(',', '.'))
+                            v_ci = float(str(m['ci']).replace(',', '.'))
+                            
+                            # Só entra se algum erro for maior que zero (Contra o Consumidor real)
+                            if v_cn > 0 or v_cp > 0 or v_ci > 0:
+                                criticos_data.append({
+                                    "Data": row['Data'],
+                                    "Bancada": row['Bancada_Nome'],
+                                    "Série": m['serie'],
+                                    "Erro CN": m['cn'],
+                                    "Erro CP": m['cp'],
+                                    "Erro CI": m['ci'],
+                                    "M.V": m['mv'],
+                                    "Reg.": m['reg_erro'],
+                                    "Motivo": m['motivo']
+                                })
+                        except:
+                            continue # Ignora se o dado estiver corrompido
+            
+            if criticos_data:
+                df_c = pd.DataFrame(criticos_data)
+                st.dataframe(df_c.style.applymap(lambda x: 'color: #e53e3e; font-weight: bold' if isinstance(x, str) and '+' in x else ''), use_container_width=True, hide_index=True)
+            else:
+                st.info("Nenhum medidor com erro positivo (+) detectado neste período.")
 
     st.markdown("<br>", unsafe_allow_html=True)
     m1, m2, m3, m4 = st.columns(4)
@@ -890,7 +899,8 @@ def pagina_visao_mensal(df_completo):
         st.markdown("##### Evolução Mensal")
         fig_bar = go.Figure()
         for col, color in zip(['Aprovados','Reprovados','Contra Consumidor'], ['#16a34a','#dc2626','#7c3aed']):
-            fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily[col], name=col, marker_color=color))
+            if col in df_daily.columns:
+                fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily[col], name=col, marker_color=color))
         fig_bar.update_layout(barmode='stack', height=250, margin=dict(t=0,b=0,l=0,r=0), legend=dict(orientation="h", y=1.2))
         st.plotly_chart(fig_bar, use_container_width=True)
 
@@ -912,7 +922,7 @@ def pagina_visao_mensal(df_completo):
             } for m in meds_aud])
 
             st.dataframe(df_final.style.applymap(lambda x: 'background-color: #fed7d7' if x in ['REPROVADO', 'CONTRA O CONSUMIDOR'] else '', subset=['Status']), use_container_width=True, hide_index=True)
-            
+
 # =======================================================================
 # [BLOCO 08] - PÁGINA: ANÁLISE DE POSIÇÕES (HEATMAP DE REPROVAÇÃO)
 # =======================================================================
