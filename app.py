@@ -27,7 +27,7 @@ st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
 # =======================================================================
-# [BLOCO ISOLADO] - METROLOGIA AVANÇADA (VERSÃO FINAL - LARGURA MÁXIMA)
+# [BLOCO ISOLADO] - METROLOGIA AVANÇADA (VERSÃO FINAL - LARGURA TOTAL)
 # =======================================================================
 
 # --- CONSTANTES EXCLUSIVAS DO BLOCO DE METROLOGIA ---
@@ -127,6 +127,14 @@ def processar_metrologia_isolada(row, df_mestra=None, classe_banc20=None):
     return medidores
 
 def pagina_metrologia_avancada(df_completo):
+    # Força o layout a usar a largura total da janela do navegador
+    st.markdown("""
+        <style>
+            .main > div { padding-left: 1rem; padding-right: 1rem; max-width: 100%; }
+            .block-container { padding-top: 1rem; padding-bottom: 1rem; padding-left: 1rem; padding-right: 1rem; }
+        </style>
+    """, unsafe_allow_html=True)
+
     st.markdown("## 🔬 Metrologia Avançada e Estabilidade")
     df_mestra = carregar_tabela_mestra_sheets()
     
@@ -187,7 +195,6 @@ def pagina_metrologia_avancada(df_completo):
         
         df_disp = df_met.dropna(subset=['cn', eixo_y]).copy()
         if not df_disp.empty:
-            # Jittering para visualização pericial
             df_disp['cn_j'] = df_disp['cn'] + np.random.uniform(-0.015, 0.015, len(df_disp))
             df_disp[f'{eixo_y}_j'] = df_disp[eixo_y] + np.random.uniform(-0.015, 0.015, len(df_disp))
 
@@ -198,24 +205,23 @@ def pagina_metrologia_avancada(df_completo):
                 labels={'cn_j': 'Erro Carga Nominal (%)', f'{eixo_y}_j': f'Erro Carga {eixo_y.upper()} (%)'}
             )
             
-            # Tracejados Vermelhos RTM
             lim_ref = df_disp['limite_rtm'].mean()
             fig_scat.add_shape(type="rect", x0=-lim_ref, y0=-lim_ref, x1=lim_ref, y1=lim_ref, 
                                line=dict(color="#e74c3c", width=2, dash="dash"))
             
-            # Eixos Centrais e Grade
             fig_scat.update_xaxes(zeroline=True, zerolinecolor='black', zerolinewidth=1, gridcolor='lightgray', range=[-5, 5])
             fig_scat.update_yaxes(zeroline=True, zerolinecolor='black', zerolinewidth=1, gridcolor='lightgray', range=[-5, 5])
             
-            # AJUSTE DE LARGURA TOTAL E ALTURA
+            # AJUSTE: ALTURA MENOR (600) E MARGENS ZERADAS PARA ESTICAR TUDO
             fig_scat.update_layout(
-                height=900, 
+                height=600, 
                 autosize=True,
-                margin=dict(l=10, r=10, t=40, b=10), # Margens mínimas para ganhar espaço lateral
-                template="plotly_dark"
+                margin=dict(l=0, r=0, t=30, b=0),
+                template="plotly_dark",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
             
-            st.plotly_chart(fig_scat, use_container_width=True) # Ocupa 100% da largura da tela
+            st.plotly_chart(fig_scat, use_container_width=True)
             
             st.markdown("##### 📝 Resumo de Precisão por Bancada")
             st.dataframe(df_disp.groupby('Bancada').agg({'cn': ['mean', 'std'], eixo_y: ['mean', 'std']}).round(4), use_container_width=True)
