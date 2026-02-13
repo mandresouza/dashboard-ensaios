@@ -72,11 +72,13 @@ def processar_metrologia_isolada(row, df_mestra=None, classe_banc20=None):
     medidores = []
     bancada_row = str(row.get('Bancada_Nome', ''))
     n_ensaio = row.get('N_ENSAIO', 'N/A')
+    modelo = row.get('Modelo', 'N/A')
     
     serie_bancada = next((v for k, v in MAPA_BANCADA_SERIE.items() if k in bancada_row), None)
     tamanho_bancada = 20 if '20_POS' in bancada_row else 10
     
     classe = str(row.get("Classe", "")).upper()
+    # Limites conforme RTM/Classe
     limite = 4.0 if "ELETROMEC" in (classe or 'B') else LIMITES_CLASSE.get(str(classe or 'B').replace("ELETROMEC", "").strip(), 1.3)
     
     def texto(val): return str(val) if val is not None else ""
@@ -113,10 +115,10 @@ def processar_metrologia_isolada(row, df_mestra=None, classe_banc20=None):
                 status, detalhe = "ZONA CRÍTICA", f"⚠️ Guardband: {', '.join(alertas_gb)}"
         
         medidores.append({
-            "n_ensaio": n_ensaio, "pos": pos, "serie": serie,
+            "n_ensaio": n_ensaio, "pos": pos, "serie": serie, "modelo": modelo,
             "cn": v_cn, "cp": v_cp, "ci": v_ci,
             "status": status, "detalhe": detalhe, 
-            "erro_ref": erro_ref, "inc_banc": inc_banc
+            "erro_ref": erro_ref, "inc_banc": inc_banc, "limite_rtm": limite
         })
     return medidores
 
@@ -125,6 +127,8 @@ def pagina_metrologia_avancada(df_completo):
     df_mestra = carregar_tabela_mestra_sheets()
     
     meses_n = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
+    
+    c_filt1, c_filt2 = st.sidebar.columns(2)
     mes_sel = st.sidebar.selectbox("Mês de Referência", range(1, 13), index=datetime.now().month-1, format_func=lambda x: meses_n[x-1])
     ano_sel = st.sidebar.selectbox("Ano de Referência", sorted(df_completo['Data_dt'].dt.year.unique(), reverse=True))
     
@@ -155,36 +159,71 @@ def pagina_metrologia_avancada(df_completo):
         
         if not df_chart.empty:
             fig = go.Figure()
-            # Linha de Erro do Medidor
             fig.add_trace(go.Scatter(x=df_chart['Data'], y=df_chart['Erro_Medio'], mode='lines+markers', name='Erro do Medidor', line=dict(color='#2ecc71', width=3), hovertext=df_chart['n_ensaio']))
-            # Linha de Referência da Bancada
             fig.add_trace(go.Scatter(x=df_chart['Data'], y=df_chart['erro_ref'], mode='lines', name='Referência Bancada', line=dict(dash='dash', color='#e74c3c')))
-            # Linha de Tendência (Média Móvel)
-            fig.add_trace(go.Scatter(x=df_chart['Data'], y=df_chart['Erro_Medio'].rolling(window=3, min_periods=1).mean(), mode='lines', name='Tendência (Média Móvel)', line=dict(color='rgba(255,255,255,0.3)', width=1)))
             
             avg, std = df_chart['Erro_Medio'].mean(), df_chart['Erro_Medio'].std()
             if not pd.isna(std) and std > 0:
-                fig.add_hline(y=avg + 2*std, line_dash="dot", line_color="#f1c40f", annotation_text="LSC (Limite Superior)")
-                fig.add_hline(y=avg - 2*std, line_dash="dot", line_color="#f1c40f", annotation_text="LIC (Limite Inferior)")
+                fig.add_hline(y=avg + 2*std, line_dash="dot", line_color="#f1c40f", annotation_text="LSC")
+                fig.add_hline(y=avg - 2*std, line_dash="dot", line_color="#f1c40f", annotation_text="LIC")
             
-            fig.update_layout(title=f"Carta de Controle Individual: {b_sel} (Posição {p_sel})", xaxis_title="Data do Ensaio", yaxis_title="Erro Médio (%)", hovermode="x unified")
+            fig.update_layout(title=f"Estabilidade: {b_sel} (Pos {p_sel})", xaxis_title="Data", yaxis_title="Erro Médio (%)")
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("Não há ensaios válidos para esta posição no período selecionado.")
+            st.info("Não há ensaios válidos para esta posição.")
 
     with tabs[1]:
         df_gb = df_met[df_met['status'] == 'ZONA CRÍTICA']
         if not df_gb.empty:
-            st.warning(f"Identificamos {len(df_gb)} medidores que passaram no limite, mas estão na zona de risco por incerteza.")
+            st.warning(f"Identificamos {len(df_gb)} medidores na Zona de Risco (Guardband).")
             st.dataframe(df_gb[['Data', 'n_ensaio', 'Bancada', 'pos', 'serie', 'detalhe']], use_container_width=True, hide_index=True)
         else:
-            st.success("Excelente! Nenhum medidor na zona crítica de Guardband neste mês.")
+            st.success("Nenhum medidor na zona crítica de Guardband.")
 
     with tabs[2]:
-        df_met['Erro_Max'] = df_met.apply(lambda r: max([abs(x) for x in [r['cn'], r['cp'], r['ci']] if x is not None] or [0]), axis=1)
-        fig_box = px.box(df_met, x='Bancada', y='Erro_Max', color='Bancada', title="Distribuição de Erros Máximos por Bancada", points="all")
-        fig_box.update_layout(yaxis_title="Erro Absoluto Máximo (%)")
-        st.plotly_chart(fig_box, use_container_width=True)
+        st.markdown("#### Cruzamento de Erros: CN vs CP (Dispersão)")
+        
+        # Filtro de Modelo dentro da aba de dispersão
+        lista_modelos = ["Todos"] + sorted(df_met['modelo'].unique().tolist())
+        mod_sel = st.selectbox("Filtrar por Modelo do Medidor", lista_modelos)
+        
+        df_disp = df_met.dropna(subset=['cn', 'cp']).copy()
+        if mod_sel != "Todos":
+            df_disp = df_disp[df_disp['modelo'] == mod_sel]
+
+        if not df_disp.empty:
+            fig_scat = px.scatter(
+                df_disp, x='cn', y='cp', color='status',
+                hover_data=['serie', 'pos', 'Bancada', 'n_ensaio'],
+                color_discrete_map={'APROVADO': '#16a34a', 'REPROVADO': '#dc2626', 'ZONA CRÍTICA': '#f1c40f'},
+                labels={'cn': 'Erro Carga Nominal (%)', 'cp': 'Erro Carga Pequena (%)'}
+            )
+
+            # Pegamos o limite do primeiro item para desenhar os quadrados de referência
+            lim_ref = df_disp['limite_rtm'].iloc[0]
+            
+            # Quadrado do Limite RTM (Vermelho)
+            fig_scat.add_shape(type="rect", x0=-lim_ref, y0=-lim_ref, x1=lim_ref, y1=lim_ref,
+                               line=dict(color="Red", width=2, dash="dash"), name="Limite RTM")
+            
+            # Quadrado da Zona de Alerta (Amarelo - 90% do limite)
+            alerta = lim_ref * 0.9
+            fig_scat.add_shape(type="rect", x0=-alerta, y0=-alerta, x1=alerta, y1=alerta,
+                               line=dict(color="#f1c40f", width=1, dash="dot"), name="Alerta")
+
+            fig_scat.update_layout(height=600, plot_bgcolor='white')
+            fig_scat.update_xaxes(showgrid=True, gridcolor='LightGray', zeroline=True, zerolinecolor='Black')
+            fig_scat.update_yaxes(showgrid=True, gridcolor='LightGray', zeroline=True, zerolinecolor='Black')
+            
+            st.plotly_chart(fig_scat, use_container_width=True)
+            
+            # Estatística de Variabilidade por Bancada
+            st.markdown("---")
+            st.markdown("##### 📊 Consistência por Bancada (Precisão)")
+            stats_banc = df_disp.groupby('Bancada').agg({'cn': ['mean', 'std'], 'cp': ['mean', 'std']})
+            st.dataframe(stats_banc, use_container_width=True)
+        else:
+            st.info("Dados insuficientes para gerar a dispersão.")
 
 # =======================================================================
 # [FIM DO BLOCO ISOLADO]
