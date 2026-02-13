@@ -261,7 +261,7 @@ def to_excel(df):
     return processed_data
 
 # =======================================================================
-# [BLOCO 04] - PROCESSAMENTO TÉCNICO (VERSÃO "SEM ERRO" - FOCO NO 0, 0.01 e 1.0)
+# [BLOCO 04] - PROCESSAMENTO TÉCNICO (VERSÃO BLINDADA - TOLERÂNCIA TOTAL)
 # =======================================================================
 
 def valor_num(valor):
@@ -313,41 +313,42 @@ def processar_ensaio(row, classe_banc20=None):
         erros_list = []
         erros_pontuais = []
         
-        # 1. VALIDAÇÃO DE EXATIDÃO
+        # 1. Validação Exatidão
         if v_cn is not None and abs(v_cn) > limite_exat: erros_pontuais.append('CN'); erros_list.append("Exatidão")
         if v_cp is not None and abs(v_cp) > limite_exat: erros_pontuais.append('CP'); erros_list.append("Exatidão")
         if v_ci is not None and abs(v_ci) > limite_exat: erros_pontuais.append('CI'); erros_list.append("Exatidão")
 
-        # 2. VALIDAÇÃO DE MOSTRADOR (MV)
+        # 2. Validação Mostrador
         mv_reprovado = False
         if (bancada == 'BANC_10_POS' and mv_str != "+") or (bancada != 'BANC_10_POS' and mv_str != "OK"):
             mv_reprovado = True; erros_list.append("Mostrador/MV")
 
-        # 3. VALIDAÇÃO DO REGISTRADOR (LÓGICA SUPER SIMPLIFICADA)
+        # 3. VALIDAÇÃO DO REGISTRADOR (LÓGICA DE CORTE DEFINITIVA)
         reg_diff_display = "-"
         incremento_maior = False
         
         if v_reg_ini is not None and v_reg_fim is not None:
             diff = round(v_reg_fim - v_reg_ini, 2)
             
-            # Se for 0, 0.01 ou 1.0 -> É APROVADO (NÃO ADICIONA ERRO)
-            if diff in [0.0, 0.01, 1.0]:
-                reg_diff_display = 0.01 if diff <= 0.01 else 1.0
+            # --- SE O INCREMENTO FOR ATÉ 1.0 (INCLUINDO 0, 0.01 e 1.0) ---
+            if diff <= 1.05: # Usamos 1.05 para garantir que 1.0 passe sempre
+                # Se for 0 ou 0.01, mostra 0.01. Se for 1.0, mostra 1.0.
+                reg_diff_display = 0.01 if diff < 0.1 else 1.0
+                # APROVADO - NÃO ADICIONA ERRO
             else:
-                # Se for o tal do 3001 ou qualquer outro valor fora do padrão, aí sim reprova
+                # SE FOR MAIOR QUE 1.0 (Ex: 3001 ou 2.0)
                 if diff > 5.0:
                     reg_diff_display = "ERRO"
                 else:
                     reg_diff_display = diff
                 
                 erros_list.append("Registrador")
-                if diff > 1.0: incremento_maior = True
+                incremento_maior = True
         else:
             erros_list.append("Registrador")
 
-        # 4. LÓGICA FINAL
+        # 4. Lógica Final
         erro_exat = any(v is not None and abs(v) > limite_exat for v in [v_cn, v_cp, v_ci])
-        
         if (erro_exat and incremento_maior) or (erro_exat and mv_reprovado):
             status, motivo = "CONTRA O CONSUMIDOR", "Contra Consumidor"
         elif len(erros_list) > 0:
@@ -361,11 +362,9 @@ def processar_ensaio(row, classe_banc20=None):
             "status": status, "detalhe": "", "motivo": motivo, "limite": limite_exat,
             "erros_pontuais": erros_pontuais
         })
-        
     return medidores
 
-# --- [BLOCO 04B] - FUNÇÕES DE ESTATÍSTICAS E AUDITORIA ---
-
+# --- BLOCO 04B ---
 def calcular_estatisticas(medidores):
     total = len(medidores)
     apr = sum(1 for m in medidores if m['status'] == 'APROVADO')
@@ -381,15 +380,13 @@ def calcular_auditoria_real(df):
             t_pos += 1
             if m['status'] != "Não Ligou / Não Ensaido":
                 t_ens += 1
-                if m['status'] == "APROVADO":
-                    t_apr += 1
+                if m['status'] == "APROVADO": t_apr += 1
                 else:
                     t_rep += 1
                     if "Exatidão" in m['motivo']: r_exat += 1
                     if "Registrador" in m['motivo']: r_reg += 1
                     if "Mostrador/MV" in m['motivo']: r_mv += 1
                     if m['status'] == "CONTRA O CONSUMIDOR": r_cons += 1
-    
     taxa = (t_apr / t_ens * 100) if t_ens > 0 else 0
     return {
         "total_posicoes": t_pos, "total_ensaiadas": t_ens, "total_aprovadas": t_apr, 
