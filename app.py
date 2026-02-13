@@ -746,7 +746,7 @@ def pagina_visao_diaria(df_completo):
                     renderizar_card(m)
 
 # =========================================================
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL (CORREÇÃO CIRÚRGICA)
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL (CORREÇÃO CIRÚRGICA DE CHAVES)
 # =========================================================
 
 def get_stats_por_dia(df_mes):
@@ -852,10 +852,10 @@ def pagina_visao_mensal(df_completo):
         with st.expander(f"🚨 DETALHAMENTO TÉCNICO: {total_c_consumidor} ITENS CONFIRMADOS", expanded=False):
             dados_tabela = []
             for m in lista_consumidor_fidedigna:
-                # MAPEAMENTO ROBUSTO: Tenta várias combinações para não vir vazio (-)
-                reg_ini = m.get('P1_REG_Inicio') or m.get('reg_inicial') or m.get('reg_inic') or '-'
-                reg_fim = m.get('P1_REG_Fim') or m.get('reg_final') or m.get('reg_fim') or '-'
-                reg_err = m.get('P1_REG_Erro') or m.get('reg_erro') or m.get('reg_%') or '-'
+                # MAPEAMENTO EXTREMO PARA INÍCIO
+                reg_ini = m.get('P1_REG_Inicio') or m.get('P1_REG_Início') or m.get('reg_inicial') or m.get('reg_inic') or m.get('Início') or m.get('Inicio') or '-'
+                reg_fim = m.get('P1_REG_Fim') or m.get('reg_final') or m.get('reg_fim') or m.get('Fim') or '-'
+                reg_err = m.get('P1_REG_Erro') or m.get('reg_erro') or m.get('reg_%') or m.get('Erro %') or '-'
                 
                 dados_tabela.append({
                     "Data": m.get('data_ensaio', 'N/A'), 
@@ -912,7 +912,7 @@ def pagina_visao_mensal(df_completo):
     st.markdown("---")
     with st.expander("🔍 PAINEL DE AUDITORIA COMPLETO", expanded=False):
         datas_disponiveis = df_daily['Data'].dt.strftime('%d/%m/%Y').unique()
-        dia_auditoria_str = st.selectbox("Selecione o dia para conferência detalhada:", datas_disponiveis, key="sel_audit_mensal_final_v6")
+        dia_auditoria_str = st.selectbox("Selecione o dia para conferência detalhada:", datas_disponiveis, key="sel_audit_mensal_final_v7")
         
         if dia_auditoria_str:
             data_f = pd.to_datetime(dia_auditoria_str, format='%d/%m/%Y')
@@ -924,10 +924,10 @@ def pagina_visao_mensal(df_completo):
             if meds_aud:
                 df_final_data = []
                 for m in meds_aud:
-                    # MESMO MAPEAMENTO ROBUSTO AQUI
-                    r_ini = m.get('P1_REG_Inicio') or m.get('reg_inicial') or m.get('reg_inic') or '-'
-                    r_fim = m.get('P1_REG_Fim') or m.get('reg_final') or m.get('reg_fim') or '-'
-                    r_err = m.get('P1_REG_Erro') or m.get('reg_erro') or m.get('reg_%') or '-'
+                    # MAPEAMENTO EXTREMO AQUI TAMBÉM
+                    r_ini = m.get('P1_REG_Inicio') or m.get('P1_REG_Início') or m.get('reg_inicial') or m.get('reg_inic') or m.get('Início') or m.get('Inicio') or '-'
+                    r_fim = m.get('P1_REG_Fim') or m.get('reg_final') or m.get('reg_fim') or m.get('Fim') or '-'
+                    r_err = m.get('P1_REG_Erro') or m.get('reg_erro') or m.get('reg_%') or m.get('Erro %') or '-'
                     
                     df_final_data.append({ 
                         "Pos": m.get('pos', '-'), 
