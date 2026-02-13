@@ -581,7 +581,7 @@ def renderizar_botao_scroll_topo():
     st.components.v1.html(scroll_button_html, height=0)
 
 # =========================================================
-# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (IDENTIDADE PROFISSIONAL)
+# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (VERSÃO FINAL SEM ERROS)
 # =========================================================
 
 def pagina_visao_diaria(df_completo):
@@ -639,7 +639,7 @@ def pagina_visao_diaria(df_completo):
     st.sidebar.header("🔍 Central de Filtros")
 
     # =====================================================
-    # BUSCA POR SÉRIE (Original Mantido)
+    # BUSCA POR SÉRIE
     # =====================================================
     if "search_key" not in st.session_state:
         st.session_state.search_key = 0
@@ -693,6 +693,14 @@ def pagina_visao_diaria(df_completo):
     todos_os_medidores = [m for e in ensaios for m in e["medidores"]]
     stats = calcular_estatisticas(todos_os_medidores)
 
+    # --- TRATAMENTO DE ERRO PARA AS CHAVES DO DICIONÁRIO ---
+    # Isso evita o erro de KeyError se a chave vier diferente da função stats
+    v_total = stats.get("total", 0)
+    v_aprov = stats.get("aprovados", 0)
+    v_repro = stats.get("reprovados", 0)
+    v_cons  = stats.get("contra_consumidor", stats.get("Contra Consumidor", 0))
+    v_taxa  = stats.get("taxa_aprovacao", 0)
+
     # =====================================================
     # INDICADORES TÉCNICOS UNIFICADOS (VISUAL PROFISSIONAL)
     # =====================================================
@@ -700,21 +708,20 @@ def pagina_visao_diaria(df_completo):
     
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
-        st.markdown(f'<div class="metric-card-clean" style="border-top-color:#1e293b"><span class="val-clean">{stats["total"]}</span><span class="lab-clean">Unidades Ensaiadas</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card-clean" style="border-top-color:#1e293b"><span class="val-clean">{v_total}</span><span class="lab-clean">Unidades Ensaiadas</span></div>', unsafe_allow_html=True)
     with c2:
-        st.markdown(f'<div class="metric-card-clean" style="border-top-color:#16a34a"><span class="val-clean">{stats["aprovados"]}</span><span class="lab-clean">Conformes</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card-clean" style="border-top-color:#16a34a"><span class="val-clean">{v_aprov}</span><span class="lab-clean">Conformes</span></div>', unsafe_allow_html=True)
     with c3:
-        st.markdown(f'<div class="metric-card-clean" style="border-top-color:#dc2626"><span class="val-clean">{stats["reprovados"]}</span><span class="lab-clean">Não Conformes</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card-clean" style="border-top-color:#dc2626"><span class="val-clean">{v_repro}</span><span class="lab-clean">Não Conformes</span></div>', unsafe_allow_html=True)
     with c4:
-        st.markdown(f'<div class="metric-card-clean" style="border-top-color:#7c3aed"><span class="val-clean">{stats["contra_consumidor"]}</span><span class="lab-clean">Contra Consumidor</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card-clean" style="border-top-color:#7c3aed"><span class="val-clean">{v_cons}</span><span class="lab-clean">Contra Consumidor</span></div>', unsafe_allow_html=True)
     with c5:
-        # Cor dinâmica para o índice de qualidade
-        cor_status = "#16a34a" if stats["taxa_aprovacao"] >= 90 else "#ea580c"
-        st.markdown(f'<div class="metric-card-clean" style="border-top-color:{cor_status}"><span class="val-clean">{stats["taxa_aprovacao"]:.1f}%</span><span class="lab-clean">Índice de Qualidade</span></div>', unsafe_allow_html=True)
+        cor_status = "#16a34a" if v_taxa >= 90 else "#ea580c"
+        st.markdown(f'<div class="metric-card-clean" style="border-top-color:{cor_status}"><span class="val-clean">{v_taxa:.1f}%</span><span class="lab-clean">Índice de Qualidade</span></div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Detalhamento de Irregularidades Técnicas
+    # Detalhamento de Irregularidades
     d1, d2, d3, d4 = st.columns(4)
     d1.info(f"⚡ Erro de Exatidão: **{stats['motivos'].get('Exatidão', 0)}**")
     d2.warning(f"⚙️ Falha Registrador: **{stats['motivos'].get('Registrador', 0)}**")
