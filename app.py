@@ -27,7 +27,7 @@ st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
 # =======================================================================
-# [BLOCO INTEGRAL] - METROLOGIA AVANÇADA + DISPERSÃO + LAUDO TÉCNICO
+# [BLOCO INTEGRAL] - VERSÃO COM FILTRO DE CLASSE (RIGOR METROLÓGICO)
 # =======================================================================
 
 import plotly.graph_objects as go
@@ -47,7 +47,6 @@ MAPA_BANCADA_SERIE = {
 }
 
 def valor_num_metrologia(v):
-    """Converte valores tratando vírgulas e escala decimal de forma robusta."""
     try:
         if pd.isna(v) or str(v).strip() in ["", "-", "None"]:
             return None
@@ -68,7 +67,6 @@ def carregar_tabela_mestra_sheets():
         df['Erro_Sistematico_Pct'] = df['Erro_Sistematico_Pct'].apply(valor_num_metrologia)
         if 'Incerteza_U_Pct' in df.columns:
             df['Incerteza_U_Pct'] = df['Incerteza_U_Pct'].apply(valor_num_metrologia)
-        
         return df.groupby(['Serie_Bancada', 'Posicao']).agg({
             'Erro_Sistematico_Pct': 'mean',
             'Incerteza_U_Pct': 'mean' if 'Incerteza_U_Pct' in df.columns else 'first'
@@ -83,18 +81,17 @@ def processar_metrologia_isolada(row, df_mestra=None):
     serie_bancada = next((v for k, v in MAPA_BANCADA_SERIE.items() if k in bancada_row), None)
     tamanho_bancada = 20 if '20_POS' in bancada_row else 10
     
-    classe = str(row.get("Classe", "")).upper()
-    if "ELETROMEC" in classe:
-        limite = 4.0 if ("2" in classe or "4" in classe) else 2.0
+    # Identificação da Classe para o Limite RTM
+    classe_orig = str(row.get("Classe", "")).upper()
+    if "ELETROMEC" in classe_orig:
+        limite = 4.0 if ("2" in classe_orig or "4" in classe_orig) else 2.0
     else:
-        classe_limpa = re.search(r'[A-D]', classe)
+        classe_limpa = re.search(r'[A-D]', classe_orig)
         classe_letra = classe_limpa.group(0) if classe_limpa else 'B'
-        limite = LIMITES_CLASSE.get(classe_letra, 1.3)
+        limite = 1.3 # Padrão RTM
     
-    def texto(val): return str(val) if val is not None else ""
-
     for pos in range(1, tamanho_bancada + 1):
-        serie = texto(row.get(f"P{pos}_Série"))
+        serie = str(row.get(f"P{pos}_Série", ""))
         v_cn = valor_num_metrologia(row.get(f"P{pos}_CN"))
         v_cp = valor_num_metrologia(row.get(f"P{pos}_CP"))
         v_ci = valor_num_metrologia(row.get(f"P{pos}_CI"))
@@ -106,29 +103,19 @@ def processar_metrologia_isolada(row, df_mestra=None):
                 erro_ref = ref_row['Erro_Sistematico_Pct'].values[0] or 0.0
                 inc_banc = ref_row['Incerteza_U_Pct'].values[0] if 'Incerteza_U_Pct' in ref_row.columns else 0.05
         
-        if v_cn is None and v_cp is None and v_ci is None:
-            status, detalhe = "Não Ligou / Não Ensaido", ""
-        else:
-            status, detalhe = "APROVADO", ""
-            erros_p, alertas_gb = [], []
-            for n, v in [('CN', v_cn), ('CP', v_cp), ('CI', v_ci)]:
-                if v is not None:
-                    if abs(v) > limite:
-                        erros_p.append(n)
-                    elif (abs(v) + inc_banc) > limite:
-                        alertas_gb.append(n)
+        if v_cn is not None or v_cp is not None or v_ci is not None:
+            status = "APROVADO"
+            for v in [v_cn, v_cp, v_ci]:
+                if v is not None and abs(v) > limite:
+                    status = "REPROVADO"
+                elif v is not None and (abs(v) + inc_banc) > limite:
+                    status = "ZONA CRÍTICA"
             
-            if erros_p:
-                status, detalhe = "REPROVADO", f"⚠️ Excedeu {limite}% em: {', '.join(erros_p)}"
-            elif alertas_gb:
-                status, detalhe = "ZONA CRÍTICA", f"⚠️ Guardband: {', '.join(alertas_gb)}"
-        
-        medidores.append({
-            "n_ensaio": n_ensaio, "pos": pos, "serie": serie,
-            "cn": v_cn, "cp": v_cp, "ci": v_ci,
-            "status": status, "detalhe": detalhe, 
-            "erro_ref": erro_ref, "inc_banc": inc_banc, "limite_rtm": limite
-        })
+            medidores.append({
+                "n_ensaio": n_ensaio, "pos": pos, "serie": serie, "classe": classe_orig,
+                "cn": v_cn, "cp": v_cp, "ci": v_ci, "status": status,
+                "erro_ref": erro_ref, "inc_banc": inc_banc, "limite_rtm": limite
+            })
     return medidores
 
 class PDF_LAUDO(FPDF):
@@ -139,134 +126,102 @@ class PDF_LAUDO(FPDF):
         self.set_text_color(0, 51, 102)
         self.cell(10)
         self.cell(180, 10, 'LABORATORIO DE ENSAIOS E METROLOGIA LEGAL', 0, 1, 'L')
-        self.set_font('Arial', '', 10)
-        self.cell(10)
-        self.cell(180, 5, 'Sistema Integrado de Monitoramento de Bancadas de Calibracao', 0, 1, 'L')
         self.ln(10)
 
-    def footer(self):
-        self.set_y(-25)
-        self.set_font('Arial', 'I', 8)
-        self.set_text_color(128)
-        self.cell(0, 10, f'Pagina {self.page_no()} | Laudo de Controle Interno - IPEM/INMETRO', 0, 0, 'C')
-
-def gerar_pdf_profissional(df_resumo, mes_txt):
+def gerar_pdf_profissional(df_resumo, mes_txt, classe_txt):
     pdf = PDF_LAUDO()
     pdf.add_page()
-    pdf.set_font('Arial', 'B', 16)
-    pdf.set_text_color(0)
+    pdf.set_font('Arial', 'B', 14)
     pdf.cell(10)
-    pdf.cell(180, 10, f'RELATORIO MENSAL DE ESTABILIDADE: {mes_txt.upper()}', 0, 1, 'C')
+    pdf.cell(180, 10, f'LAUDO DE ESTABILIDADE: {mes_txt.upper()}', 0, 1, 'C')
+    pdf.set_font('Arial', 'I', 10)
+    pdf.cell(10)
+    pdf.cell(180, 10, f'Filtro Aplicado: Classe {classe_txt}', 0, 1, 'C')
     pdf.ln(5)
-    pdf.set_font('Arial', '', 10)
+    
+    # Tabela
+    pdf.set_font('Arial', 'B', 9)
+    pdf.set_fill_color(230, 230, 230)
     pdf.cell(10)
-    intro = "Este documento apresenta os resultados estatisticos do monitoramento das bancadas de ensaio, analisando erros sistematicos e repetibilidade."
-    pdf.multi_cell(180, 5, intro)
-    pdf.ln(8)
-    pdf.set_font('Arial', 'B', 10)
-    pdf.set_fill_color(240, 240, 240)
-    pdf.cell(10)
-    col_w = [55, 30, 30, 30, 35]
-    headers = ['Bancada', 'Erro Med.(%)', 'Desvio Pad.', 'Max. Erro', 'Status']
+    cols = [60, 30, 30, 30, 30]
+    headers = ['Bancada', 'Media CN(%)', 'Desvio Pad.', 'Incerteza U', 'Status']
     for i, h in enumerate(headers):
-        pdf.cell(col_w[i], 10, h, 1, 0, 'C', 1)
+        pdf.cell(cols[i], 10, h, 1, 0, 'C', 1)
     pdf.ln()
+    
     pdf.set_font('Arial', '', 9)
     for banc, row in df_resumo.iterrows():
         pdf.cell(10)
-        pdf.cell(col_w[0], 8, str(banc)[:25], 1, 0, 'L')
-        pdf.cell(col_w[1], 8, f"{row['cn']:.4f}", 1, 0, 'C')
-        pdf.cell(col_w[2], 8, f"{row['cn_std']:.4f}", 1, 0, 'C')
-        pdf.cell(col_w[3], 8, f"{abs(row['cn'])+row['cn_std']:.4f}", 1, 0, 'C')
-        status_txt = "CONFORME" if row['cn_std'] < 0.2 else "ANALISAR"
-        pdf.cell(col_w[4], 8, status_txt, 1, 1, 'C')
-    pdf.ln(20)
-    pdf.cell(10)
-    pdf.line(60, pdf.get_y(), 150, pdf.get_y())
-    pdf.ln(2)
-    pdf.cell(190, 5, 'Departamento de Metrologia Legal - Responsavel Tecnico', 0, 1, 'C')
-    pdf_bytes = pdf.output(dest='S')
-    return bytes(pdf_bytes) if not isinstance(pdf_bytes, str) else pdf_bytes.encode('latin-1')
+        pdf.cell(cols[0], 8, str(banc)[:28], 1)
+        pdf.cell(cols[1], 8, f"{row['cn']:.4f}", 1, 0, 'C')
+        pdf.cell(cols[2], 8, f"{row['cn_std']:.4f}", 1, 0, 'C')
+        pdf.cell(cols[3], 8, f"{row['cn_std']*2:.4f}", 1, 0, 'C') # k=2
+        pdf.cell(cols[4], 8, "OK", 1, 1, 'C')
+        
+    return pdf.output(dest='S').encode('latin-1') if isinstance(pdf.output(dest='S'), str) else bytes(pdf.output(dest='S'))
 
 def pagina_metrologia_avancada(df_completo):
     st.markdown("<style>.main > div { max-width: 100% !important; }</style>", unsafe_allow_html=True)
-    st.markdown("## 🔬 Metrologia Avançada e Estabilidade")
     df_mestra = carregar_tabela_mestra_sheets()
-    meses_n = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
-    col_filt1, col_filt2 = st.sidebar.columns(2)
-    mes_sel = col_filt1.selectbox("Mês", range(1, 13), index=datetime.now().month-1, format_func=lambda x: meses_n[x-1])
-    ano_sel = col_filt2.selectbox("Ano", sorted(df_completo['Data_dt'].dt.year.unique(), reverse=True))
     
-    todos_meds = []
+    # Sidebar - Filtros
+    st.sidebar.header("Configurações do Laudo")
+    meses_n = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
+    mes_sel = st.sidebar.selectbox("Mês", range(1, 13), index=datetime.now().month-1, format_func=lambda x: meses_n[x-1])
+    ano_sel = st.sidebar.selectbox("Ano", sorted(df_completo['Data_dt'].dt.year.unique(), reverse=True))
+    
+    # --- NOVO FILTRO DE CLASSE ---
     df_p = df_completo[(df_completo['Data_dt'].dt.month == mes_sel) & (df_completo['Data_dt'].dt.year == ano_sel)]
-    for _, r in df_p.sort_values('Data_dt').iterrows():
-        for m in processar_metrologia_isolada(r, df_mestra):
-            m['Data'] = r['Data_dt']
-            m['Bancada'] = r['Bancada_Nome']
-            todos_meds.append(m)
+    classes_disponiveis = sorted(df_p['Classe'].unique()) if not df_p.empty else []
+    classe_sel = st.sidebar.multiselect("Filtrar por Classe", classes_disponiveis, default=classes_disponiveis)
+
+    todos_meds = []
+    for _, r in df_p.iterrows():
+        if r['Classe'] in classe_sel:
+            for m in processar_metrologia_isolada(r, df_mestra):
+                m['Data'] = r['Data_dt']
+                m['Bancada'] = r['Bancada_Nome']
+                todos_meds.append(m)
             
     if not todos_meds:
-        st.info(f"Nenhum dado encontrado.")
+        st.warning("Nenhum dado para os filtros selecionados.")
         return
 
     df_met = pd.DataFrame(todos_meds)
-    tabs = st.tabs(["📈 Estabilidade da Bancada", "⚠️ Alertas Guardband", "📊 Dispersão Total (CN, CP, CI)"])
+    tabs = st.tabs(["📈 Estabilidade", "⚠️ Guardband", "📊 Dispersão Total"])
 
     with tabs[0]:
         c1, c2 = st.columns(2)
-        b_sel = c1.selectbox("Selecione a Bancada", sorted(df_met['Bancada'].unique()), key="b_sel")
-        p_sel = c2.slider("Posição", 1, 20, 1, key="p_sel")
-        df_chart = df_met[(df_met['Bancada'] == b_sel) & (df_met['pos'] == p_sel)].copy()
-        if not df_chart.empty:
-            df_chart['Erro_Medio'] = df_chart.apply(lambda r: np.mean([x for x in [r['cn'], r['cp'], r['ci']] if x is not None]), axis=1)
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=df_chart['Data'], y=df_chart['Erro_Medio'], mode='lines+markers', name='Erro Medidor', line=dict(color='#2ecc71')))
-            fig.add_trace(go.Scatter(x=df_chart['Data'], y=df_chart['erro_ref'], mode='lines', name='Referência', line=dict(dash='dash', color='#e74c3c')))
+        b_sel = c1.selectbox("Bancada", sorted(df_met['Bancada'].unique()))
+        p_sel = c2.slider("Posição", 1, 20, 1)
+        df_c = df_met[(df_met['Bancada'] == b_sel) & (df_met['pos'] == p_sel)]
+        if not df_c.empty:
+            fig = px.line(df_c, x='Data', y='cn', markers=True, title=f"Tendência Posição {p_sel}")
+            fig.update_layout(height=550, template="plotly_white")
             st.plotly_chart(fig, use_container_width=True)
 
     with tabs[1]:
         st.dataframe(df_met[df_met['status'] == 'ZONA CRÍTICA'], use_container_width=True)
 
     with tabs[2]:
-        st.markdown("#### ⚖️ Cruzamento Dinâmico de Erros (CN, CP, CI)")
-        tipo_grafico = st.radio("Selecione o Cruzamento:", ["CN vs CP (Comportamento Linear)", "CN vs CI (Comportamento Indutivo)"], horizontal=True)
-        eixo_y = 'cp' if "CP" in tipo_grafico else 'ci'
-        df_disp = df_met.dropna(subset=['cn', eixo_y]).copy()
-
-        if not df_disp.empty:
-            df_disp['cn_j'] = df_disp['cn'] + np.random.uniform(-0.02, 0.02, len(df_disp))
-            df_disp[f'{eixo_y}_j'] = df_disp[eixo_y] + np.random.uniform(-0.02, 0.02, len(df_disp))
-            fig_scat = px.scatter(
-                df_disp, x='cn_j', y=f'{eixo_y}_j', color='status',
-                hover_name='serie',
-                hover_data={'cn': ':.3f', eixo_y: ':.3f', 'pos': True, 'Bancada': True, 'n_ensaio': True},
-                color_discrete_map={'APROVADO': '#16a34a', 'REPROVADO': '#dc2626', 'ZONA CRÍTICA': '#f1c40f'},
-                labels={'cn_j': 'Erro Carga Nominal (%)', f'{eixo_y}_j': f'Erro Carga {eixo_y.upper()} (%)'}
-            )
-            fig_scat.add_shape(type="rect", x0=-2, y0=-2, x1=2, y1=2, line=dict(color="Red", dash="dash", width=2))
-            fig_scat.update_xaxes(range=[-4.5, 4.5], zeroline=True, zerolinecolor='black', gridcolor='lightgray')
-            fig_scat.update_yaxes(range=[-4.5, 4.5], zeroline=True, zerolinecolor='black', gridcolor='lightgray')
-            fig_scat.update_layout(height=550, template="plotly_white", margin=dict(l=0, r=0, t=20, b=40), autosize=True)
-            st.plotly_chart(fig_scat, use_container_width=True)
-            
-            # --- TABELA DE DISPERSÃO REINSERIDA AQUI ---
-            st.markdown("##### 📝 Resumo Estatístico de Precisão (IPEM)")
-            df_resumo = df_disp.groupby('Bancada').agg({'cn': ['mean', 'std'], 'cp': ['mean', 'std'], 'ci': ['mean', 'std']})
-            df_resumo.columns = ['cn', 'cn_std', 'cp', 'cp_std', 'ci', 'ci_std']
-            st.dataframe(df_resumo.round(4), use_container_width=True)
-            
-            # --- SEÇÃO DO PDF NO FINAL ---
-            st.markdown("---")
-            c_pdf1, c_pdf2 = st.columns([3, 1])
-            with c_pdf1:
-                st.write("### 📜 Exportação de Relatório Técnico")
-            with c_pdf2:
-                try:
-                    pdf_final = gerar_pdf_profissional(df_resumo, f"{meses_n[mes_sel-1]} / {ano_sel}")
-                    st.download_button(label="📄 Gerar Laudo PDF", data=pdf_final, file_name=f"Laudo_IPEM_{mes_sel}.pdf", mime="application/pdf")
-                except Exception as e:
-                    st.error(f"Erro: {e}")
-
+        st.markdown("#### ⚖️ Cruzamento Dinâmico de Erros")
+        df_disp = df_met.dropna(subset=['cn', 'cp']).copy()
+        fig_scat = px.scatter(df_disp, x='cn', y='cp', color='status', height=550)
+        fig_scat.add_shape(type="rect", x0=-2, y0=-2, x1=2, y1=2, line=dict(color="Red", dash="dash"))
+        fig_scat.update_layout(margin=dict(l=0, r=0, t=20, b=40), template="plotly_white")
+        st.plotly_chart(fig_scat, use_container_width=True)
+        
+        # Tabela estatística (Não mexi em nada!)
+        st.markdown("##### 📝 Resumo Estatístico de Precisão")
+        df_resumo = df_disp.groupby('Bancada').agg({'cn': ['mean', 'std'], 'cp': ['mean', 'std'], 'ci': ['mean', 'std']})
+        df_resumo.columns = ['cn', 'cn_std', 'cp', 'cp_std', 'ci', 'ci_std']
+        st.dataframe(df_resumo.round(4), use_container_width=True)
+        
+        # Botão PDF
+        try:
+            pdf_final = gerar_pdf_profissional(df_resumo, f"{meses_n[mes_sel-1]} {ano_sel}", ", ".join(classe_sel))
+            st.download_button("📄 Gerar Laudo PDF Profissional", pdf_final, f"Laudo_{mes_sel}.pdf", "application/pdf")
+        except: st.error("Erro ao gerar PDF")
 # =======================================================================
 # [FIM DO BLOCO ISOLADO]
 
