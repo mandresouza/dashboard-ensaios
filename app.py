@@ -746,7 +746,7 @@ def pagina_visao_diaria(df_completo):
                     renderizar_card(m)
           
 # =========================================================
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO PROFISSIONAL FINAL)
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO AUDITORIA TÉCNICA)
 # =========================================================
 
 def get_stats_por_dia(df_mes):
@@ -777,42 +777,26 @@ def get_stats_por_dia(df_mes):
     return pd.DataFrame(daily_stats)
 
 def pagina_visao_mensal(df_completo):
-    # --- CSS PARA IDENTIDADE VISUAL DE LABORATÓRIO (UNIFICADA) ---
+    # --- CSS PARA IDENTIDADE VISUAL DE LABORATÓRIO ---
     st.markdown('''
         <style> 
             .stApp { scroll-behavior: smooth; } 
-            .header-mensal {
-                padding: 10px 0px;
-                border-bottom: 2px solid #1e3a8a;
-                margin-bottom: 25px;
-            }
-            .titulo-mensal {
-                color: #1e3a8a;
-                font-size: 28px;
-                font-weight: 800;
-                margin-bottom: 0px;
-            }
+            .header-mensal { padding: 10px 0px; border-bottom: 2px solid #1e3a8a; margin-bottom: 25px; }
+            .titulo-mensal { color: #1e3a8a; font-size: 28px; font-weight: 800; margin-bottom: 0px; }
             .metric-card-mensal {
-                background-color: #ffffff;
-                padding: 15px;
-                border-radius: 8px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-                text-align: center;
-                border-top: 5px solid #1e3a8a;
+                background-color: #ffffff; padding: 15px; border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.05); text-align: center; border-top: 5px solid #1e3a8a;
             }
             .val-mensal { font-size: 24px; font-weight: 800; color: #0f172a; display: block; }
             .lab-mensal { font-size: 11px; color: #475569; font-weight: 700; text-transform: uppercase; }
-            .alerta-critico {
-                padding: 15px;
-                background-color: #fff5f5;
-                border-left: 5px solid #e53e3e;
-                border-radius: 4px;
-                margin: 10px 0px;
+            .alerta-critico-box {
+                padding: 20px; background-color: #fff5f5; border: 1px solid #feb2b2;
+                border-left: 6px solid #e53e3e; border-radius: 8px; margin: 15px 0px;
             }
         </style> 
     ''', unsafe_allow_html=True)
 
-    # --- CABEÇALHO ATUALIZADO (TEXTO PROFISSIONAL IPEM-AM) ---
+    # --- CABEÇALHO ---
     st.markdown('''
         <div class="header-mensal">
             <p class="titulo-mensal">Sistema de Gestão de Ensaios e Auditoria</p>
@@ -829,12 +813,7 @@ def pagina_visao_mensal(df_completo):
     st.sidebar.header("📅 Seleção do Período")
     ano_sel = st.sidebar.selectbox("Ano", sorted(df_completo['Ano'].unique(), reverse=True))
     meses_disp = sorted(df_completo[df_completo['Ano'] == ano_sel]['Mes'].unique())
-    
-    mes_sel = st.sidebar.selectbox(
-        "Mês", 
-        meses_disp, 
-        format_func=lambda x: ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][x-1]
-    )
+    mes_sel = st.sidebar.selectbox("Mês", meses_disp, format_func=lambda x: ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][x-1])
 
     df_mes = df_completo[(df_completo['Ano'] == ano_sel) & (df_completo['Mes'] == mes_sel)]
     
@@ -843,54 +822,49 @@ def pagina_visao_mensal(df_completo):
         return
 
     # =====================================================
-    # AUDITORIA TÉCNICA REAL (Métricas Rápidas)
+    # MÉTRICAS E AUDITORIA REAL
     # =====================================================
     dados_auditoria = calcular_auditoria_real(df_mes)
     
-    st.markdown("### 🔍 Resumo de Auditoria Real")
+    st.markdown("### 📊 Indicadores de Performance Mensal")
     a1, a2, a3, a4, a5 = st.columns(5)
     
-    with a1:
-        st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#1e293b"><span class="val-mensal">{dados_auditoria["total_ensaiadas"]}</span><span class="lab-mensal">Ensaios Reais</span></div>', unsafe_allow_html=True)
-    with a2:
-        st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#16a34a"><span class="val-mensal">{dados_auditoria["total_aprovadas"]}</span><span class="lab-mensal">Aprovados</span></div>', unsafe_allow_html=True)
-    with a3:
-        st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#dc2626"><span class="val-mensal">{dados_auditoria["total_reprovadas"]}</span><span class="lab-mensal">Reprovados</span></div>', unsafe_allow_html=True)
-    with a4:
-        st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#7c3aed"><span class="val-mensal">{dados_auditoria["reprov_consumidor"]}</span><span class="lab-mensal">C. Consumidor</span></div>', unsafe_allow_html=True)
+    with a1: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#1e293b"><span class="val-mensal">{dados_auditoria["total_ensaiadas"]}</span><span class="lab-mensal">Ensaios Reais</span></div>', unsafe_allow_html=True)
+    with a2: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#16a34a"><span class="val-mensal">{dados_auditoria["total_aprovadas"]}</span><span class="lab-mensal">Aprovados</span></div>', unsafe_allow_html=True)
+    with a3: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#dc2626"><span class="val-mensal">{dados_auditoria["total_reprovadas"]}</span><span class="lab-mensal">Reprovados</span></div>', unsafe_allow_html=True)
+    with a4: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#7c3aed"><span class="val-mensal">{dados_auditoria["reprov_consumidor"]}</span><span class="lab-mensal">C. Consumidor</span></div>', unsafe_allow_html=True)
     with a5:
         cor_taxa = "#16a34a" if dados_auditoria["taxa_aprovacao"] >= 95 else "#ea580c"
-        st.markdown(f'<div class="metric-card-mensal" style="border-top-color:{cor_taxa}"><span class="val-mensal">{dados_auditoria["taxa_aprovacao"]:.2f}%</span><span class="lab-mensal">Aprovação Final</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card-mensal" style="border-top-color:{cor_taxa}"><span class="val-mensal">{dados_auditoria["taxa_aprovacao"]:.2f}%</span><span class="lab-mensal">Eficiência</span></div>', unsafe_allow_html=True)
 
-    # ---------------------------------------------------------
-    # NOVO: DETALHAMENTO DE MEDIDORES CONTRA O CONSUMIDOR
-    # ---------------------------------------------------------
+    # =====================================================
+    # DETALHAMENTO FIDEDIGNO: CONTRA O CONSUMIDOR
+    # =====================================================
     if dados_auditoria["reprov_consumidor"] > 0:
-        with st.expander("🚨 DETALHAR MEDIDORES CONTRA O CONSUMIDOR", expanded=False):
-            st.markdown('<div class="alerta-critico"><b>Atenção:</b> Os medidores abaixo apresentaram erros graves fora da margem legal permitida contra o consumidor.</div>', unsafe_allow_html=True)
-            
-            # Coleta apenas os contra o consumidor do mês
-            medidores_criticos = []
-            for _, row in df_mes.iterrows():
-                lista = processar_ensaio(row)
-                for m in lista:
-                    if m['status'] == 'CONTRA O CONSUMIDOR':
-                        medidores_criticos.append({
-                            "Data": row['Data'],
-                            "Bancada": row['Bancada_Nome'],
-                            "Série": m['serie'],
-                            "Erro CN": m['cn'],
-                            "Erro CP": m['cp'],
-                            "Erro CI": m['ci'],
-                            "Motivo": m['motivo']
-                        })
-            
-            df_criticos = pd.DataFrame(medidores_criticos)
-            st.table(df_criticos) # Usando table para destaque fixo ou dataframe se preferir
+        st.markdown('<div class="alerta-critico-box"><h4>⚠️ Alerta de Auditoria: Medidores Contra o Consumidor</h4><p>Os itens abaixo apresentam dupla reprovação ou erros positivos críticos que impactam o faturamento.</p></div>', unsafe_allow_html=True)
+        
+        criticos_data = []
+        for _, row in df_mes.iterrows():
+            medidores = processar_ensaio(row)
+            for m in medidores:
+                if m['status'] == 'CONTRA O CONSUMIDOR':
+                    criticos_data.append({
+                        "Data": row['Data'],
+                        "Bancada": row['Bancada_Nome'],
+                        "Série": m['serie'],
+                        "Erro CN": m['cn'],
+                        "Erro CP": m['cp'],
+                        "Erro CI": m['ci'],
+                        "M.V": m['mv'],
+                        "Reg.": m['reg_erro'],
+                        "Motivo": m['motivo']
+                    })
+        
+        if criticos_data:
+            df_c = pd.DataFrame(criticos_data)
+            st.dataframe(df_c.style.applymap(lambda x: 'color: #e53e3e; font-weight: bold' if isinstance(x, str) and '+' in x else ''), use_container_width=True, hide_index=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-
-    # Motivos de Reprovação (Sub-métricas)
     m1, m2, m3, m4 = st.columns(4)
     m1.info(f"⚡ Exatidão: **{dados_auditoria['reprov_exatidao']}**")
     m2.warning(f"⚙️ Registrador: **{dados_auditoria['reprov_registrador']}**")
@@ -898,121 +872,46 @@ def pagina_visao_mensal(df_completo):
     m4.success(f"📋 Posições Totais: **{dados_auditoria['total_posicoes']}**")
 
     # =====================================================
-    # CONSOLIDAÇÃO DOS DADOS DIÁRIOS
+    # GRÁFICOS E EVOLUÇÃO
     # =====================================================
     df_daily = get_stats_por_dia(df_mes)
-
-    # =====================================================
-    # GRÁFICOS DE PERFORMANCE
-    # =====================================================
     st.markdown("---")
     col_g1, col_g2 = st.columns([1, 1.5])
     
     with col_g1:
-        st.markdown("##### Distribuição Mensal")
-        df_pie = pd.DataFrame({
-            'Status': ['Aprovados','Reprovados','Contra Consumidor'],
-            'Qtd': [dados_auditoria["total_aprovadas"], dados_auditoria["total_reprovadas"], dados_auditoria["reprov_consumidor"]]
-        })
-        fig_donut = px.pie(
-            df_pie, values='Qtd', names='Status', hole=.5,
-            color_discrete_map={'Aprovados':'#16a34a', 'Reprovados':'#dc2626', 'Contra Consumidor':'#7c3aed'}
-        )
-        fig_donut.update_traces(textposition='inside', textinfo='percent+label')
-        fig_donut.update_layout(showlegend=False, margin=dict(t=0,b=0,l=0,r=0), height=300)
+        st.markdown("##### Distribuição de Resultados")
+        fig_donut = px.pie(values=[dados_auditoria["total_aprovadas"], dados_auditoria["total_reprovadas"], dados_auditoria["reprov_consumidor"]], 
+                           names=['Aprovados','Reprovados','C. Consumidor'], hole=.5,
+                           color_discrete_map={'Aprovados':'#16a34a', 'Reprovados':'#dc2626', 'C. Consumidor':'#7c3aed'})
+        fig_donut.update_layout(showlegend=False, margin=dict(t=0,b=0,l=0,r=0), height=250)
         st.plotly_chart(fig_donut, use_container_width=True)
 
     with col_g2:
-        st.markdown("##### Evolução Diária de Ensaios")
+        st.markdown("##### Evolução Mensal")
         fig_bar = go.Figure()
-        fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Aprovados'], name='Aprovados', marker_color='#16a34a'))
-        fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Reprovados'], name='Reprovados', marker_color='#dc2626'))
-        fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily['Contra Consumidor'], name='Contra Consumidor', marker_color='#7c3aed'))
-        
-        fig_bar.update_layout(
-            barmode='stack', 
-            xaxis_title="Dia", yaxis_title="Qtd",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            margin=dict(t=0,b=0,l=0,r=0), height=300, hovermode="x unified"
-        )
+        for col, color in zip(['Aprovados','Reprovados','Contra Consumidor'], ['#16a34a','#dc2626','#7c3aed']):
+            fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily[col], name=col, marker_color=color))
+        fig_bar.update_layout(barmode='stack', height=250, margin=dict(t=0,b=0,l=0,r=0), legend=dict(orientation="h", y=1.2))
         st.plotly_chart(fig_bar, use_container_width=True)
 
-    # TENDÊNCIA DA TAXA
-    st.markdown("##### 📈 Tendência da Taxa de Aprovação")
-    if not df_daily.empty:
-        fig_line = px.line(
-            df_daily, x='Data', y='Taxa de Aprovação (%)', 
-            markers=True, text='Taxa de Aprovação (%)'
-        )
-        fig_line.update_traces(textposition="top center", line_color="#1e3a8a")
-        fig_line.update_layout(
-            yaxis=dict(range=[0,110]), 
-            yaxis_title="Taxa (%)", xaxis_title="Dia",
-            margin=dict(t=20,b=20,l=0,r=0), height=300
-        )
-        st.plotly_chart(fig_line, use_container_width=True)
-
     # =====================================================
-    # PAINEL DE AUDITORIA DETALHADO
+    # PAINEL DE CONFERÊNCIA GERAL
     # =====================================================
     st.markdown("---")
-    with st.expander("🔍 PAINEL DE AUDITORIA: Conferência de Dados"):
-        st.write(f"### Análise Detalhada: {mes_sel}/{ano_sel}")
-        
-        # 1. Tabela de Resumo Diário
-        st.write("**1. Resumo Diário (Base dos Gráficos):**")
-        df_exibicao = df_daily.copy()
-        df_exibicao['Data'] = df_exibicao['Data'].dt.strftime('%d/%m/%Y')
-        st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
-
-        st.markdown("---")
-        
-        # 2. Auditoria por Dia Selecionado
-        st.write("**2. Auditoria Individual de Medidores:**")
-        dia_auditoria_str = st.selectbox(
-            "Selecione um dia para ver o detalhamento técnico:", 
-            df_daily['Data'].dt.strftime('%d/%m/%Y'),
-            key="sel_dia_mensal"
-        )
-        
+    with st.expander("🔍 PAINEL DE AUDITORIA COMPLETO"):
+        dia_auditoria_str = st.selectbox("Selecione o dia para auditoria:", df_daily['Data'].dt.strftime('%d/%m/%Y'), key="sel_mes_final")
         if dia_auditoria_str:
-            data_filtro = pd.to_datetime(dia_auditoria_str, format='%d/%m/%Y')
-            df_dia_f = df_mes[df_mes['Data_dt'] == data_filtro]
+            data_f = pd.to_datetime(dia_auditoria_str, format='%d/%m/%Y')
+            df_dia_f = df_mes[df_mes['Data_dt'] == data_f]
+            meds_aud = []
+            for _, r in df_dia_f.iterrows(): meds_aud.extend(processar_ensaio(r))
             
-            medidores_auditoria = []
-            for _, r in df_dia_f.iterrows():
-                medidores_auditoria.extend(processar_ensaio(r))
-            
-            df_auditoria = pd.DataFrame([{
-                "Pos": m['pos'],
-                "Série": m['serie'],
-                "Status": m['status'],
-                "CN": m['cn'],
-                "CP": m['cp'],
-                "CI": m['ci'],
-                "MV": m['mv'],
-                "Reg": m['reg_erro'],
-                "Motivo": m['motivo']
-            } for m in medidores_auditoria])
+            df_final = pd.DataFrame([{
+                "Pos": m['pos'], "Série": m['serie'], "Status": m['status'],
+                "CN": m['cn'], "CP": m['cp'], "CI": m['ci'], "MV": m['mv'], "Reg": m['reg_erro'], "Motivo": m['motivo']
+            } for m in meds_aud])
 
-            nao_ligou = len(df_auditoria[df_auditoria['Status'] == "Não Ligou / Não Ensaido"])
-            ensaiados = len(df_auditoria[df_auditoria['Status'] != "Não Ligou / Não Ensaido"])
-            
-            ca1, ca2 = st.columns(2)
-            ca1.warning(f"🔌 Não Ligaram/Vazios: {nao_ligou}")
-            ca2.success(f"✅ Considerados no Cálculo: {ensaiados}")
-
-            def color_status(val):
-                if val == 'APROVADO': return 'background-color: #c6f6d5'
-                if val == 'REPROVADO': return 'background-color: #fed7d7'
-                if val == 'CONTRA O CONSUMIDOR': return 'background-color: #e9d8fd'
-                return 'background-color: #edf2f7'
-
-            st.dataframe(
-                df_auditoria.style.applymap(color_status, subset=['Status']),
-                use_container_width=True,
-                hide_index=True
-            )
+            st.dataframe(df_final.style.applymap(lambda x: 'background-color: #fed7d7' if x in ['REPROVADO', 'CONTRA O CONSUMIDOR'] else '', subset=['Status']), use_container_width=True, hide_index=True)
             
 # =======================================================================
 # [BLOCO 08] - PÁGINA: ANÁLISE DE POSIÇÕES (HEATMAP DE REPROVAÇÃO)
