@@ -261,11 +261,10 @@ def to_excel(df):
     return processed_data
 
 # =======================================================================
-# [BLOCO 04] - PROCESSAMENTO TÉCNICO (VERSÃO FINAL - ZERO ERRO FALSO)
+# [BLOCO 04] - PROCESSAMENTO TÉCNICO (VERSÃO ULTRA-BLINDADA)
 # =======================================================================
 
 def valor_num(valor):
-    """Converte valores da planilha para float, tratando vírgulas e erros nominais."""
     if pd.isna(valor) or valor == "" or str(valor).strip() in ["-", "None", "SEM LEITURA", "ERRO"]:
         return None
     try:
@@ -276,7 +275,6 @@ def valor_num(valor):
         return None
 
 def texto(valor):
-    """Trata strings para exibição, removendo decimais desnecessários."""
     if pd.isna(valor) or str(valor).strip() in ["-", "None"]:
         return "-"
     val_str = str(valor).strip()
@@ -285,10 +283,6 @@ def texto(valor):
     return val_str
 
 def processar_ensaio(row, classe_banc20=None):
-    """
-    Regra Definitiva: 0, 0.01 e 1.0 são normais. 
-    Usamos round(x, 2) para garantir que 1.00000001 seja lido como 1.0.
-    """
     medidores = []
     bancada = row.get('Bancada_Nome')
     tamanho_bancada = 20 if bancada == 'BANC_20_POS' else 10
@@ -330,29 +324,32 @@ def processar_ensaio(row, classe_banc20=None):
         if (bancada == 'BANC_10_POS' and mv_str != "+") or (bancada != 'BANC_10_POS' and mv_str != "OK"):
             mv_reprovado = True; erros_list.append("Mostrador/MV")
 
-        # 4. VALIDAÇÃO DO REGISTRADOR (CORREÇÃO DE ARREDONDAMENTO)
+        # 4. VALIDAÇÃO DO REGISTRADOR (LÓGICA DE PROXIMIDADE)
         reg_diff_display = "-"
         incremento_maior = False
         
         if v_reg_ini is not None and v_reg_fim is not None:
-            # Arredondamos para 2 casas para evitar lixo de memória do Python
-            diff = round(v_reg_fim - v_reg_ini, 2)
+            diff = v_reg_fim - v_reg_ini
             
-            # --- VALORES TÉCNICOS NORMAIS (0, 0.01 e 1.0 são APROVADOS) ---
-            if diff == 0.0 or diff == 0.01 or diff == 1.0:
-                # Se for 0 ou 0.01, mostramos 0.01 por padrão técnico
-                reg_diff_display = 0.01 if diff <= 0.01 else 1.0
-                # NÃO adiciona erro de Registrador aqui.
+            # --- SE ESTIVER PERTO DE 0 OU 0.01 (TOLERÂNCIA DE 0.05) ---
+            if abs(diff - 0.0) < 0.05 or abs(diff - 0.01) < 0.05:
+                reg_diff_display = 0.01 # Normaliza para 0.01
+                # APROVADO - NÃO ADICIONA ERRO
+                
+            # --- SE ESTIVER PERTO DE 1.0 (TOLERÂNCIA DE 0.05) ---
+            elif abs(diff - 1.0) < 0.05:
+                reg_diff_display = 1.0
+                # APROVADO - NÃO ADICIONA ERRO
             
-            # --- VALORES FORA DO PADRÃO ---
+            # --- QUALQUER OUTRA COISA É ERRO ---
             else:
                 if diff > 5.0:
-                    reg_diff_display = "ERRO" # Limpa o 3001
+                    reg_diff_display = "ERRO"
                 else:
-                    reg_diff_display = diff
+                    reg_diff_display = round(diff, 4)
                 
                 erros_list.append("Registrador")
-                if diff > 1.0: incremento_maior = True
+                if diff > 1.05: incremento_maior = True
         else:
             erros_list.append("Registrador")
 
