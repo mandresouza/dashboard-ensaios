@@ -581,11 +581,11 @@ def renderizar_botao_scroll_topo():
     st.components.v1.html(scroll_button_html, height=0)
 
 # =========================================================
-# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (VERSÃO FINAL UNIFICADA)
+# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (VERSÃO ÚNICA E LIMPA)
 # =========================================================
 
 def pagina_visao_diaria(df_completo):
-    # --- BOTÃO VOLTAR AO TOPO (CSS & HTML) ---
+    # --- CSS PARA LIMPEZA VISUAL ---
     st.markdown('''
         <style> 
             .stApp { scroll-behavior: smooth; } 
@@ -595,19 +595,16 @@ def pagina_visao_diaria(df_completo):
                 color: white; cursor: pointer; padding: 15px; 
                 border-radius: 10px; font-size: 18px; opacity: 0.7; 
             } 
-            #scroll-to-top:hover { background-color: #f44336; opacity: 1; } 
-            
-            /* Estilo para os novos cards de performance */
-            .metric-card-mensal {
+            .metric-card-clean {
                 background-color: #ffffff;
-                padding: 15px;
+                padding: 20px;
                 border-radius: 12px;
                 box-shadow: 0 4px 6px rgba(0,0,0,0.05);
                 text-align: center;
-                border-top: 4px solid #3b82f6;
+                border-bottom: 4px solid #3b82f6;
             }
-            .val-mensal { font-size: 28px; font-weight: 800; color: #1e293b; display: block; }
-            .lab-mensal { font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase; }
+            .val-clean { font-size: 30px; font-weight: 800; color: #1e293b; display: block; }
+            .lab-clean { font-size: 13px; color: #64748b; font-weight: 600; text-transform: uppercase; }
         </style> 
         <a id="top"></a> 
         <a href="#top" id="scroll-to-top"><b>^</b></a> 
@@ -621,12 +618,7 @@ def pagina_visao_diaria(df_completo):
     if "search_key" not in st.session_state:
         st.session_state.search_key = 0
         
-    serie_input = st.sidebar.text_input(
-        "Pesquisar Número de Série", 
-        value="", 
-        key=f"busca_{st.session_state.search_key}"
-    )
-    
+    serie_input = st.sidebar.text_input("Pesquisar Número de Série", value="", key=f"busca_{st.session_state.search_key}")
     termo_busca = serie_input.strip().lower()
 
     if termo_busca:
@@ -634,7 +626,7 @@ def pagina_visao_diaria(df_completo):
             st.session_state.search_key += 1
             st.rerun()
             
-        st.markdown(f"### 🔍 Histórico de Ensaios para a Série: **{serie_input}**")
+        st.markdown(f"### 🔍 Histórico de Ensaios: **{serie_input}**")
         resultados = []
         for _, ensaio_row in df_completo.iterrows():
             colunas_serie = [c for c in ensaio_row.index if "_Série" in str(c)]
@@ -643,117 +635,82 @@ def pagina_visao_diaria(df_completo):
                 for m in medidores:
                     if termo_busca in m['serie'].lower():
                         resultados.append({"data": ensaio_row['Data'], "bancada": ensaio_row['Bancada_Nome'], "dados": m})
-        
         if resultados:
-            st.success(f"{len(resultados)} registro(s) encontrado(s).")
             for res in sorted(resultados, key=lambda x: datetime.strptime(x['data'], '%d/%m/%y'), reverse=True):
                 with st.expander(f"{res['data']} | {res['bancada']} | {res['dados']['status']}"):
                     renderizar_card(res['dados'])
-        else:
-            st.warning("Nenhum registro encontrado.")
         return
 
     # =====================================================
-    # FILTROS DO DIA (Original Mantido)
+    # FILTROS E PROCESSAMENTO
     # =====================================================
-    if "filtro_data" not in st.session_state:
-        st.session_state.filtro_data = (datetime.now() - pd.Timedelta(hours=3)).date()
-    if "filtro_bancada" not in st.session_state:
-        st.session_state.filtro_bancada = "Todas"
-    if "filtro_status" not in st.session_state:
-        st.session_state.filtro_status = []
-    if "filtro_irregularidade" not in st.session_state:
-        st.session_state.filtro_irregularidade = []
-
+    if "filtro_data" not in st.session_state: st.session_state.filtro_data = (datetime.now() - pd.Timedelta(hours=3)).date()
+    if "filtro_bancada" not in st.session_state: st.session_state.filtro_bancada = "Todas"
+    if "filtro_status" not in st.session_state: st.session_state.filtro_status = []
+    
     st.session_state.filtro_data = st.sidebar.date_input("Data do Ensaio", value=st.session_state.filtro_data, format="DD/MM/YYYY")
     bancadas = df_completo['Bancada_Nome'].unique().tolist()
     st.session_state.filtro_bancada = st.sidebar.selectbox("Bancada", ['Todas'] + bancadas)
-    status_options = ["APROVADO", "REPROVADO", "CONTRA O CONSUMIDOR", "Não Ligou / Não Ensaido"]
-    st.session_state.filtro_status = st.sidebar.multiselect("Filtrar Status", status_options, default=st.session_state.filtro_status)
 
-    if "REPROVADO" in st.session_state.filtro_status:
-        st.session_state.filtro_irregularidade = st.sidebar.multiselect("Filtrar Irregularidade", ["Exatidão", "Registrador", "Mostrador/MV"], default=st.session_state.filtro_irregularidade)
-    else:
-        st.session_state.filtro_irregularidade = []
-
-    # =====================================================
-    # PROCESSAMENTO DE DADOS (Unificado para evitar erros)
-    # =====================================================
     df_filtrado = df_completo[df_completo['Data_dt'].dt.date == st.session_state.filtro_data]
     if st.session_state.filtro_bancada != "Todas":
         df_filtrado = df_filtrado[df_filtrado['Bancada_Nome'] == st.session_state.filtro_bancada]
 
     if df_filtrado.empty:
-        st.info("Nenhum ensaio encontrado para esta data/bancada.")
+        st.info("Nenhum ensaio encontrado.")
         return
 
     ensaios = []
     for _, row in df_filtrado.iterrows():
         medidores = processar_ensaio(row)
-        medidores_filtrados = []
-        for m in medidores:
-            status_ok = not st.session_state.filtro_status or m['status'] in st.session_state.filtro_status
-            irr_ok = not st.session_state.filtro_irregularidade or any(i in m['motivo'] for i in st.session_state.filtro_irregularidade)
-            if status_ok and irr_ok:
-                medidores_filtrados.append(m)
-        if medidores_filtrados:
-            ensaios.append({"n_ensaio": row.get("N_ENSAIO", "N/A"), "bancada": row["Bancada_Nome"], "temperatura": row.get("Temperatura", "--"), "medidores": medidores_filtrados})
-
-    if not ensaios:
-        st.info("Nenhum medidor corresponde aos filtros.")
-        return
+        ensaios.append({"n_ensaio": row.get("N_ENSAIO", "N/A"), "bancada": row["Bancada_Nome"], "temperatura": row.get("Temperatura", "--"), "medidores": medidores})
 
     todos_os_medidores = [m for e in ensaios for m in e["medidores"]]
     stats = calcular_estatisticas(todos_os_medidores)
 
     # =====================================================
-    # 🎯 NOVA ESTRUTURA DE INDICADORES (LIMPA E UNIFICADA)
+    # 🎯 AQUI ESTÁ A MUDANÇA: APENAS UMA ESTRUTURA DE CARDS
     # =====================================================
-    st.markdown("### 📊 Resumo da Auditoria")
+    st.subheader(f"📊 Consolidado Técnica - {st.session_state.filtro_data.strftime('%d/%m/%Y')}")
     
-    # Linha principal de métricas
-    c1, g1, c2, c3, c4, c5 = st.columns([1, 0.1, 1, 1, 1, 1])
-    
+    c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
-        st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#1e293b"><span class="val-mensal">{stats["total"]}</span><span class="lab-mensal">Ensaiados</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card-clean" style="border-color:#1e293b"><span class="val-clean">{stats["total"]}</span><span class="lab-clean">Ensaiados</span></div>', unsafe_allow_html=True)
     with c2:
-        st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#16a34a"><span class="val-mensal">{stats["aprovados"]}</span><span class="lab-mensal">Aprovados</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card-clean" style="border-color:#16a34a"><span class="val-clean">{stats["aprovados"]}</span><span class="lab-clean">Aprovados</span></div>', unsafe_allow_html=True)
     with c3:
-        st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#dc2626"><span class="val-mensal">{stats["reprovados"]}</span><span class="lab-mensal">Reprovados</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card-clean" style="border-color:#dc2626"><span class="val-clean">{stats["reprovados"]}</span><span class="lab-clean">Reprovados</span></div>', unsafe_allow_html=True)
     with c4:
-        st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#7c3aed"><span class="val-mensal">{stats["contra_consumidor"]}</span><span class="lab-mensal">Contra Cons.</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card-clean" style="border-color:#7c3aed"><span class="val-clean">{stats["contra_consumidor"]}</span><span class="lab-clean">Contra Cons.</span></div>', unsafe_allow_html=True)
     with c5:
-        cor_idx = "#16a34a" if stats["taxa_aprovacao"] >= 90 else "#ea580c"
-        st.markdown(f'<div class="metric-card-mensal" style="border-top-color:{cor_idx}"><span class="val-mensal">{stats["taxa_aprovacao"]:.1f}%</span><span class="lab-mensal">Qualidade</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card-clean" style="border-color:#16a34a"><span class="val-clean">{stats["taxa_aprovacao"]:.1f}%</span><span class="lab-clean">Aprovação</span></div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Sub-detalhamento técnico (Informativo)
-    d1, d2, d3 = st.columns(3)
-    with d1:
-        st.info(f"📍 **Falhas de Exatidão:** {stats['motivos'].get('Exatidão', 0)}")
-    with d2:
-        st.warning(f"📍 **Falhas de Registrador:** {stats['motivos'].get('Registrador', 0)}")
-    with d3:
-        st.error(f"📍 **Falhas de Mostrador/MV:** {stats['motivos'].get('Mostrador/MV', 0)}")
+    # Segunda linha apenas com informações técnicas de erro
+    d1, d2, d3, d4 = st.columns(4)
+    d1.info(f"📍 Exatidão: **{stats['motivos'].get('Exatidão', 0)}**")
+    d2.warning(f"📍 Registrador: **{stats['motivos'].get('Registrador', 0)}**")
+    d3.error(f"📍 Mostrador/MV: **{stats['motivos'].get('Mostrador/MV', 0)}**")
+    d4.success(f"✅ Realizado: **{len(ensaios)} Ensaios**")
 
     st.markdown("---")
 
     # =====================================================
-    # GRÁFICOS E EXPORTAÇÃO (Mantido Original)
+    # GRÁFICOS E EXPORTAÇÃO
     # =====================================================
     col_g, col_e = st.columns([3, 1])
     with col_g:
         renderizar_grafico_reprovacoes(todos_os_medidores)
     with col_e:
-        st.write("📂 **Exportação**")
+        st.write("📂 **Exportar**")
         pdf = gerar_pdf_relatorio(ensaios=ensaios, data=st.session_state.filtro_data.strftime('%d/%m/%Y'), stats=stats)
-        if pdf: st.download_button("📥 Baixar PDF", pdf, file_name=f"relatorio_{st.session_state.filtro_data}.pdf", use_container_width=True)
+        if pdf: st.download_button("📥 PDF", pdf, file_name=f"relatorio.pdf", use_container_width=True)
         excel = to_excel(pd.DataFrame(todos_os_medidores))
-        st.download_button("📥 Baixar Excel", excel, file_name=f"dados_{st.session_state.filtro_data}.xlsx", use_container_width=True)
+        st.download_button("📥 Excel", excel, file_name=f"dados.xlsx", use_container_width=True)
 
     # =====================================================
-    # DETALHES DOS ENSAIOS (Não mexer daqui para baixo)
+    # DETALHES DOS ENSAIOS (Parte que você não quer mexer)
     # =====================================================
     st.subheader("📋 Detalhes dos Ensaios")
     for ensaio in ensaios:
