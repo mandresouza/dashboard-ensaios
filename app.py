@@ -27,13 +27,14 @@ st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
 # =======================================================================
-# [BLOCO ISOLADO] - METROLOGIA AVANÇADA (VERSÃO INTEGRAL IPEM/INMETRO)
+# [BLOCO ISOLADO] - METROLOGIA AVANÇADA (VERSÃO INTEGRAL RESTAURADA)
 # =======================================================================
 
 import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
 import numpy as np
+import re
 from datetime import datetime
 
 # --- CONSTANTES EXCLUSIVAS DO BLOCO DE METROLOGIA ---
@@ -83,7 +84,13 @@ def processar_metrologia_isolada(row, df_mestra=None):
     tamanho_bancada = 20 if '20_POS' in bancada_row else 10
     
     classe = str(row.get("Classe", "")).upper()
-    limite = 4.0 if "ELETROMEC" in (classe or 'B') else 1.3 
+    if "ELETROMEC" in classe:
+        limite = 4.0 if ("2" in classe or "4" in classe) else 2.0
+    else:
+        # Lógica de classe A, B, C, D conforme RTM
+        classe_limpa = re.search(r'[A-D]', classe)
+        classe_letra = classe_limpa.group(0) if classe_limpa else 'B'
+        limite = LIMITES_CLASSE.get(classe_letra, 1.3)
     
     def texto(val): return str(val) if val is not None else ""
 
@@ -114,7 +121,7 @@ def processar_metrologia_isolada(row, df_mestra=None):
                         alertas_gb.append(n)
             
             if erros_p:
-                status, detalhe = "REPROVADO", f"⚠️ Erro: {', '.join(erros_p)}"
+                status, detalhe = "REPROVADO", f"⚠️ Excedeu {limite}% em: {', '.join(erros_p)}"
             elif alertas_gb:
                 status, detalhe = "ZONA CRÍTICA", f"⚠️ Guardband: {', '.join(alertas_gb)}"
         
@@ -174,31 +181,26 @@ def pagina_metrologia_avancada(df_completo):
             
             fig.update_layout(title=f"Estabilidade: {b_sel} - Posição {p_sel}", xaxis_title="Data", yaxis_title="Erro Médio (%)")
             st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Sem ensaios para esta posição no mês.")
 
     with tabs[1]:
-        st.markdown("#### 🚩 Medidores em Zona Crítica (Risco de Incerteza)")
+        st.markdown("#### 🚩 Medidores em Zona Crítica (Guardband)")
         df_gb = df_met[df_met['status'] == 'ZONA CRÍTICA']
         if not df_gb.empty:
-            st.warning(f"Foram detectados {len(df_gb)} medidores que operam no limite da incerteza expandida.")
+            st.warning(f"Detectados {len(df_gb)} medidores operando no limite da incerteza.")
             st.dataframe(df_gb[['Data', 'n_ensaio', 'Bancada', 'pos', 'serie', 'cn', 'cp', 'ci', 'detalhe']], use_container_width=True, hide_index=True)
         else:
-            st.success("Operação nominal: Nenhum medidor detectado na zona de risco Guardband.")
+            st.success("Operação nominal: Nenhum medidor na zona de risco.")
 
     with tabs[2]:
         st.markdown("#### ⚖️ Cruzamento Dinâmico de Erros (CN, CP, CI)")
-        
-        # Seleção dinâmica de eixos para fiscalização
-        tipo_grafico = st.radio("Selecione o Cruzamento de Cargas para Análise:", 
+        tipo_grafico = st.radio("Selecione o Cruzamento de Cargas:", 
                                 ["CN vs CP (Comportamento Linear)", "CN vs CI (Comportamento Indutivo)"], horizontal=True)
         
         eixo_y_label = 'cp' if "CP" in tipo_grafico else 'ci'
-        
         df_disp = df_met.dropna(subset=['cn', eixo_y_label]).copy()
 
         if not df_disp.empty:
-            # Jittering para visualização profissional
+            # Jittering profissional para evitar sobreposição
             df_disp['cn_j'] = df_disp['cn'] + np.random.uniform(-0.02, 0.02, len(df_disp))
             df_disp[f'{eixo_y_label}_j'] = df_disp[eixo_y_label] + np.random.uniform(-0.02, 0.02, len(df_disp))
 
@@ -211,23 +213,28 @@ def pagina_metrologia_avancada(df_completo):
                 opacity=0.7
             )
             
-            # Moldura RTM
+            # --- CONFIGURAÇÃO DE LARGURA E MOLDURA RTM RESTAURADA ---
             fig_scat.add_shape(type="rect", x0=-2, y0=-2, x1=2, y1=2, line=dict(color="Red", dash="dash", width=2))
+            
             fig_scat.update_xaxes(range=[-4.5, 4.5], zeroline=True, zerolinecolor='black', gridcolor='lightgray')
             fig_scat.update_yaxes(range=[-4.5, 4.5], zeroline=True, zerolinecolor='black', gridcolor='lightgray')
+            
+            fig_scat.update_layout(
+                height=750, 
+                template="plotly_white",
+                margin=dict(l=10, r=10, t=30, b=10),
+                autosize=True
+            )
             
             st.plotly_chart(fig_scat, use_container_width=True)
             
             st.markdown("##### 📝 Resumo Estatístico de Precisão (IPEM)")
-            # Agregando médias e desvios para as 3 cargas
             stats_final = df_disp.groupby('Bancada').agg({
                 'cn': ['mean', 'std'],
                 'cp': ['mean', 'std'],
                 'ci': ['mean', 'std']
             }).round(4)
             st.dataframe(stats_final, use_container_width=True)
-        else:
-            st.warning("Dados insuficientes para gerar a dispersão.")
 
 # =======================================================================
 # [FIM DO BLOCO ISOLADO]
