@@ -805,11 +805,11 @@ def pagina_visao_mensal(df_completo):
         </style> 
     ''', unsafe_allow_html=True)
 
-    # --- CABEÇALHO ---
+    # --- CABEÇALHO ATUALIZADO (TEXTO PROFISSIONAL IPEM-AM) ---
     st.markdown('''
         <div class="header-mensal">
-            <p class="titulo-mensal">Relatório Gerencial Mensal</p>
-            <p style="color: #64748b; font-size: 14px; text-transform: uppercase;">Performance e Auditoria de Conformidade Técnica</p>
+            <p class="titulo-mensal">Sistema de Gestão de Ensaios e Auditoria</p>
+            <p style="color: #64748b; font-size: 14px; text-transform: uppercase; font-weight: 600;">Laboratório de Ensaios de Medidores de Energia Elétrica - IPEM-AM</p>
         </div>
     ''', unsafe_allow_html=True)
 
