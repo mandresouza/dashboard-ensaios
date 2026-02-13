@@ -27,7 +27,7 @@ st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
 # =======================================================================
-# [BLOCO ISOLADO] - METROLOGIA AVANÇADA (VERSÃO FINAL - GRÁFICO AMPLIADO)
+# [BLOCO ISOLADO] - METROLOGIA AVANÇADA (VERSÃO FINAL - LARGURA MÁXIMA)
 # =======================================================================
 
 # --- CONSTANTES EXCLUSIVAS DO BLOCO DE METROLOGIA ---
@@ -187,6 +187,7 @@ def pagina_metrologia_avancada(df_completo):
         
         df_disp = df_met.dropna(subset=['cn', eixo_y]).copy()
         if not df_disp.empty:
+            # Jittering para visualização pericial
             df_disp['cn_j'] = df_disp['cn'] + np.random.uniform(-0.015, 0.015, len(df_disp))
             df_disp[f'{eixo_y}_j'] = df_disp[eixo_y] + np.random.uniform(-0.015, 0.015, len(df_disp))
 
@@ -206,9 +207,15 @@ def pagina_metrologia_avancada(df_completo):
             fig_scat.update_xaxes(zeroline=True, zerolinecolor='black', zerolinewidth=1, gridcolor='lightgray', range=[-5, 5])
             fig_scat.update_yaxes(zeroline=True, zerolinecolor='black', zerolinewidth=1, gridcolor='lightgray', range=[-5, 5])
             
-            # ALTURA AMPLIADA PARA 900
-            fig_scat.update_layout(height=900, template="plotly_dark")
-            st.plotly_chart(fig_scat, use_container_width=True)
+            # AJUSTE DE LARGURA TOTAL E ALTURA
+            fig_scat.update_layout(
+                height=900, 
+                autosize=True,
+                margin=dict(l=10, r=10, t=40, b=10), # Margens mínimas para ganhar espaço lateral
+                template="plotly_dark"
+            )
+            
+            st.plotly_chart(fig_scat, use_container_width=True) # Ocupa 100% da largura da tela
             
             st.markdown("##### 📝 Resumo de Precisão por Bancada")
             st.dataframe(df_disp.groupby('Bancada').agg({'cn': ['mean', 'std'], eixo_y: ['mean', 'std']}).round(4), use_container_width=True)
