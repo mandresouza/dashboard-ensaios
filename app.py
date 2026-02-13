@@ -261,7 +261,7 @@ def to_excel(df):
     return processed_data
 
 # =======================================================================
-# [BLOCO 04] - PROCESSAMENTO TÉCNICO (VERSÃO ULTRA-BLINDADA)
+# [BLOCO 04] - PROCESSAMENTO TÉCNICO (VERSÃO "SEM ERRO" - FOCO NO 0, 0.01 e 1.0)
 # =======================================================================
 
 def valor_num(valor):
@@ -301,7 +301,6 @@ def processar_ensaio(row, classe_banc20=None):
         v_reg_ini, v_reg_fim = valor_num(r_ini), valor_num(r_fim)
         mv_str = str(texto(mv)).strip().upper()
 
-        # 1. TRATAMENTO DE NÃO ENSAIADOS
         if v_cn is None and v_cp is None and v_ci is None and v_reg_ini is None:
             medidores.append({
                 "pos": pos, "serie": serie, "cn": "-", "cp": "-", "ci": "-", "mv": "-",
@@ -314,46 +313,39 @@ def processar_ensaio(row, classe_banc20=None):
         erros_list = []
         erros_pontuais = []
         
-        # 2. VALIDAÇÃO DE EXATIDÃO
+        # 1. VALIDAÇÃO DE EXATIDÃO
         if v_cn is not None and abs(v_cn) > limite_exat: erros_pontuais.append('CN'); erros_list.append("Exatidão")
         if v_cp is not None and abs(v_cp) > limite_exat: erros_pontuais.append('CP'); erros_list.append("Exatidão")
         if v_ci is not None and abs(v_ci) > limite_exat: erros_pontuais.append('CI'); erros_list.append("Exatidão")
 
-        # 3. VALIDAÇÃO DE MOSTRADOR (MV)
+        # 2. VALIDAÇÃO DE MOSTRADOR (MV)
         mv_reprovado = False
         if (bancada == 'BANC_10_POS' and mv_str != "+") or (bancada != 'BANC_10_POS' and mv_str != "OK"):
             mv_reprovado = True; erros_list.append("Mostrador/MV")
 
-        # 4. VALIDAÇÃO DO REGISTRADOR (LÓGICA DE PROXIMIDADE)
+        # 3. VALIDAÇÃO DO REGISTRADOR (LÓGICA SUPER SIMPLIFICADA)
         reg_diff_display = "-"
         incremento_maior = False
         
         if v_reg_ini is not None and v_reg_fim is not None:
-            diff = v_reg_fim - v_reg_ini
+            diff = round(v_reg_fim - v_reg_ini, 2)
             
-            # --- SE ESTIVER PERTO DE 0 OU 0.01 (TOLERÂNCIA DE 0.05) ---
-            if abs(diff - 0.0) < 0.05 or abs(diff - 0.01) < 0.05:
-                reg_diff_display = 0.01 # Normaliza para 0.01
-                # APROVADO - NÃO ADICIONA ERRO
-                
-            # --- SE ESTIVER PERTO DE 1.0 (TOLERÂNCIA DE 0.05) ---
-            elif abs(diff - 1.0) < 0.05:
-                reg_diff_display = 1.0
-                # APROVADO - NÃO ADICIONA ERRO
-            
-            # --- QUALQUER OUTRA COISA É ERRO ---
+            # Se for 0, 0.01 ou 1.0 -> É APROVADO (NÃO ADICIONA ERRO)
+            if diff in [0.0, 0.01, 1.0]:
+                reg_diff_display = 0.01 if diff <= 0.01 else 1.0
             else:
+                # Se for o tal do 3001 ou qualquer outro valor fora do padrão, aí sim reprova
                 if diff > 5.0:
                     reg_diff_display = "ERRO"
                 else:
-                    reg_diff_display = round(diff, 4)
+                    reg_diff_display = diff
                 
                 erros_list.append("Registrador")
-                if diff > 1.05: incremento_maior = True
+                if diff > 1.0: incremento_maior = True
         else:
             erros_list.append("Registrador")
 
-        # 5. LÓGICA FINAL
+        # 4. LÓGICA FINAL
         erro_exat = any(v is not None and abs(v) > limite_exat for v in [v_cn, v_cp, v_ci])
         
         if (erro_exat and incremento_maior) or (erro_exat and mv_reprovado):
