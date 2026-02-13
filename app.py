@@ -27,7 +27,7 @@ st.set_page_config(page_title="Dashboard de Ensaios", page_icon="📊", layout="
 LIMITES_CLASSE = {"A": 1.0, "B": 1.3, "C": 2.0, "D": 0.3}
 
 # =======================================================================
-# [BLOCO INTEGRAL] - METROLOGIA AVANÇADA + LAUDO TÉCNICO IPEM/INMETRO
+# [BLOCO INTEGRAL] - METROLOGIA AVANÇADA + DISPERSÃO + LAUDO TÉCNICO
 # =======================================================================
 
 import plotly.graph_objects as go
@@ -133,12 +133,11 @@ def processar_metrologia_isolada(row, df_mestra=None):
 
 class PDF_LAUDO(FPDF):
     def header(self):
-        # Moldura decorativa lateral
-        self.set_fill_color(0, 51, 102) # Azul Marinho IPEM
+        self.set_fill_color(0, 51, 102)
         self.rect(0, 0, 8, 297, 'F')
         self.set_font('Arial', 'B', 14)
         self.set_text_color(0, 51, 102)
-        self.cell(10) # Offset da moldura
+        self.cell(10)
         self.cell(180, 10, 'LABORATORIO DE ENSAIOS E METROLOGIA LEGAL', 0, 1, 'L')
         self.set_font('Arial', '', 10)
         self.cell(10)
@@ -154,34 +153,24 @@ class PDF_LAUDO(FPDF):
 def gerar_pdf_profissional(df_resumo, mes_txt):
     pdf = PDF_LAUDO()
     pdf.add_page()
-    
-    # Titulo do Relatorio
     pdf.set_font('Arial', 'B', 16)
     pdf.set_text_color(0)
     pdf.cell(10)
     pdf.cell(180, 10, f'RELATORIO MENSAL DE ESTABILIDADE: {mes_txt.upper()}', 0, 1, 'C')
     pdf.ln(5)
-
-    # Contexto Metrologico
     pdf.set_font('Arial', '', 10)
     pdf.cell(10)
-    intro = "Este documento apresenta os resultados estatisticos do monitoramento das bancadas de ensaio, " \
-            "analisando erros sistematicos e repetibilidade em cargas Nominais, Lineares e Indutivas."
+    intro = "Este documento apresenta os resultados estatisticos do monitoramento das bancadas de ensaio, analisando erros sistematicos e repetibilidade."
     pdf.multi_cell(180, 5, intro)
     pdf.ln(8)
-
-    # Tabela de Resultados
     pdf.set_font('Arial', 'B', 10)
     pdf.set_fill_color(240, 240, 240)
     pdf.cell(10)
-    # Header da Tabela
     col_w = [55, 30, 30, 30, 35]
     headers = ['Bancada', 'Erro Med.(%)', 'Desvio Pad.', 'Max. Erro', 'Status']
     for i, h in enumerate(headers):
         pdf.cell(col_w[i], 10, h, 1, 0, 'C', 1)
     pdf.ln()
-
-    # Linhas da Tabela
     pdf.set_font('Arial', '', 9)
     for banc, row in df_resumo.iterrows():
         pdf.cell(10)
@@ -189,25 +178,19 @@ def gerar_pdf_profissional(df_resumo, mes_txt):
         pdf.cell(col_w[1], 8, f"{row['cn']:.4f}", 1, 0, 'C')
         pdf.cell(col_w[2], 8, f"{row['cn_std']:.4f}", 1, 0, 'C')
         pdf.cell(col_w[3], 8, f"{abs(row['cn'])+row['cn_std']:.4f}", 1, 0, 'C')
-        
         status_txt = "CONFORME" if row['cn_std'] < 0.2 else "ANALISAR"
         pdf.cell(col_w[4], 8, status_txt, 1, 1, 'C')
-
-    # Campo de Assinatura
     pdf.ln(20)
     pdf.cell(10)
     pdf.line(60, pdf.get_y(), 150, pdf.get_y())
     pdf.ln(2)
     pdf.cell(190, 5, 'Departamento de Metrologia Legal - Responsavel Tecnico', 0, 1, 'C')
-    
-    # Retorno binario
     pdf_bytes = pdf.output(dest='S')
     return bytes(pdf_bytes) if not isinstance(pdf_bytes, str) else pdf_bytes.encode('latin-1')
 
 def pagina_metrologia_avancada(df_completo):
     st.markdown("<style>.main > div { max-width: 100% !important; }</style>", unsafe_allow_html=True)
     st.markdown("## 🔬 Metrologia Avançada e Estabilidade")
-    
     df_mestra = carregar_tabela_mestra_sheets()
     meses_n = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
     col_filt1, col_filt2 = st.sidebar.columns(2)
@@ -253,7 +236,6 @@ def pagina_metrologia_avancada(df_completo):
         if not df_disp.empty:
             df_disp['cn_j'] = df_disp['cn'] + np.random.uniform(-0.02, 0.02, len(df_disp))
             df_disp[f'{eixo_y}_j'] = df_disp[eixo_y] + np.random.uniform(-0.02, 0.02, len(df_disp))
-
             fig_scat = px.scatter(
                 df_disp, x='cn_j', y=f'{eixo_y}_j', color='status',
                 hover_name='serie',
@@ -267,22 +249,21 @@ def pagina_metrologia_avancada(df_completo):
             fig_scat.update_layout(height=550, template="plotly_white", margin=dict(l=0, r=0, t=20, b=40), autosize=True)
             st.plotly_chart(fig_scat, use_container_width=True)
             
+            # --- TABELA DE DISPERSÃO REINSERIDA AQUI ---
+            st.markdown("##### 📝 Resumo Estatístico de Precisão (IPEM)")
             df_resumo = df_disp.groupby('Bancada').agg({'cn': ['mean', 'std'], 'cp': ['mean', 'std'], 'ci': ['mean', 'std']})
             df_resumo.columns = ['cn', 'cn_std', 'cp', 'cp_std', 'ci', 'ci_std']
+            st.dataframe(df_resumo.round(4), use_container_width=True)
             
-            # BLOCO DE EXPORTAÇÃO PROFISSIONAL
+            # --- SEÇÃO DO PDF NO FINAL ---
             st.markdown("---")
             c_pdf1, c_pdf2 = st.columns([3, 1])
             with c_pdf1:
                 st.write("### 📜 Exportação de Relatório Técnico")
-                st.write("Gere o laudo de conformidade metrológica com padrão IPEM/INMETRO.")
             with c_pdf2:
                 try:
                     pdf_final = gerar_pdf_profissional(df_resumo, f"{meses_n[mes_sel-1]} / {ano_sel}")
-                    st.download_button(label="📄 Gerar Laudo PDF", 
-                                       data=pdf_final, 
-                                       file_name=f"Laudo_Metrologia_IPEM_{mes_sel}.pdf", 
-                                       mime="application/pdf")
+                    st.download_button(label="📄 Gerar Laudo PDF", data=pdf_final, file_name=f"Laudo_IPEM_{mes_sel}.pdf", mime="application/pdf")
                 except Exception as e:
                     st.error(f"Erro: {e}")
 
