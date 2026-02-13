@@ -746,11 +746,11 @@ def pagina_visao_diaria(df_completo):
                     renderizar_card(m)
 
 # =========================================================
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL (COMPLETO E RESTAURADO)
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL (CORREÇÃO DE GRÁFICOS)
 # =========================================================
 
 def get_stats_por_dia(df_mes):
-    """Gera o dataframe consolidado de estatísticas diárias para os gráficos."""
+    """Gera o dataframe consolidado de estatísticas diárias."""
     daily_stats = []
     for data, group in df_mes.groupby('Data_dt'):
         medidores = []
@@ -760,7 +760,6 @@ def get_stats_por_dia(df_mes):
         aprovados = sum(1 for m in medidores if m['status'] == 'APROVADO')
         reprovados = sum(1 for m in medidores if m['status'] == 'REPROVADO')
         
-        # REGRA DE OURO NA CONTAGEM DIÁRIA
         consumidor = 0
         for m in medidores:
             if m['status'] == 'CONTRA O CONSUMIDOR':
@@ -783,7 +782,7 @@ def get_stats_por_dia(df_mes):
     return pd.DataFrame(daily_stats)
 
 def extrair_valor_reg(dicionario_medidor, tipo):
-    """Varredura total para encontrar as chaves de Registrador."""
+    """Busca cirúrgica nas chaves do dicionário para capturar Registrador."""
     for k, v in dicionario_medidor.items():
         key_upper = str(k).upper()
         if tipo == 'inic':
@@ -842,9 +841,7 @@ def pagina_visao_mensal(df_completo):
     df_mes = df_completo[(df_completo['Ano'] == ano_sel) & (df_completo['Mes'] == mes_sel)]
     if df_mes.empty: return
 
-    # =====================================================
-    # PROCESSAMENTO E ALINHAMENTO DE DADOS
-    # =====================================================
+    # --- PROCESSAMENTO DE DADOS ---
     lista_consumidor_fidedigna = []
     for _, row in df_mes.iterrows():
         medidores_da_linha = processar_ensaio(row)
@@ -863,7 +860,7 @@ def pagina_visao_mensal(df_completo):
     total_c_consumidor = len(lista_consumidor_fidedigna)
     dados_auditoria = calcular_auditoria_real(df_mes)
     
-    # --- EXIBIÇÃO DOS CARDS ---
+    # --- CARDS ---
     st.markdown("### 📊 Indicadores de Performance Mensal")
     a1, a2, a3, a4, a5 = st.columns(5)
     with a1: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#1e293b"><span class="val-mensal">{dados_auditoria["total_ensaiadas"]}</span><span class="lab-mensal">Ensaios Reais</span></div>', unsafe_allow_html=True)
@@ -872,9 +869,7 @@ def pagina_visao_mensal(df_completo):
     with a4: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#7c3aed"><span class="val-mensal">{total_c_consumidor}</span><span class="lab-mensal">C. Consumidor</span></div>', unsafe_allow_html=True)
     with a5: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#16a34a"><span class="val-mensal">{dados_auditoria["taxa_aprovacao"]:.2f}%</span><span class="lab-mensal">Eficiência</span></div>', unsafe_allow_html=True)
 
-    # =====================================================
-    # TABELA TÉCNICA (DETALHAMENTO CONTRA CONSUMIDOR)
-    # =====================================================
+    # --- TABELA TÉCNICA ---
     if total_c_consumidor > 0:
         with st.expander(f"🚨 DETALHAMENTO TÉCNICO: {total_c_consumidor} ITENS CONFIRMADOS", expanded=False):
             dados_tabela = []
@@ -884,9 +879,7 @@ def pagina_visao_mensal(df_completo):
                     "Bancada": m.get('bancada_ensaio', 'N/A'), 
                     "Pos": m.get('pos', '-'),
                     "Série": m.get('serie', 'N/A'),
-                    "Erro CN": m.get('cn', '-'), 
-                    "Erro CP": m.get('cp', '-'), 
-                    "Erro CI": m.get('ci', '-'),
+                    "Erro CN": m.get('cn', '-'), "Erro CP": m.get('cp', '-'), "Erro CI": m.get('ci', '-'),
                     "M.V": m.get('mv', '-'), 
                     "Reg Inic": extrair_valor_reg(m, 'inic'), 
                     "Reg Fim": extrair_valor_reg(m, 'fim'),
@@ -902,9 +895,7 @@ def pagina_visao_mensal(df_completo):
     m3.error(f"📺 Mostrador/MV: **{dados_auditoria['reprov_mv']}**")
     m4.success(f"📋 Posições Totais: **{dados_auditoria['total_posicoes']}**")
 
-    # =====================================================
-    # GRÁFICOS RESTAURADOS COM TOTAL NO TOPO
-    # =====================================================
+    # --- GRÁFICOS RESTAURADOS ---
     df_daily = get_stats_por_dia(df_mes)
     st.markdown("---")
     col_g1, col_g2 = st.columns([1, 1.5])
@@ -921,73 +912,55 @@ def pagina_visao_mensal(df_completo):
         st.markdown("##### Evolução Mensal")
         fig_bar = go.Figure()
         
-        # Adiciona as barras empilhadas
         for col, color in zip(['Aprovados','Reprovados','Contra Consumidor'], ['#16a34a','#dc2626','#7c3aed']):
             if col in df_daily.columns:
                 fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily[col], name=col, marker_color=color))
         
-        # Adiciona o TOTAL no topo de cada barra
+        # CORREÇÃO DO ERRO AQUI: fontfamily -> family
         fig_bar.add_trace(go.Scatter(
             x=df_daily['Data'], 
             y=df_daily['Total'], 
-            text=df_daily['Total'], 
+            text=df_daily['Total'].astype(str), 
             mode='text', 
             textposition='top center', 
             showlegend=False,
-            textfont=dict(size=12, color='black', fontfamily='Arial Black')
+            textfont=dict(size=12, color='black', family='Arial Black')
         ))
         
-        fig_bar.update_layout(
-            barmode='stack', 
-            height=300, 
-            margin=dict(t=30,b=0,l=0,r=0), 
-            legend=dict(orientation="h", y=1.2)
-        )
+        fig_bar.update_layout(barmode='stack', height=300, margin=dict(t=30,b=0,l=0,r=0), legend=dict(orientation="h", y=1.2))
         st.plotly_chart(fig_bar, use_container_width=True)
 
-    # =====================================================
-    # PAINEL DE AUDITORIA COMPLETO
-    # =====================================================
+    # --- PAINEL DE AUDITORIA COMPLETO ---
     st.markdown("---")
     with st.expander("🔍 PAINEL DE AUDITORIA COMPLETO", expanded=False):
         datas_disponiveis = df_daily['Data'].dt.strftime('%d/%m/%Y').unique()
-        dia_auditoria_str = st.selectbox("Selecione o dia para conferência detalhada:", datas_disponiveis, key="sel_audit_mensal_final_v10")
+        dia_auditoria_str = st.selectbox("Selecione o dia para conferência detalhada:", datas_disponiveis, key="sel_audit_mensal_final_vCorrect")
         
         if dia_auditoria_str:
             data_f = pd.to_datetime(dia_auditoria_str, format='%d/%m/%Y')
-            df_dia_f = df_mes[df_mes['Data_dt'] == data_f]
             meds_aud = []
-            for _, r in df_dia_f.iterrows(): 
+            for _, r in df_mes[df_mes['Data_dt'] == data_f].iterrows(): 
                 meds_aud.extend(processar_ensaio(r))
             
             if meds_aud:
-                df_final_data = []
-                for m in meds_aud:
-                    df_final_data.append({ 
-                        "Pos": m.get('pos', '-'), 
-                        "Série": m.get('serie', '-'), 
-                        "Status": m.get('status', '-'), 
-                        "CN": m.get('cn', '-'), 
-                        "CP": m.get('cp', '-'), 
-                        "CI": m.get('ci', '-'), 
-                        "MV": m.get('mv', '-'), 
-                        "Reg Inic": extrair_valor_reg(m, 'inic'), 
-                        "Reg Fim": extrair_valor_reg(m, 'fim'), 
-                        "Reg %": extrair_valor_reg(m, 'erro'), 
-                        "Motivo": m.get('motivo', '-') 
-                    })
-                
-                df_final = pd.DataFrame(df_final_data)
+                df_f = pd.DataFrame([{ 
+                    "Pos": m.get('pos', '-'), "Série": m.get('serie', '-'), "Status": m.get('status', '-'), 
+                    "CN": m.get('cn', '-'), "CP": m.get('cp', '-'), "CI": m.get('ci', '-'), 
+                    "MV": m.get('mv', '-'), 
+                    "Reg Inic": extrair_valor_reg(m, 'inic'), 
+                    "Reg Fim": extrair_valor_reg(m, 'fim'), 
+                    "Reg %": extrair_valor_reg(m, 'erro'), 
+                    "Motivo": m.get('motivo', '-') 
+                } for m in meds_aud])
                 
                 def color_status(val):
                     color = 'transparent'
-                    if val == 'APROVADO': color = '#c6f6d5; color: #22543d'
-                    elif val == 'REPROVADO': color = '#fed7d7; color: #822727'
-                    elif val == 'CONTRA O CONSUMIDOR': color = '#e9d8fd; color: #553c9a'
-                    elif val == 'Não Ligou / Não Ensaido': color = '#edf2f7; color: #2d3748'
-                    return f'background-color: {color}; font-weight: bold'
+                    if val == 'APROVADO': color = '#c6f6d5'
+                    elif val == 'REPROVADO': color = '#fed7d7'
+                    elif val == 'CONTRA O CONSUMIDOR': color = '#e9d8fd'
+                    return f'background-color: {color}'
 
-                st.dataframe(df_final.style.applymap(color_status, subset=['Status']), use_container_width=True, hide_index=True)
+                st.dataframe(df_f.style.applymap(color_status, subset=['Status']), use_container_width=True, hide_index=True)
                 
 # =======================================================================
 # [BLOCO 08] - PÁGINA: ANÁLISE DE POSIÇÕES (HEATMAP DE REPROVAÇÃO)
