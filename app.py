@@ -746,7 +746,7 @@ def pagina_visao_diaria(df_completo):
                     renderizar_card(m)
 
 # =========================================================
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO FINAL COM TOTAIS NO GRÁFICO)
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO COMPLETA E INTEGRADA)
 # =========================================================
 
 def get_stats_por_dia(df_mes):
@@ -774,12 +774,11 @@ def get_stats_por_dia(df_mes):
         
         nao_ensaiados = sum(1 for m in medidores if m['status'] == 'Não Ligou / Não Ensaido')
         total_ensaiados = aprovados + reprovados + consumidor
-        taxa_aprovacao = (aprovados / total_ensaiados * 100) if total_ensaiados > 0 else 0
         
         daily_stats.append({
             'Data': data, 'Aprovados': aprovados, 'Reprovados': reprovados,
             'Contra Consumidor': consumidor, 'Não Ensaidos': nao_ensaiados,
-            'Total': total_ensaiados, 'Taxa de Aprovação (%)': round(taxa_aprovacao, 1)
+            'Total': total_ensaiados
         })
     return pd.DataFrame(daily_stats)
 
@@ -868,7 +867,7 @@ def pagina_visao_mensal(df_completo):
     m4.success(f"📋 Posições Totais: **{dados_auditoria['total_posicoes']}**")
 
     # =====================================================
-    # GRÁFICOS (COM TOTAL EM CIMA DAS BARRAS)
+    # GRÁFICOS
     # =====================================================
     df_daily = get_stats_por_dia(df_mes)
     st.markdown("---")
@@ -885,41 +884,40 @@ def pagina_visao_mensal(df_completo):
     with col_g2:
         st.markdown("##### Evolução Mensal")
         fig_bar = go.Figure()
-        
-        # Adiciona as barras empilhadas
         for col, color in zip(['Aprovados','Reprovados','Contra Consumidor'], ['#16a34a','#dc2626','#7c3aed']):
             if col in df_daily.columns:
                 fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily[col], name=col, marker_color=color))
         
-        # ADICIONA O TOTAL EM CIMA DA BARRA (Regra solicitada)
-        fig_bar.add_trace(go.Scatter(
-            x=df_daily['Data'], 
-            y=df_daily['Total'], 
-            text=df_daily['Total'],
-            mode='text',
-            textposition='top center',
-            showlegend=False
-        ))
+        # TOTAL NO TOPO DAS BARRAS
+        fig_bar.add_trace(go.Scatter(x=df_daily['Data'], y=df_daily['Total'], text=df_daily['Total'], mode='text', textposition='top center', showlegend=False))
 
-        fig_bar.update_layout(
-            barmode='stack', 
-            height=250, 
-            margin=dict(t=20,b=0,l=0,r=0), 
-            legend=dict(orientation="h", y=1.2)
-        )
+        fig_bar.update_layout(barmode='stack', height=250, margin=dict(t=20,b=0,l=0,r=0), legend=dict(orientation="h", y=1.2))
         st.plotly_chart(fig_bar, use_container_width=True)
 
-    # PAINEL GERAL
+    # =====================================================
+    # PAINEL DE CONFERÊNCIA GERAL (RECUPERADO)
+    # =====================================================
     st.markdown("---")
     with st.expander("🔍 PAINEL DE AUDITORIA COMPLETO"):
-        dia_auditoria_str = st.selectbox("Selecione o dia:", df_daily['Data'].dt.strftime('%d/%m/%Y'), key="sel_mes_final")
+        # Seletor de data recuperado
+        datas_disponiveis = df_daily['Data'].dt.strftime('%d/%m/%Y').unique()
+        dia_auditoria_str = st.selectbox("Selecione o dia para conferência detalhada:", datas_disponiveis, key="sel_mes_final_v2")
+        
         if dia_auditoria_str:
             data_f = pd.to_datetime(dia_auditoria_str, format='%d/%m/%Y')
             df_dia_f = df_mes[df_mes['Data_dt'] == data_f]
             meds_aud = []
-            for _, r in df_dia_f.iterrows(): meds_aud.extend(processar_ensaio(r))
-            df_final = pd.DataFrame([{ "Pos": m['pos'], "Série": m['serie'], "Status": m['status'], "CN": m['cn'], "CP": m['cp'], "CI": m['ci'], "MV": m['mv'], "Reg": m['reg_erro'], "Motivo": m['motivo'] } for m in meds_aud])
-            st.dataframe(df_final.style.applymap(lambda x: 'background-color: #fed7d7' if x in ['REPROVADO', 'CONTRA O CONSUMIDOR'] else '', subset=['Status']), use_container_width=True, hide_index=True)
+            for _, r in df_dia_f.iterrows(): 
+                meds_aud.extend(processar_ensaio(r))
+            
+            if meds_aud:
+                df_final = pd.DataFrame([{ 
+                    "Pos": m['pos'], "Série": m['serie'], "Status": m['status'], 
+                    "CN": m['cn'], "CP": m['cp'], "CI": m['ci'], 
+                    "MV": m['mv'], "Reg": m['reg_erro'], "Motivo": m['motivo'] 
+                } for m in meds_aud])
+                
+                st.dataframe(df_final.style.applymap(lambda x: 'background-color: #fed7d7' if x in ['REPROVADO', 'CONTRA O CONSUMIDOR'] else '', subset=['Status']), use_container_width=True, hide_index=True)
 
 # =======================================================================
 # [BLOCO 08] - PÁGINA: ANÁLISE DE POSIÇÕES (HEATMAP DE REPROVAÇÃO)
