@@ -581,11 +581,11 @@ def renderizar_botao_scroll_topo():
     st.components.v1.html(scroll_button_html, height=0)
 
 # =========================================================
-# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (RESTAURADO - SEM AUDITORIA)
+# [BLOCO 06] - PÁGINA: VISÃO MENSAL E PERFORMANCE (AJUSTADO)
 # =========================================================
 
-def pagina_visao_diaria(df_completo):
-    # --- BOTÃO VOLTAR AO TOPO (CSS & HTML) ---
+def pagina_visao_mensal(df_completo):
+    # --- BOTÃO VOLTAR AO TOPO (Mantido Original) ---
     st.markdown('''
         <style> 
             .stApp { scroll-behavior: smooth; } 
@@ -601,178 +601,113 @@ def pagina_visao_diaria(df_completo):
         <a href="#top" id="scroll-to-top"><b>^</b></a> 
     ''', unsafe_allow_html=True)
 
-    st.sidebar.header("🔍 Busca e Filtros")
+    st.sidebar.header("📅 Filtro de Período")
 
     # =====================================================
-    # BUSCA POR SÉRIE
+    # SELEÇÃO DE MÊS (Para evitar poluição de dados diários)
     # =====================================================
-    if "search_key" not in st.session_state:
-        st.session_state.search_key = 0
-        
-    serie_input = st.sidebar.text_input(
-        "Pesquisar Número de Série", 
-        value="", 
-        key=f"busca_{st.session_state.search_key}"
-    )
+    df_completo['Mes_Ano'] = df_completo['Data_dt'].dt.strftime('%m/%Y')
+    meses_disponiveis = sorted(df_completo['Mes_Ano'].unique(), reverse=True)
+    mes_selecionado = st.sidebar.selectbox("Selecionar Mês para Auditoria", meses_disponiveis)
+
+    # Filtrando dados do mês selecionado
+    df_mes = df_completo[df_completo['Mes_Ano'] == mes_selecionado]
+
+    # =====================================================
+    # PROCESSAMENTO DE MEDIDORES (Garante que os números batam)
+    # =====================================================
+    todos_medidores_mes = []
+    for _, row in df_mes.iterrows():
+        todos_medidores_mes.extend(processar_ensaio(row))
+
+    if not todos_medidores_mes:
+        st.info(f"Nenhum dado encontrado para {mes_selecionado}")
+        return
+
+    # Cálculos para os Cards
+    total = len(todos_medidores_mes)
+    aprovados = sum(1 for m in todos_medidores_mes if m['status'] == "APROVADO")
+    reprovados = sum(1 for m in todos_medidores_mes if m['status'] == "REPROVADO")
+    consumidor = sum(1 for m in todos_medidores_mes if m['status'] == "CONTRA O CONSUMIDOR")
     
-    termo_busca = serie_input.strip().lower()
-
-    if termo_busca:
-        if st.sidebar.button("🗑️ Limpar Pesquisa"):
-            st.session_state.search_key += 1
-            st.rerun()
-            
-        st.markdown(f"### 🔍 Histórico de Ensaios para a Série: **{serie_input}**")
-        resultados = []
-        
-        for _, ensaio_row in df_completo.iterrows():
-            # Identifica colunas que contêm o número de série dos medidores
-            colunas_serie = [c for c in ensaio_row.index if "_Série" in str(c)]
-            
-            if any(termo_busca in str(ensaio_row[col]).lower() for col in colunas_serie if pd.notna(ensaio_row[col])):
-                medidores = processar_ensaio(ensaio_row)
-                for m in medidores:
-                    if termo_busca in m['serie'].lower():
-                        resultados.append({
-                            "data": ensaio_row['Data'],
-                            "bancada": ensaio_row['Bancada_Nome'],
-                            "dados": m
-                        })
-        
-        if resultados:
-            st.success(f"{len(resultados)} registro(s) encontrado(s).")
-            # Ordena do mais recente para o mais antigo
-            for res in sorted(resultados, key=lambda x: datetime.strptime(x['data'], '%d/%m/%y'), reverse=True):
-                with st.expander(f"{res['data']} | {res['bancada']} | {res['dados']['status']}"):
-                    renderizar_card(res['dados'])
-        else:
-            st.warning("Nenhum registro encontrado.")
-        return
+    # Contagem de Irregularidades Técnicas
+    m_exatidao = sum(1 for m in todos_medidores_mes if "Exatidão" in str(m['motivo']))
+    m_registrador = sum(1 for m in todos_medidores_mes if "Registrador" in str(m['motivo']))
+    m_mostrador = sum(1 for m in todos_medidores_mes if any(x in str(m['motivo']) for x in ["Mostrador", "MV"]))
 
     # =====================================================
-    # FILTROS DO DIA
+    # RENDERIZAÇÃO DOS CARDS (ORGANIZADO E SEM POLUIÇÃO)
     # =====================================================
-    if "filtro_data" not in st.session_state:
-        st.session_state.filtro_data = (datetime.now() - pd.Timedelta(hours=3)).date()
-    if "filtro_bancada" not in st.session_state:
-        st.session_state.filtro_bancada = "Todas"
-    if "filtro_status" not in st.session_state:
-        st.session_state.filtro_status = []
-    if "filtro_irregularidade" not in st.session_state:
-        st.session_state.filtro_irregularidade = []
-
-    st.session_state.filtro_data = st.sidebar.date_input(
-        "Data do Ensaio", 
-        value=st.session_state.filtro_data, 
-        format="DD/MM/YYYY"
-    )
-
-    bancadas = df_completo['Bancada_Nome'].unique().tolist()
-    st.session_state.filtro_bancada = st.sidebar.selectbox(
-        "Bancada", 
-        ['Todas'] + bancadas
-    )
-
-    status_options = ["APROVADO", "REPROVADO", "CONTRA O CONSUMIDOR", "Não Ligou / Não Ensaido"]
-    st.session_state.filtro_status = st.sidebar.multiselect(
-        "Filtrar Status", 
-        status_options, 
-        default=st.session_state.filtro_status
-    )
-
-    if "REPROVADO" in st.session_state.filtro_status:
-        st.session_state.filtro_irregularidade = st.sidebar.multiselect(
-            "Filtrar Irregularidade",
-            ["Exatidão", "Registrador", "Mostrador/MV"],
-            default=st.session_state.filtro_irregularidade
-        )
-    else:
-        st.session_state.filtro_irregularidade = []
-
-    # =====================================================
-    # APLICAÇÃO DOS FILTROS
-    # =====================================================
-    df_filtrado = df_completo[df_completo['Data_dt'].dt.date == st.session_state.filtro_data]
+    st.title(f"📈 Auditoria Mensal - {mes_selecionado}")
     
-    if st.session_state.filtro_bancada != "Todas":
-        df_filtrado = df_filtrado[df_filtrado['Bancada_Nome'] == st.session_state.filtro_bancada]
+    # Linha 1: Principais Indicadores
+    c1, gap, c2, c3, c4 = st.columns([1, 0.2, 1, 1, 1])
+    with c1:
+        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#1e293b;">{total}</div><div class="metric-label">Total Ensaiados</div></div>', unsafe_allow_html=True)
+    with c2:
+        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#16a34a;">{aprovados}</div><div class="metric-label">Aprovados</div></div>', unsafe_allow_html=True)
+    with c3:
+        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#dc2626;">{reprovados + consumidor}</div><div class="metric-label">Reprovados Total</div></div>', unsafe_allow_html=True)
+    with c4:
+        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#7c3aed;">{consumidor}</div><div class="metric-label">Contra Consumidor</div></div>', unsafe_allow_html=True)
 
-    if df_filtrado.empty:
-        st.info("Nenhum ensaio encontrado para esta data/bancada.")
-        return
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Linha 2: Detalhes Técnicos (Resumo Limpo)
+    st.markdown("##### 🔍 Detalhamento Técnico das Irregularidades")
+    d1, d2, d3, d4 = st.columns(4)
+    with d1:
+        st.info(f"📍 **Exatidão:** {m_exatidao}")
+    with d2:
+        st.warning(f"📍 **Registrador:** {m_registrador}")
+    with d3:
+        st.error(f"📍 **Mostrador/MV:** {m_mostrador}")
+    with d4:
+        taxa = (aprovados / total * 100) if total > 0 else 0
+        st.success(f"📈 **Aprovação:** {taxa:.1f}%")
 
-    # =====================================================
-    # PROCESSAMENTO DOS MEDIDORES FILTRADOS
-    # =====================================================
-    ensaios = []
-    for _, row in df_filtrado.iterrows():
-        medidores = processar_ensaio(row)
-        medidores_filtrados = []
-        
-        for m in medidores:
-            status_ok = not st.session_state.filtro_status or m['status'] in st.session_state.filtro_status
-            irr_ok = not st.session_state.filtro_irregularidade or any(i in m['motivo'] for i in st.session_state.filtro_irregularidade)
-            
-            if status_ok and irr_ok:
-                medidores_filtrados.append(m)
-        
-        if medidores_filtrados:
-            ensaios.append({
-                "n_ensaio": row.get("N_ENSAIO", "N/A"),
-                "bancada": row["Bancada_Nome"],
-                "temperatura": row.get("Temperatura", "--"),
-                "medidores": medidores_filtrados
-            })
-
-    if not ensaios:
-        st.info("Nenhum medidor corresponde aos filtros selecionados.")
-        return
-
-    todos_os_medidores = [m for e in ensaios for m in e["medidores"]]
-
-    # =====================================================
-    # RENDERIZAÇÃO DE RESUMO E GRÁFICOS
-    # =====================================================
-    stats = calcular_estatisticas(todos_os_medidores)
-    renderizar_resumo(stats)
-
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        renderizar_grafico_reprovacoes(todos_os_medidores)
-    with col2:
-        # Botões de Exportação
-        pdf_bytes = gerar_pdf_relatorio(
-            ensaios=ensaios,
-            data=st.session_state.filtro_data.strftime('%d/%m/%Y'),
-            stats=stats
-        )
-        if pdf_bytes:
-            st.download_button("📥 Baixar PDF", pdf_bytes, file_name=f"relatorio_{st.session_state.filtro_data}.pdf")
-        
-        df_export = pd.DataFrame(todos_os_medidores)
-        excel_bytes = to_excel(df_export)
-        st.download_button("📥 Baixar Excel", excel_bytes, file_name=f"dados_{st.session_state.filtro_data}.xlsx")
-
-    # =====================================================
-    # EXIBIÇÃO DOS DETALHES (CARDS)
-    # =====================================================
     st.markdown("---")
-    st.subheader("📋 Detalhes dos Ensaios")
+
+    # =====================================================
+    # GRÁFICOS E EXPORTAÇÃO (Original mantido)
+    # =====================================================
+    col_graf, col_exp = st.columns([3, 1])
+    with col_graf:
+        renderizar_grafico_reprovacoes(todos_medidores_mes)
     
-    for ensaio in ensaios:
-        renderizar_cabecalho_ensaio(
-            ensaio["n_ensaio"], 
-            ensaio["bancada"], 
-            ensaio["temperatura"]
+    with col_exp:
+        st.write("📂 **Exportar Período**")
+        df_export = pd.DataFrame(todos_medidores_mes)
+        excel_bytes = to_excel(df_export)
+        st.download_button(
+            "📥 Baixar Excel Mensal", 
+            excel_bytes, 
+            file_name=f"auditoria_{mes_selecionado.replace('/','_')}.xlsx",
+            use_container_width=True
         )
-        
-        # Organiza os cards em 5 colunas por linha
-        cols_n = 5
-        for i in range(0, len(ensaio["medidores"]), cols_n):
-            cols = st.columns(cols_n)
-            for j, m in enumerate(ensaio["medidores"][i : i + cols_n]):
-                with cols[j]:
-                    renderizar_card(m)
+
+    # =====================================================
+    # DETALHES DOS ENSAIOS (Mantendo sua estrutura original)
+    # =====================================================
+    st.subheader("📋 Histórico Detalhado do Período")
+    
+    # Agrupando ensaios para exibição (mesma lógica do seu original)
+    for _, row in df_mes.iterrows():
+        medidores_do_ensaio = processar_ensaio(row)
+        if medidores_do_ensaio:
+            renderizar_cabecalho_ensaio(
+                row.get("N_ENSAIO", "N/A"), 
+                row["Bancada_Nome"], 
+                row.get("Temperatura", "--")
+            )
+            
+            # Organiza os cards em 5 colunas (Mantido Original)
+            cols_n = 5
+            for i in range(0, len(medidores_do_ensaio), cols_n):
+                cols = st.columns(cols_n)
+                for j, m in enumerate(medidores_do_ensaio[i : i + cols_n]):
+                    with cols[j]:
+                        renderizar_card(m)
 
 # =========================================================
 # [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO FINAL AJUSTADA)
