@@ -435,11 +435,11 @@ def calcular_auditoria_real(df):
     }
     
 # =======================================================================
-# [BLOCO 05] - COMPONENTES VISUAIS (CORRIGIDO - SEM ERRO DE PLOTLY)
+# [BLOCO 05] - COMPONENTES VISUAIS (VERSÃO ORIGINAL COM AJUSTE DE ALTURA E ESPAÇO)
 # =======================================================================
 
 def renderizar_card(medidor):
-    """Renderiza o card individual com altura fixa para alinhamento perfeito."""
+    """Renderiza o card individual de cada medidor com cores dinâmicas por status."""
     status_cor = {
         "APROVADO": "#dcfce7", 
         "REPROVADO": "#fee2e2", 
@@ -448,125 +448,137 @@ def renderizar_card(medidor):
     }
     cor = status_cor.get(medidor['status'], "#f3f4f6")
     
-    # Altura travada em 400px para garantir alinhamento na linha
+    # AJUSTE: height: 400px fixo para todos ficarem do mesmo tamanho
     conteudo_html = f"""
-<div style="background:{cor}; border-radius:12px; padding:16px; font-size:14px; 
-            box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left: 6px solid rgba(0,0,0,0.1); 
-            display: flex; flex-direction: column; justify-content: space-between; 
-            height: 400px; margin-bottom: 20px;">
-    <div>
-        <div style="font-size:18px; font-weight:700; border-bottom:2px solid rgba(0,0,0,0.15); margin-bottom:12px; padding-bottom: 8px;">
-            🔢 Posição {medidor['pos']}
-        </div>
-        <p style="margin:0 0 12px 0;"><b>Série:</b> {medidor['serie']}</p>
+<div style="background:{cor}; border-radius:12px; padding:16px; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left: 6px solid rgba(0,0,0,0.1); display: flex; flex-direction: column; justify-content: space-between; height: 400px;">
+<div>
+<div style="font-size:18px; font-weight:700; border-bottom:2px solid rgba(0,0,0,0.15); margin-bottom:12px; padding-bottom: 8px;">🔢 Posição {medidor['pos']}</div>
+<p style="margin:0 0 12px 0;"><b>Série:</b> {medidor['serie']}</p>
 
-        <div style="background: rgba(0,0,0,0.05); padding: 10px; border-radius: 8px; margin-bottom:12px;">
-            <b style="display: block; margin-bottom: 8px;">Exatidão (±{medidor['limite']}%)</b>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px;">
-                <span><b>CN:</b> {medidor['cn']}%</span><span><b>CP:</b> {medidor['cp']}%</span>
-                <span><b>CI:</b> {medidor['ci']}%</span><span><b>MV:</b> {medidor['mv']}</span>
-            </div>
-        </div>
+<div style="background: rgba(0,0,0,0.05); padding: 10px; border-radius: 8px; margin-bottom:12px;">
+<b style="display: block; margin-bottom: 8px;">Exatidão (±{medidor['limite']}%)</b>
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px;">
+<span><b>CN:</b> {medidor['cn']}%</span><span><b>CP:</b> {medidor['cp']}%</span>
+<span><b>CI:</b> {medidor['ci']}%</span><span><b>MV:</b> {medidor['mv']}</span>
+</div>
+</div>
 
-        <div style="background: rgba(0,0,0,0.03); padding: 10px; border-radius: 8px; border: 1px dashed rgba(0,0,0,0.1); margin-bottom:12px;">
-            <b style="display: block; margin-bottom: 8px; font-size: 12px;">📑 Registrador (kWh)</b>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 14px;">
-                <span><b>Início:</b> {medidor['reg_inicio']}</span>
-                <span><b>Fim:</b> {medidor['reg_fim']}</span>
-                <span style="grid-column: span 2; font-weight: bold; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 4px;">
-                    Erro: {medidor['reg_erro']}
-                </span>
-            </div>
-        </div>
-    </div>
+<div style="background: rgba(0,0,0,0.03); padding: 10px; border-radius: 8px; border: 1px dashed rgba(0,0,0,0.1); margin-bottom:12px;">
+<b style="display: block; margin-bottom: 8px; font-size: 12px;">📑 Registrador (kWh)</b>
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 14px;">
+<span><b>Início:</b> {medidor['reg_inicio']}</span>
+<span><b>Fim:</b> {medidor['reg_fim']}</span>
+<span style="grid-column: span 2; font-weight: bold; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 4px;">Erro: {medidor['reg_erro']}</span>
+</div>
+</div>
 
-    <div>
-        <div style="padding:10px; border-radius:8px; font-weight:800; font-size: 15px; 
-                    text-align:center; background: rgba(0,0,0,0.1); color: rgba(0,0,0,0.7);">
-            {medidor['status']}
-        </div>
-    </div>
+</div>
+<div>
+<div style="padding:10px; margin-top: 16px; border-radius:8px; font-weight:800; font-size: 15px; text-align:center; background: rgba(0,0,0,0.08);">{medidor['status']}</div>
+<div style="margin-top:8px; font-size:12px; text-align:center;">{medidor['detalhe']}</div>
+</div>
 </div>
 """.strip()
     
     st.markdown(conteudo_html, unsafe_allow_html=True)
 
 def renderizar_resumo(stats):
-    """Cards de métricas superiores com espaçamento entre Total e os demais."""
+    """Renderiza as métricas de resumo com AJUSTE DE ESPAÇAMENTO entre o 1º e os demais."""
     st.markdown("""
         <style>
-            .metric-card {
-                background-color: #FFFFFF; padding: 20px; border-radius: 12px; 
-                box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center;
-                height: 120px; display: flex; flex-direction: column; justify-content: center;
-            }
-            .metric-value { font-size: 32px; font-weight: 700; line-height: 1; }
-            .metric-label { font-size: 14px; color: #64748b; margin-top: 8px; }
+            .metric-card{background-color:#FFFFFF; padding:20px; border-radius:12px; 
+                         box-shadow:0 4px 6px rgba(0,0,0,0.05); text-align:center;}
+            .metric-value{font-size:32px; font-weight:700;}
+            .metric-label{font-size:16px; color:#64748b;}
         </style>
     """, unsafe_allow_html=True)
     
-    c1, gap, c2, c3, c4 = st.columns([1, 0.25, 1, 1, 1])
+    # AJUSTE: Adicionado coluna 'gap' (0.25) para separar o primeiro card dos outros
+    col1, gap, col2, col3, col4 = st.columns([1, 0.25, 1, 1, 1])
     
-    with c1:
+    with col1:
         st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#1e293b;">{stats["total"]}</div><div class="metric-label">Total Ensaiados</div></div>', unsafe_allow_html=True)
-    with c2:
+    with col2:
         st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#16a34a;">{stats["aprovados"]}</div><div class="metric-label">Aprovados</div></div>', unsafe_allow_html=True)
-    with c3:
+    with col3:
         st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#dc2626;">{stats["reprovados"]}</div><div class="metric-label">Reprovados</div></div>', unsafe_allow_html=True)
-    with c4:
+    with col4:
         st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#7c3aed;">{stats["consumidor"]}</div><div class="metric-label">Contra Consumidor</div></div>', unsafe_allow_html=True)
 
-def renderizar_grafico_reprovacoes(medidores):
-    import pandas as pd
-    import plotly.express as px
-    
-    motivos_raw = [m['motivo'] for m in medidores if m['status'] in ['REPROVADO', 'CONTRA O CONSUMIDOR']]
-    if not motivos_raw: return
-
-    contagem = {}
-    for m in motivos_raw:
-        for parte in [p.strip() for p in str(m).split('/')]:
-            if parte not in ["Nenhum", "N/A", ""]:
-                contagem[parte] = contagem.get(parte, 0) + 1
-                
-    if not contagem: return
-
-    df_motivos = pd.DataFrame(list(contagem.items()), columns=['Motivo', 'Qtd']).sort_values('Qtd', ascending=True)
-    
-    fig = px.bar(df_motivos, x='Qtd', y='Motivo', orientation='h', 
-                 title='<b>Motivos de Reprovação</b>', text='Qtd',
-                 color_discrete_sequence=['#94a3b8'])
-    
-    # CORREÇÃO AQUI: Propriedade correta é marker_line_width ou direto no update_traces
-    fig.update_layout(yaxis_title=None, xaxis_title=None, showlegend=False, 
-                      margin=dict(l=10, r=10, t=40, b=10), height=250,
-                      plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
-    
-    # Removido marker_border_width que causava o erro
-    fig.update_traces(textposition='outside') 
-    st.plotly_chart(fig, use_container_width=True)
-
 def renderizar_cabecalho_ensaio(n_ensaio, bancada, temperatura):
+    """Cria uma barra de informações compacta para identificar o ensaio atual."""
     st.markdown(f"""
-        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 12px 20px; 
-                    border-radius: 12px; margin-bottom: 20px; display: flex; 
-                    justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-            <span style="font-weight: 800; font-size: 1.2em; color: #1e293b;">📋 Ensaio #{n_ensaio}</span>
-            <span style="color: #475569; font-size: 0.95em;"><b>Bancada:</b> {bancada.replace('_', ' ')}</span>
-            <span style="color: #475569; font-size: 0.95em;">🌡️ <b>Temp:</b> {temperatura}</span>
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 15px; 
+                    border-radius: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight: bold; font-size: 1.1em;">📋 Ensaio #{n_ensaio}</span>
+            <span style="color: #475569;"><strong>Bancada:</strong> {bancada.replace('_', ' ')}</span>
+            <span style="color: #475569;">🌡️ {temperatura}</span>
         </div>
     """, unsafe_allow_html=True)
 
+def renderizar_grafico_reprovacoes(medidores):
+    """Gera um gráfico horizontal com os motivos das reprovações."""
+    import pandas as pd
+    import plotly.express as px
+    
+    motivos = [m['motivo'] for m in medidores if m['status'] in ['REPROVADO', 'CONTRA O CONSUMIDOR']]
+    if not motivos:
+        return
+        
+    contagem = {}
+    for m in motivos:
+        partes = [p.strip() for p in str(m).split('/')]
+        for parte in partes:
+            if parte not in ["Nenhum", "N/A", ""]:
+                contagem[parte] = contagem.get(parte, 0) + 1
+                
+    if not contagem:
+        return
+        
+    df_motivos = pd.DataFrame(list(contagem.items()), columns=['Motivo', 'Quantidade']).sort_values('Quantidade', ascending=True)
+    
+    fig = px.bar(df_motivos, x='Quantidade', y='Motivo', orientation='h', 
+                 title='<b>Principais Motivos de Reprovação</b>', text='Quantidade',
+                 color_discrete_sequence=px.colors.qualitative.Pastel)
+    
+    fig.update_layout(yaxis_title=None, xaxis_title="Número de Medidores", showlegend=False, 
+                      margin=dict(l=10, r=10, t=40, b=10), height=250)
+    fig.update_traces(textposition='outside')
+    st.plotly_chart(fig, use_container_width=True)
+
 def renderizar_botao_scroll_topo():
-    scroll_html = """
-    <button onclick="window.scrollTo({top: 0, behavior: 'smooth'})" 
-            style="position:fixed; bottom:20px; right:20px; z-index:99; border:none; 
-            background:#1e293b; color:white; padding:12px 18px; border-radius:50px; 
-            cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,0.2); font-weight:bold;">
-        ↑ Topo
-    </button>
+    """Adiciona um botão flutuante para voltar ao topo da página via JavaScript."""
+    scroll_button_html = """
+    <style>
+        #scrollTopBtn {
+            display: none; position: fixed; bottom: 20px; right: 30px; z-index: 99; 
+            border: none; outline: none; background-color: #555; color: white; 
+            cursor: pointer; padding: 15px; border-radius: 10px; font-size: 18px; opacity: 0.7;
+        }
+        #scrollTopBtn:hover { background-color: #f44336; opacity: 1; }
+    </style>
+    
+    <button onclick="topFunction()" id="scrollTopBtn" title="Voltar ao topo"><b>^</b></button>
+    
+    <script>
+        var mybutton = document.getElementById("scrollTopBtn");
+        window.onscroll = function() {scrollFunction()};
+        
+        function scrollFunction() {
+            if (document.body.scrollTop > 100 || document.documentElement.scrollTop > 100) {
+                mybutton.style.display = "block";
+            } else {
+                mybutton.style.display = "none";
+            }
+        }
+        
+        function topFunction() {
+            document.body.scrollTop = 0;
+            document.documentElement.scrollTop = 0;
+        }
+    </script>
     """
-    st.components.v1.html(scroll_html, height=100)
+    st.components.v1.html(scroll_button_html, height=0)
 
 # =========================================================
 # [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (RESTAURADO - SEM AUDITORIA)
