@@ -581,11 +581,11 @@ def renderizar_botao_scroll_topo():
     st.components.v1.html(scroll_button_html, height=0)
 
 # =========================================================
-# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (PRESERVADO INTEGRALMENTE)
+# [BLOCO 06] - PÁGINA: VISÃO DIÁRIA (EVOLUÍDA E PRESERVADA)
 # =========================================================
 
 def pagina_visao_diaria(df_completo):
-    # --- BOTÃO VOLTAR AO TOPO (CSS & HTML) ---
+    # --- BOTÃO VOLTAR AO TOPO (CSS & HTML PRESERVADO) ---
     st.markdown('''
         <style> 
             .stApp { scroll-behavior: smooth; } 
@@ -596,7 +596,15 @@ def pagina_visao_diaria(df_completo):
                 border-radius: 10px; font-size: 18px; opacity: 0.7; 
             } 
             #scroll-to-top:hover { background-color: #f44336; opacity: 1; } 
-        </style> 
+            
+            /* Estilos dos Cards de Performance Evoluídos */
+            .metric-card-diaria {
+                background-color: #ffffff; padding: 15px; border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.05); text-align: center; border-top: 5px solid #1e3a8a;
+            }
+            .val-diaria { font-size: 24px; font-weight: 800; color: #0f172a; display: block; }
+            .lab-diaria { font-size: 11px; color: #475569; font-weight: 700; text-transform: uppercase; }
+        </style>
         <a id="top"></a> 
         <a href="#top" id="scroll-to-top"><b>^</b></a> 
     ''', unsafe_allow_html=True)
@@ -604,7 +612,7 @@ def pagina_visao_diaria(df_completo):
     st.sidebar.header("🔍 Busca e Filtros")
 
     # =====================================================
-    # BUSCA POR SÉRIE
+    # BUSCA POR SÉRIE (FUNCIONALIDADE PRESERVADA)
     # =====================================================
     if "search_key" not in st.session_state:
         st.session_state.search_key = 0
@@ -627,7 +635,6 @@ def pagina_visao_diaria(df_completo):
         
         for _, ensaio_row in df_completo.iterrows():
             colunas_serie = [c for c in ensaio_row.index if "_Série" in str(c)]
-            
             if any(termo_busca in str(ensaio_row[col]).lower() for col in colunas_serie if pd.notna(ensaio_row[col])):
                 medidores = processar_ensaio(ensaio_row)
                 for m in medidores:
@@ -648,7 +655,7 @@ def pagina_visao_diaria(df_completo):
         return
 
     # =====================================================
-    # FILTROS DO DIA
+    # FILTROS DO DIA (ESTADO PRESERVADO)
     # =====================================================
     if "filtro_data" not in st.session_state:
         st.session_state.filtro_data = (datetime.now() - pd.Timedelta(hours=3)).date()
@@ -688,7 +695,7 @@ def pagina_visao_diaria(df_completo):
         st.session_state.filtro_irregularidade = []
 
     # =====================================================
-    # APLICAÇÃO DOS FILTROS E PROCESSAMENTO
+    # PROCESSAMENTO E CÁLCULO DE INDICADORES
     # =====================================================
     df_filtrado = df_completo[df_completo['Data_dt'].dt.date == st.session_state.filtro_data]
     if st.session_state.filtro_bancada != "Todas":
@@ -698,45 +705,68 @@ def pagina_visao_diaria(df_completo):
         st.info("Nenhum ensaio encontrado para esta data/bancada.")
         return
 
-    ensaios = []
+    ensaios_processados = []
+    total_nao_ligou_dia = 0
+    lista_consumidor_dia = []
+    
     for _, row in df_filtrado.iterrows():
         medidores = processar_ensaio(row)
-        medidores_filtrados = []
+        meds_f = []
         for m in medidores:
+            # Contagem global para o card "Não Ligou" (independente de filtro de status)
+            if m['status'] == 'Não Ligou / Não Ensaido':
+                total_nao_ligou_dia += 1
+            
+            # Filtro Contra Consumidor para estatística
+            if m['status'] == 'CONTRA O CONSUMIDOR':
+                lista_consumidor_dia.append(m)
+
+            # Aplicação dos filtros de interface
             status_ok = not st.session_state.filtro_status or m['status'] in st.session_state.filtro_status
             irr_ok = not st.session_state.filtro_irregularidade or any(i in m['motivo'] for i in st.session_state.filtro_irregularidade)
+            
             if status_ok and irr_ok:
-                medidores_filtrados.append(m)
+                meds_f.append(m)
         
-        if medidores_filtrados:
-            ensaios.append({
+        if meds_f:
+            ensaios_processados.append({
                 "n_ensaio": row.get("N_ENSAIO", "N/A"),
                 "bancada": row["Bancada_Nome"],
                 "temperatura": row.get("Temperatura", "--"),
-                "medidores": medidores_filtrados
+                "medidores": meds_f
             })
 
-    if not ensaios:
-        st.info("Nenhum medidor corresponde aos filtros selecionados.")
-        return
-
-    todos_os_medidores = [m for e in ensaios for m in e["medidores"]]
+    # Dados para os cards
+    todos_os_medidores = [m for e in ensaios_processados for m in e["medidores"]]
     stats = calcular_estatisticas(todos_os_medidores)
-    renderizar_resumo(stats)
+    dados_auditoria = calcular_auditoria_real(df_filtrado)
+    total_c_consumidor = len(lista_consumidor_dia)
 
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        renderizar_grafico_reprovacoes(todos_os_medidores)
-    with col2:
-        pdf_bytes = gerar_pdf_relatorio(ensaios=ensaios, data=st.session_state.filtro_data.strftime('%d/%m/%Y'), stats=stats)
-        if pdf_bytes:
-            st.download_button("📥 Baixar PDF", pdf_bytes, file_name=f"relatorio_{st.session_state.filtro_data}.pdf")
-        excel_bytes = to_excel(pd.DataFrame(todos_os_medidores))
-        st.download_button("📥 Baixar Excel", excel_bytes, file_name=f"dados_{st.session_state.filtro_data}.xlsx")
+    # --- INDICADORES DE PERFORMANCE (6 COLUNAS) ---
+    st.markdown(f"### 📅 Performance do Dia - {st.session_state.filtro_data.strftime('%d/%m/%Y')}")
+    a1, a2, a3, a4, a5, a6 = st.columns(6)
+    with a1: st.markdown(f'<div class="metric-card-diaria" style="border-top-color:#1e293b"><span class="val-diaria">{dados_auditoria["total_ensaiadas"]}</span><span class="lab-diaria">Ensaios Reais</span></div>', unsafe_allow_html=True)
+    with a2: st.markdown(f'<div class="metric-card-diaria" style="border-top-color:#16a34a"><span class="val-diaria">{dados_auditoria["total_aprovadas"]}</span><span class="lab-diaria">Aprovados</span></div>', unsafe_allow_html=True)
+    with a3: st.markdown(f'<div class="metric-card-diaria" style="border-top-color:#dc2626"><span class="val-diaria">{dados_auditoria["total_reprovadas"]}</span><span class="lab-diaria">Reprovados</span></div>', unsafe_allow_html=True)
+    with a4: st.markdown(f'<div class="metric-card-diaria" style="border-top-color:#7c3aed"><span class="val-diaria">{total_c_consumidor}</span><span class="lab-diaria">C. Consumidor</span></div>', unsafe_allow_html=True)
+    with a5: st.markdown(f'<div class="metric-card-diaria" style="border-top-color:#64748b"><span class="val-diaria">{total_nao_ligou_dia}</span><span class="lab-diaria">Não Ligou</span></div>', unsafe_allow_html=True)
+    with a6: st.markdown(f'<div class="metric-card-diaria" style="border-top-color:#16a34a"><span class="val-diaria">{dados_auditoria["taxa_aprovacao"]:.2f}%</span><span class="lab-diaria">Eficiência</span></div>', unsafe_allow_html=True)
 
+    # --- GRÁFICOS E DOWNLOADS ---
     st.markdown("---")
+    col_g1, col_g2 = st.columns([3, 1])
+    with col_g1:
+        renderizar_grafico_reprovacoes(todos_os_medidores)
+    with col_g2:
+        pdf_bytes = gerar_pdf_relatorio(ensaios=ensaios_processados, data=st.session_state.filtro_data.strftime('%d/%m/%Y'), stats=stats)
+        if pdf_bytes:
+            st.download_button("📥 Baixar PDF", pdf_bytes, file_name=f"relatorio_{st.session_state.filtro_data}.pdf", use_container_width=True)
+        excel_bytes = to_excel(pd.DataFrame(todos_os_medidores))
+        st.download_button("📥 Baixar Excel", excel_bytes, file_name=f"dados_{st.session_state.filtro_data}.xlsx", use_container_width=True)
+
+    # --- DETALHES DOS ENSAIOS (CARDS ORIGINAIS) ---
     st.subheader("📋 Detalhes dos Ensaios")
-    for ensaio in ensaios:
+    for ensaio in ensaios_processados:
         renderizar_cabecalho_ensaio(ensaio["n_ensaio"], ensaio["bancada"], ensaio["temperatura"])
         cols_n = 5
         for i in range(0, len(ensaio["medidores"]), cols_n):
