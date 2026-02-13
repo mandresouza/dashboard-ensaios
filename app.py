@@ -746,7 +746,7 @@ def pagina_visao_diaria(df_completo):
                     renderizar_card(m)
 
 # =========================================================
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO FIDEDIGNA FINAL)
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL (VERSÃO FINAL COM TOTAIS NO GRÁFICO)
 # =========================================================
 
 def get_stats_por_dia(df_mes):
@@ -820,8 +820,6 @@ def pagina_visao_mensal(df_completo):
     # PROCESSAMENTO E ALINHAMENTO DE DADOS (CARD vs TABELA)
     # =====================================================
     lista_consumidor_fidedigna = []
-    
-    # Processa linha por linha para manter o vínculo com Data e Bancada
     for _, row in df_mes.iterrows():
         medidores_da_linha = processar_ensaio(row)
         for m in medidores_da_linha:
@@ -830,10 +828,7 @@ def pagina_visao_mensal(df_completo):
                     v_cn = float(str(m['cn']).replace('+', '').replace(',', '.').strip() or 0)
                     v_cp = float(str(m['cp']).replace('+', '').replace(',', '.').strip() or 0)
                     v_ci = float(str(m['ci']).replace('+', '').replace(',', '.').strip() or 0)
-                    
-                    # REGRA DE OURO: Só entra se houver erro positivo real
                     if v_cn > 0 or v_cp > 0 or v_ci > 0:
-                        # Anexa a Data e Bancada diretamente do 'row' atual
                         m['data_ensaio'] = row['Data']
                         m['bancada_ensaio'] = row['Bancada_Nome']
                         lista_consumidor_fidedigna.append(m)
@@ -852,24 +847,17 @@ def pagina_visao_mensal(df_completo):
     with a5: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#16a34a"><span class="val-mensal">{dados_auditoria["taxa_aprovacao"]:.2f}%</span><span class="lab-mensal">Eficiência</span></div>', unsafe_allow_html=True)
 
     # =====================================================
-    # TABELA TÉCNICA (DATA E BANCADA CORRIGIDOS)
+    # TABELA TÉCNICA
     # =====================================================
     if total_c_consumidor > 0:
         with st.expander(f"🚨 DETALHAMENTO TÉCNICO: {total_c_consumidor} ITENS CONFIRMADOS", expanded=True):
             dados_tabela = []
             for m in lista_consumidor_fidedigna:
                 dados_tabela.append({
-                    "Data": m['data_ensaio'], 
-                    "Bancada": m['bancada_ensaio'], 
-                    "Série": m['serie'],
-                    "Erro CN": m['cn'], 
-                    "Erro CP": m['cp'], 
-                    "Erro CI": m['ci'],
-                    "M.V": m['mv'], 
-                    "Reg.": m['reg_erro'], 
-                    "Motivo": m['motivo']
+                    "Data": m['data_ensaio'], "Bancada": m['bancada_ensaio'], "Série": m['serie'],
+                    "Erro CN": m['cn'], "Erro CP": m['cp'], "Erro CI": m['ci'],
+                    "M.V": m['mv'], "Reg.": m['reg_erro'], "Motivo": m['motivo']
                 })
-            
             st.dataframe(pd.DataFrame(dados_tabela).style.applymap(lambda x: 'color: #e53e3e; font-weight: bold' if isinstance(x, str) and '+' in x else ''), use_container_width=True, hide_index=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -879,10 +867,13 @@ def pagina_visao_mensal(df_completo):
     m3.error(f"📺 Mostrador/MV: **{dados_auditoria['reprov_mv']}**")
     m4.success(f"📋 Posições Totais: **{dados_auditoria['total_posicoes']}**")
 
-    # GRÁFICOS
+    # =====================================================
+    # GRÁFICOS (COM TOTAL EM CIMA DAS BARRAS)
+    # =====================================================
     df_daily = get_stats_por_dia(df_mes)
     st.markdown("---")
     col_g1, col_g2 = st.columns([1, 1.5])
+    
     with col_g1:
         st.markdown("##### Distribuição")
         fig_donut = px.pie(values=[dados_auditoria["total_aprovadas"], dados_auditoria["total_reprovadas"], total_c_consumidor], 
@@ -890,13 +881,32 @@ def pagina_visao_mensal(df_completo):
                            color_discrete_map={'Aprovados':'#16a34a', 'Reprovados':'#dc2626', 'C. Consumidor':'#7c3aed'})
         fig_donut.update_layout(showlegend=False, margin=dict(t=0,b=0,l=0,r=0), height=250)
         st.plotly_chart(fig_donut, use_container_width=True)
+
     with col_g2:
         st.markdown("##### Evolução Mensal")
         fig_bar = go.Figure()
+        
+        # Adiciona as barras empilhadas
         for col, color in zip(['Aprovados','Reprovados','Contra Consumidor'], ['#16a34a','#dc2626','#7c3aed']):
             if col in df_daily.columns:
                 fig_bar.add_trace(go.Bar(x=df_daily['Data'], y=df_daily[col], name=col, marker_color=color))
-        fig_bar.update_layout(barmode='stack', height=250, margin=dict(t=0,b=0,l=0,r=0), legend=dict(orientation="h", y=1.2))
+        
+        # ADICIONA O TOTAL EM CIMA DA BARRA (Regra solicitada)
+        fig_bar.add_trace(go.Scatter(
+            x=df_daily['Data'], 
+            y=df_daily['Total'], 
+            text=df_daily['Total'],
+            mode='text',
+            textposition='top center',
+            showlegend=False
+        ))
+
+        fig_bar.update_layout(
+            barmode='stack', 
+            height=250, 
+            margin=dict(t=20,b=0,l=0,r=0), 
+            legend=dict(orientation="h", y=1.2)
+        )
         st.plotly_chart(fig_bar, use_container_width=True)
 
     # PAINEL GERAL
