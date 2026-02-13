@@ -746,11 +746,11 @@ def pagina_visao_diaria(df_completo):
                     renderizar_card(m)
 
 # =========================================================
-# [BLOCO 07] - PÁGINA: VISÃO MENSAL (AJUSTE BOTÃO & TABELA)
+# [BLOCO 07] - PÁGINA: VISÃO MENSAL (ESTILO FINAL AJUSTADO)
 # =========================================================
 
 def get_stats_por_dia(df_mes):
-    """Gera o dataframe consolidado de estatísticas diárias para os gráficos."""
+    """Gera o dataframe consolidado de estatísticas diárias."""
     daily_stats = []
     for data, group in df_mes.groupby('Data_dt'):
         medidores = []
@@ -760,7 +760,6 @@ def get_stats_por_dia(df_mes):
         aprovados = sum(1 for m in medidores if m['status'] == 'APROVADO')
         reprovados = sum(1 for m in medidores if m['status'] == 'REPROVADO')
         
-        # REGRA DE OURO NA CONTAGEM DIÁRIA
         consumidor = 0
         for m in medidores:
             if m['status'] == 'CONTRA O CONSUMIDOR':
@@ -798,32 +797,33 @@ def extrair_valor_reg(dicionario_medidor, tipo):
     return '-'
 
 def pagina_visao_mensal(df_completo):
-    # --- BOTÃO VOLTAR AO TOPO (AJUSTADO PARA FICAR MAIOR E VISÍVEL) ---
+    # --- BOTÃO VOLTAR AO TOPO (ESTILO IGUAL À FOTO) ---
     st.markdown('''
         <style> 
             .stApp { scroll-behavior: smooth; } 
             #scroll-to-top { 
                 position: fixed; 
-                bottom: 30px; 
-                right: 30px; 
-                z-index: 9999; 
+                bottom: 80px; /* Subi para não bater na barra de gerenciar */
+                right: 20px; 
+                z-index: 999999; 
                 border: none; 
                 outline: none; 
-                background-color: #1e3a8a; 
+                background-color: #808080; /* Cinza conforme a imagem */
                 color: white !important; 
                 cursor: pointer; 
-                width: 50px; 
-                height: 50px; 
-                border-radius: 50%; 
+                width: 45px; 
+                height: 45px; 
+                border-radius: 12px; /* Arredondado conforme foto */
                 display: flex; 
                 align-items: center; 
                 justify-content: center; 
-                font-size: 24px; 
+                font-size: 22px; 
                 text-decoration: none;
-                box-shadow: 2px 2px 10px rgba(0,0,0,0.3);
+                box-shadow: 0px 4px 10px rgba(0,0,0,0.2);
                 transition: 0.3s;
+                font-weight: bold;
             } 
-            #scroll-to-top:hover { background-color: #dc2626; transform: scale(1.1); } 
+            #scroll-to-top:hover { background-color: #1e3a8a; transform: translateY(-5px); } 
             
             .header-mensal { padding: 10px 0px; border-bottom: 2px solid #1e3a8a; margin-bottom: 25px; }
             .titulo-mensal { color: #1e3a8a; font-size: 28px; font-weight: 800; margin-bottom: 0px; }
@@ -835,7 +835,7 @@ def pagina_visao_mensal(df_completo):
             .lab-mensal { font-size: 11px; color: #475569; font-weight: 700; text-transform: uppercase; }
         </style>
         <a id="top"></a> 
-        <a href="#top" id="scroll-to-top" title="Voltar ao Topo">▲</a> 
+        <a href="#top" id="scroll-to-top">^</a> 
     ''', unsafe_allow_html=True)
 
     # --- CABEÇALHO ---
@@ -937,7 +937,7 @@ def pagina_visao_mensal(df_completo):
     st.markdown("---")
     with st.expander("🔍 PAINEL DE AUDITORIA COMPLETO", expanded=False):
         datas_disponiveis = df_daily['Data'].dt.strftime('%d/%m/%Y').unique()
-        dia_auditoria_str = st.selectbox("Selecione o dia para conferência detalhada:", datas_disponiveis, key="sel_audit_mensal_v9")
+        dia_auditoria_str = st.selectbox("Selecione o dia para conferência detalhada:", datas_disponiveis, key="sel_audit_mensal_final_Vfinal")
         if dia_auditoria_str:
             data_f = pd.to_datetime(dia_auditoria_str, format='%d/%m/%Y')
             meds_aud = []
@@ -958,7 +958,7 @@ def pagina_visao_mensal(df_completo):
                     color = '#c6f6d5' if val == 'APROVADO' else '#fed7d7' if val == 'REPROVADO' else '#e9d8fd' if val == 'CONTRA O CONSUMIDOR' else 'transparent'
                     return f'background-color: {color}'
                 st.dataframe(df_f.style.applymap(color_status, subset=['Status']), use_container_width=True, hide_index=True)
-
+                
 # =======================================================================
 # [BLOCO 08] - PÁGINA: ANÁLISE DE POSIÇÕES (HEATMAP DE REPROVAÇÃO)
 # =======================================================================
