@@ -760,7 +760,7 @@ def get_stats_por_dia(df_mes):
         aprovados = sum(1 for m in medidores if m['status'] == 'APROVADO')
         reprovados = sum(1 for m in medidores if m['status'] == 'REPROVADO')
         
-        # REGRA DE OURO NA CONTAGEM DIÁRIA: Só conta como Contra Consumidor se houver erro positivo
+        # REGRA DE OURO NA CONTAGEM DIÁRIA
         consumidor = 0
         for m in medidores:
             if m['status'] == 'CONTRA O CONSUMIDOR':
@@ -819,25 +819,28 @@ def pagina_visao_mensal(df_completo):
     # =====================================================
     # PROCESSAMENTO E ALINHAMENTO DE DADOS (CARD vs TABELA)
     # =====================================================
-    todos_medidores_mes = []
-    for _, row in df_mes.iterrows():
-        todos_medidores_mes.extend(processar_ensaio(row))
-
-    # Lista final validada pela Regra de Ouro (Apenas positivos)
     lista_consumidor_fidedigna = []
-    for m in todos_medidores_mes:
-        if m['status'] == 'CONTRA O CONSUMIDOR':
-            try:
-                v_cn = float(str(m['cn']).replace('+', '').replace(',', '.').strip() or 0)
-                v_cp = float(str(m['cp']).replace('+', '').replace(',', '.').strip() or 0)
-                v_ci = float(str(m['ci']).replace('+', '').replace(',', '.').strip() or 0)
-                if v_cn > 0 or v_cp > 0 or v_ci > 0:
-                    lista_consumidor_fidedigna.append(m)
-            except: continue
+    
+    # Processa linha por linha para manter o vínculo com Data e Bancada
+    for _, row in df_mes.iterrows():
+        medidores_da_linha = processar_ensaio(row)
+        for m in medidores_da_linha:
+            if m['status'] == 'CONTRA O CONSUMIDOR':
+                try:
+                    v_cn = float(str(m['cn']).replace('+', '').replace(',', '.').strip() or 0)
+                    v_cp = float(str(m['cp']).replace('+', '').replace(',', '.').strip() or 0)
+                    v_ci = float(str(m['ci']).replace('+', '').replace(',', '.').strip() or 0)
+                    
+                    # REGRA DE OURO: Só entra se houver erro positivo real
+                    if v_cn > 0 or v_cp > 0 or v_ci > 0:
+                        # Anexa a Data e Bancada diretamente do 'row' atual
+                        m['data_ensaio'] = row['Data']
+                        m['bancada_ensaio'] = row['Bancada_Nome']
+                        lista_consumidor_fidedigna.append(m)
+                except: continue
 
-    # Re-calcula métricas para o card bater com a tabela
     total_c_consumidor = len(lista_consumidor_fidedigna)
-    dados_auditoria = calcular_auditoria_real(df_mes) # Pega base original
+    dados_auditoria = calcular_auditoria_real(df_mes)
     
     # --- EXIBIÇÃO DOS CARDS ---
     st.markdown("### 📊 Indicadores de Performance Mensal")
@@ -845,27 +848,26 @@ def pagina_visao_mensal(df_completo):
     with a1: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#1e293b"><span class="val-mensal">{dados_auditoria["total_ensaiadas"]}</span><span class="lab-mensal">Ensaios Reais</span></div>', unsafe_allow_html=True)
     with a2: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#16a34a"><span class="val-mensal">{dados_auditoria["total_aprovadas"]}</span><span class="lab-mensal">Aprovados</span></div>', unsafe_allow_html=True)
     with a3: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#dc2626"><span class="val-mensal">{dados_auditoria["total_reprovadas"]}</span><span class="lab-mensal">Reprovados</span></div>', unsafe_allow_html=True)
-    # CARD ATUALIZADO (Agora baterá com a tabela)
     with a4: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#7c3aed"><span class="val-mensal">{total_c_consumidor}</span><span class="lab-mensal">C. Consumidor</span></div>', unsafe_allow_html=True)
     with a5: st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#16a34a"><span class="val-mensal">{dados_auditoria["taxa_aprovacao"]:.2f}%</span><span class="lab-mensal">Eficiência</span></div>', unsafe_allow_html=True)
 
     # =====================================================
-    # TABELA TÉCNICA (SÓ APARECE SE O CARD FOR > 0)
+    # TABELA TÉCNICA (DATA E BANCADA CORRIGIDOS)
     # =====================================================
     if total_c_consumidor > 0:
         with st.expander(f"🚨 DETALHAMENTO TÉCNICO: {total_c_consumidor} ITENS CONFIRMADOS", expanded=True):
-            # Monta o DataFrame apenas com o que foi validado acima
             dados_tabela = []
             for m in lista_consumidor_fidedigna:
-                # Busca a bancada e data no df_mes original pelo número de série
-                info_origem = df_mes[df_mes.astype(str).apply(lambda x: m['serie'] in x.values, axis=1)]
-                data_ensaio = info_origem['Data'].iloc[0] if not info_origem.empty else "N/A"
-                bancada = info_origem['Bancada_Nome'].iloc[0] if not info_origem.empty else "N/A"
-                
                 dados_tabela.append({
-                    "Data": data_ensaio, "Bancada": bancada, "Série": m['serie'],
-                    "Erro CN": m['cn'], "Erro CP": m['cp'], "Erro CI": m['ci'],
-                    "M.V": m['mv'], "Reg.": m['reg_erro'], "Motivo": m['motivo']
+                    "Data": m['data_ensaio'], 
+                    "Bancada": m['bancada_ensaio'], 
+                    "Série": m['serie'],
+                    "Erro CN": m['cn'], 
+                    "Erro CP": m['cp'], 
+                    "Erro CI": m['ci'],
+                    "M.V": m['mv'], 
+                    "Reg.": m['reg_erro'], 
+                    "Motivo": m['motivo']
                 })
             
             st.dataframe(pd.DataFrame(dados_tabela).style.applymap(lambda x: 'color: #e53e3e; font-weight: bold' if isinstance(x, str) and '+' in x else ''), use_container_width=True, hide_index=True)
