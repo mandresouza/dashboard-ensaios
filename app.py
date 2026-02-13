@@ -802,6 +802,13 @@ def pagina_visao_mensal(df_completo):
             }
             .val-mensal { font-size: 24px; font-weight: 800; color: #0f172a; display: block; }
             .lab-mensal { font-size: 11px; color: #475569; font-weight: 700; text-transform: uppercase; }
+            .alerta-critico {
+                padding: 15px;
+                background-color: #fff5f5;
+                border-left: 5px solid #e53e3e;
+                border-radius: 4px;
+                margin: 10px 0px;
+            }
         </style> 
     ''', unsafe_allow_html=True)
 
@@ -846,14 +853,40 @@ def pagina_visao_mensal(df_completo):
     with a1:
         st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#1e293b"><span class="val-mensal">{dados_auditoria["total_ensaiadas"]}</span><span class="lab-mensal">Ensaios Reais</span></div>', unsafe_allow_html=True)
     with a2:
-        st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#16a34a"><span class="val-mensal">{dados_auditoria["total_aprovadas"]}</span><span class="lab-clean">Aprovados</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#16a34a"><span class="val-mensal">{dados_auditoria["total_aprovadas"]}</span><span class="lab-mensal">Aprovados</span></div>', unsafe_allow_html=True)
     with a3:
-        st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#dc2626"><span class="val-mensal">{dados_auditoria["total_reprovadas"]}</span><span class="lab-clean">Reprovados</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#dc2626"><span class="val-mensal">{dados_auditoria["total_reprovadas"]}</span><span class="lab-mensal">Reprovados</span></div>', unsafe_allow_html=True)
     with a4:
-        st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#7c3aed"><span class="val-mensal">{dados_auditoria["reprov_consumidor"]}</span><span class="lab-clean">C. Consumidor</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card-mensal" style="border-top-color:#7c3aed"><span class="val-mensal">{dados_auditoria["reprov_consumidor"]}</span><span class="lab-mensal">C. Consumidor</span></div>', unsafe_allow_html=True)
     with a5:
         cor_taxa = "#16a34a" if dados_auditoria["taxa_aprovacao"] >= 95 else "#ea580c"
-        st.markdown(f'<div class="metric-card-mensal" style="border-top-color:{cor_taxa}"><span class="val-mensal">{dados_auditoria["taxa_aprovacao"]:.2f}%</span><span class="lab-clean">Aprovação Final</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card-mensal" style="border-top-color:{cor_taxa}"><span class="val-mensal">{dados_auditoria["taxa_aprovacao"]:.2f}%</span><span class="lab-mensal">Aprovação Final</span></div>', unsafe_allow_html=True)
+
+    # ---------------------------------------------------------
+    # NOVO: DETALHAMENTO DE MEDIDORES CONTRA O CONSUMIDOR
+    # ---------------------------------------------------------
+    if dados_auditoria["reprov_consumidor"] > 0:
+        with st.expander("🚨 DETALHAR MEDIDORES CONTRA O CONSUMIDOR", expanded=False):
+            st.markdown('<div class="alerta-critico"><b>Atenção:</b> Os medidores abaixo apresentaram erros graves fora da margem legal permitida contra o consumidor.</div>', unsafe_allow_html=True)
+            
+            # Coleta apenas os contra o consumidor do mês
+            medidores_criticos = []
+            for _, row in df_mes.iterrows():
+                lista = processar_ensaio(row)
+                for m in lista:
+                    if m['status'] == 'CONTRA O CONSUMIDOR':
+                        medidores_criticos.append({
+                            "Data": row['Data'],
+                            "Bancada": row['Bancada_Nome'],
+                            "Série": m['serie'],
+                            "Erro CN": m['cn'],
+                            "Erro CP": m['cp'],
+                            "Erro CI": m['ci'],
+                            "Motivo": m['motivo']
+                        })
+            
+            df_criticos = pd.DataFrame(medidores_criticos)
+            st.table(df_criticos) # Usando table para destaque fixo ou dataframe se preferir
 
     st.markdown("<br>", unsafe_allow_html=True)
 
